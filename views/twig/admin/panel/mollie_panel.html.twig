@@ -1,0 +1,199 @@
+{# ============================================================================
+   Sprint 7 — Mollie panel body (renders inside payment-base's shared admin
+   "Payment" tab wrapper: @oe_payment_base/admin/payment_admin_tab).
+   Body-only: no head, no transfer form, no admin frame closes — the shared
+   wrapper owns all of that.
+
+   View-data shape produced by MolliePanelViewDataBuilder::build():
+   - orderId, contractId, providerOrderId, contractState, currency
+   - capturedAmount, refundedAmount (formatted strings)
+   - captureBound/captureBoundFormatted, refundBound/refundBoundFormatted
+   - isCapturable, isRefundable, isCancellable
+   - dashboardUrl (optional), errorMessage (optional)
+   - transactions: list<TransactionRow> (type/id/amount/currency/status/badgeTone())
+   - validationErrors: list<string> (Story 3 — consumed once per render)
+   ============================================================================ #}
+
+{% if errorMessage is defined and errorMessage %}
+    <div class="pc-alert pc-alert-info" data-testid="mollie-panel-error">{{ errorMessage }}</div>
+{% endif %}
+
+{% if validationErrors is defined and validationErrors|length > 0 %}
+    <div class="pc-alert pc-alert-danger" data-testid="mollie-validation-errors">
+        {% for message in validationErrors %}
+            <p class="mb-0">{{ message }}</p>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% if contractId is defined and contractId %}
+    <h2>{{ "MOLLIE_ORDER_PAYMENT_DETAILS"|translate }}</h2>
+
+    <table class="pc-card" data-testid="mollie-panel-card">
+        <tbody>
+        <tr>
+            <th class="pc-label">{{ "MOLLIE_CONTRACT_ID"|translate }}</th>
+            <td class="pc-value"><code data-testid="contract-id">{{ contractId|default('—') }}</code></td>
+        </tr>
+        <tr>
+            <th class="pc-label">{{ "MOLLIE_PAYMENT_ID"|translate }}</th>
+            <td class="pc-value">
+                {% if providerOrderId is defined and providerOrderId %}
+                    {% if dashboardUrl is defined and dashboardUrl %}
+                        <a href="{{ dashboardUrl }}" target="_blank" rel="noopener" data-testid="mollie-dashboard-link">{{ providerOrderId }}</a>
+                    {% else %}
+                        <code data-testid="mollie-payment-id">{{ providerOrderId }}</code>
+                    {% endif %}
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <th class="pc-label">{{ "MOLLIE_CONTRACT_STATE"|translate }}</th>
+            <td class="pc-value">{{ contractState|default('—') }}</td>
+        </tr>
+        <tr>
+            <th class="pc-label">{{ "MOLLIE_CAPTURED_AMOUNT"|translate }}</th>
+            <td class="pc-value" data-testid="captured-amount">{{ capturedAmount|default('0.00') }} {{ currency|default('') }}</td>
+        </tr>
+        <tr>
+            <th class="pc-label">{{ "MOLLIE_REFUNDED_AMOUNT"|translate }}</th>
+            <td class="pc-value" data-testid="refunded-amount">{{ refundedAmount|default('0.00') }} {{ currency|default('') }}</td>
+        </tr>
+        </tbody>
+    </table>
+
+    {# ===== Transaction history (Story 2 — live Mollie API source of truth) ===== #}
+    {% if transactions is defined and transactions|length > 0 %}
+        <div class="pc-card">
+            <div class="pc-card-header">{{ "MOLLIE_TRANSACTION_HISTORY"|translate }}</div>
+            <div class="pc-card-body">
+                <table class="pc-table" data-testid="mollie-transaction-history">
+                    <thead>
+                    <tr>
+                        <th>{{ "MOLLIE_TRANSACTION_TYPE"|translate }}</th>
+                        <th>{{ "MOLLIE_TRANSACTION_ID"|translate }}</th>
+                        <th class="text-right">{{ "MOLLIE_AMOUNT"|translate }}</th>
+                        <th>{{ "MOLLIE_TRANSACTION_STATUS"|translate }}</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in transactions %}
+                        <tr data-testid="mollie-transaction-row">
+                            <td>{{ row.type }}</td>
+                            <td><code>{{ row.id }}</code></td>
+                            <td class="text-right">{{ '%.2f'|format(row.amount) }} {{ row.currency }}</td>
+                            <td><span class="pc-badge pc-badge-{{ row.badgeTone() == 'success' ? 'green' : (row.badgeTone() == 'warning' ? 'orange' : (row.badgeTone() == 'danger' ? 'blue' : 'gray')) }}">{{ row.status }}</span></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+
+    {# ===== Capture section (two-step / manual capture) ===== #}
+    {% if isCapturable is defined and isCapturable %}
+        <div class="pc-card">
+            <div class="pc-card-header">{{ "MOLLIE_CAPTURE"|translate }}</div>
+            <div class="pc-card-body">
+                <form name="mollieCaptureForm" id="mollieCaptureForm" action="{{ oViewConf.getSelfLink() }}" method="post"
+                      class="js-payment-action-form" data-testid="mollie-capture-form">
+                    {{ oViewConf.getHiddenSid()|raw }}
+                    <input type="hidden" name="cl" value="PaymentAdmin">
+                    <input type="hidden" name="oxid" value="{{ orderId }}">
+                    <input type="hidden" name="fnc" value="dispatchAction">
+                    <input type="hidden" name="payment_admin_action" value="capture">
+
+                    <p>{{ "MOLLIE_CAPTURABLE_AMOUNT"|translate }}:
+                        <strong>{{ captureBoundFormatted }} {{ currency }}</strong></p>
+
+                    <div class="pc-form-row">
+                        <div class="pc-form-group">
+                            <label class="pc-form-label" for="capture_amount">{{ "MOLLIE_AMOUNT"|translate }} ({{ currency }})</label>
+                            <input type="number" class="pc-form-input" id="capture_amount" name="capture_amount"
+                                   value="{{ captureBound }}" step="0.01" min="0.01"
+                                   max="{{ captureBound }}" data-testid="capture-amount-input">
+                        </div>
+                        <div class="pc-form-group">
+                            <label class="pc-form-label" for="capture_reason">{{ "MOLLIE_CAPTURE_REASON"|translate }}</label>
+                            <input type="text" class="pc-form-input" id="capture_reason" name="capture_reason" maxlength="140">
+                        </div>
+                    </div>
+
+                    <input type="submit" class="pc-btn pc-btn-primary" data-testid="capture-submit"
+                           value="{{ "MOLLIE_CAPTURE_SUBMIT"|translate }}"
+                           onclick="return confirm('{{ "MOLLIE_CAPTURE_CONFIRM"|translate }}');">
+                </form>
+            </div>
+        </div>
+    {% endif %}
+
+    {# ===== Refund section ===== #}
+    {% if isRefundable is defined and isRefundable %}
+        <div class="pc-card">
+            <div class="pc-card-header">{{ "MOLLIE_REFUND"|translate }}</div>
+            <div class="pc-card-body">
+                <form name="mollieRefundForm" id="mollieRefundForm" action="{{ oViewConf.getSelfLink() }}" method="post"
+                      class="js-payment-action-form" data-testid="mollie-refund-form">
+                    {{ oViewConf.getHiddenSid()|raw }}
+                    <input type="hidden" name="cl" value="PaymentAdmin">
+                    <input type="hidden" name="oxid" value="{{ orderId }}">
+                    <input type="hidden" name="fnc" value="dispatchAction">
+                    <input type="hidden" name="payment_admin_action" value="refund">
+
+                    <p>{{ "MOLLIE_REFUNDABLE_AMOUNT"|translate }}:
+                        <strong>{{ refundBoundFormatted }} {{ currency }}</strong></p>
+
+                    <div class="pc-form-row">
+                        <div class="pc-form-group">
+                            <label class="pc-form-label" for="refund_amount">{{ "MOLLIE_AMOUNT"|translate }} ({{ currency }})</label>
+                            <input type="number" class="pc-form-input" id="refund_amount" name="refund_amount"
+                                   value="{{ refundBound }}" step="0.01" min="0.01"
+                                   max="{{ refundBound }}" data-testid="refund-amount-input">
+                        </div>
+                        <div class="pc-form-group">
+                            <label class="pc-form-label" for="refund_reason">{{ "MOLLIE_REFUND_REASON"|translate }}</label>
+                            <input type="text" class="pc-form-input" id="refund_reason" name="refund_reason" maxlength="140">
+                        </div>
+                    </div>
+
+                    <input type="submit" class="pc-btn pc-btn-warning" data-testid="refund-submit"
+                           value="{{ "MOLLIE_REFUND_SUBMIT"|translate }}"
+                           onclick="return confirm('{{ "MOLLIE_REFUND_CONFIRM"|translate }}');">
+                </form>
+            </div>
+        </div>
+    {% endif %}
+
+    {# ===== Cancel authorization section ===== #}
+    {% if isCancellable is defined and isCancellable %}
+        <div class="pc-card">
+            <div class="pc-card-header">{{ "MOLLIE_CANCEL"|translate }}</div>
+            <div class="pc-card-body">
+                <form name="mollieCancelForm" id="mollieCancelForm" action="{{ oViewConf.getSelfLink() }}" method="post"
+                      class="js-payment-action-form" data-testid="mollie-cancel-form">
+                    {{ oViewConf.getHiddenSid()|raw }}
+                    <input type="hidden" name="cl" value="PaymentAdmin">
+                    <input type="hidden" name="oxid" value="{{ orderId }}">
+                    <input type="hidden" name="fnc" value="dispatchAction">
+                    <input type="hidden" name="payment_admin_action" value="cancel">
+
+                    <div class="pc-form-row">
+                        <div class="pc-form-group">
+                            <label class="pc-form-label" for="cancel_reason">{{ "MOLLIE_CANCEL_REASON"|translate }}</label>
+                            <input type="text" class="pc-form-input" id="cancel_reason" name="cancel_reason" maxlength="140">
+                        </div>
+                    </div>
+
+                    <input type="submit" class="pc-btn pc-btn-danger-outline" data-testid="cancel-submit"
+                           value="{{ "MOLLIE_CANCEL_SUBMIT"|translate }}"
+                           onclick="return confirm('{{ "MOLLIE_CANCEL_CONFIRM"|translate }}');">
+                </form>
+            </div>
+        </div>
+    {% endif %}
+{% else %}
+    <div class="pc-empty" data-testid="mollie-no-contract">{{ "MOLLIE_NO_CONTRACT"|translate }}</div>
+{% endif %}

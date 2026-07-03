@@ -1,0 +1,472 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+    public: false
+
+  # ===========================================================================
+  # Sprint 1: scaffold. Concrete services are appended by later sprints:
+  #   - Sprint 2 registers the adapter factory + LazyMollieAdapter and aliases
+  #     the 4 segregated adapter interfaces to that one shared instance.
+  #   - Sprint 3 registers ModuleConfigurationService/ConfigurationValidator and
+  #     aliases payment-base SessionAdapterInterface/ShopAdapterInterface/
+  #     ShopOrderServiceInterface to the Oxid* adapters.
+  #   - Sprints 4-6 tag handlers `payment.event_handler`, the translator
+  #     `oe.payment.event_translator`, and the panel `oe.payment.admin_panel`.
+  #
+  # NOTE: PaymentMethodInstaller is constructed directly in Core\Events (activation
+  # hook, outside the request container), so it is intentionally NOT autowired here.
+  # ===========================================================================
+
+  OxidEsales\Payments\Mollie\Service\:
+    resource: 'src/Mollie/Service/*'
+    exclude:
+      - 'src/Mollie/Service/PaymentMethodInstaller.php'
+      - 'src/Mollie/Service/Factory/*'
+      - 'src/Mollie/Service/Result/*'
+      - 'src/Mollie/Service/ConfigurationValidationResult.php'
+      - 'src/Mollie/Service/Return/*'
+      # Sprint 4 (Story 6): VOs / narrow interfaces / OXID-model-bound readers excluded from
+      # the autowire sweep for the same reasons Stripe excludes their counterparts — they either
+      # carry scalar/object constructor args Symfony cannot autowire (FieldValidationFailure,
+      # OxidUserFieldReader is bound to a specific live User) or are plain interfaces.
+      - 'src/Mollie/Service/FieldValidationFailure.php'
+      - 'src/Mollie/Service/OxidUserFieldReader.php'
+      - 'src/Mollie/Service/UserFieldReaderInterface.php'
+      - 'src/Mollie/Service/UserDataValidatorInterface.php'
+      - 'src/Mollie/Service/LanguageTranslatorInterface.php'
+      - 'src/Mollie/Service/CheckoutPaymentServiceInterface.php'
+    public: true
+
+  # Interface aliases (DIP) — config foundation.
+  OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Service\ModuleConfigurationService
+    public: true
+  OxidEsales\Payments\Mollie\Service\ConfigurationValidatorInterface:
+    alias: OxidEsales\Payments\Mollie\Service\ConfigurationValidator
+    public: true
+
+  # ===========================================================================
+  # Sprint 2: provider adapter layer.
+  # The 4 segregated adapter interfaces all alias ONE shared LazyMollieAdapter,
+  # built by the factory. This gives every consumer only its ISP slice while the
+  # SDK client + auth is created once per request, on first use.
+  # ===========================================================================
+
+  OxidEsales\Payments\Mollie\Service\Factory\MollieAdapterFactory:
+    public: true
+
+  OxidEsales\Payments\Mollie\Adapter\LazyMollieAdapter:
+    factory: ['@OxidEsales\Payments\Mollie\Service\Factory\MollieAdapterFactory', 'create']
+    public: true
+    shared: true
+
+  OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface:
+    alias: OxidEsales\Payments\Mollie\Adapter\LazyMollieAdapter
+    public: true
+  OxidEsales\Payments\Mollie\Adapter\MollieCaptureAdapterInterface:
+    alias: OxidEsales\Payments\Mollie\Adapter\LazyMollieAdapter
+    public: true
+  OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface:
+    alias: OxidEsales\Payments\Mollie\Adapter\LazyMollieAdapter
+    public: true
+  OxidEsales\Payments\Mollie\Adapter\MollieWebhookAdapterInterface:
+    alias: OxidEsales\Payments\Mollie\Adapter\LazyMollieAdapter
+    public: true
+
+  # ===========================================================================
+  # Sprint 3: OXID shop-glue adapters implementing payment-base contracts.
+  # Registered explicitly (the Adapter/ tree also holds SDK-coupled classes that
+  # must not be autowired), then aliased to the payment-base interfaces.
+  # ===========================================================================
+
+  OxidEsales\Payments\Mollie\Adapter\OxidSessionAdapter:
+    public: true
+  OxidEsales\PaymentBase\Adapter\SessionAdapterInterface:
+    alias: OxidEsales\Payments\Mollie\Adapter\OxidSessionAdapter
+    public: true
+
+  OxidEsales\Payments\Mollie\Adapter\OxidShopAdapter:
+    public: true
+  OxidEsales\PaymentBase\Adapter\ShopAdapterInterface:
+    alias: OxidEsales\Payments\Mollie\Adapter\OxidShopAdapter
+    public: true
+
+  OxidEsales\Payments\Mollie\Adapter\OxidShopOrderService:
+    public: true
+  OxidEsales\PaymentBase\Adapter\ShopOrderServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Adapter\OxidShopOrderService
+    public: true
+
+  # ===========================================================================
+  # Sprint 4: checkout flow.
+  #   - MollieContractCreationHandler (priority 100, self-reported via getPriority())
+  #     creates the DRAFT contract and dispatches the shared ContractDraftCompletedEvent.
+  #   - payment-base's EarlyOrderCreationHandler (priority 90 — not self-tagged by
+  #     payment-base, so it must be tagged here) mints the NOT_FINISHED order + order
+  #     number in response.
+  #   - MollieCheckoutSessionHandler (priority 10, self-reported) then creates the Mollie
+  #     payment and stores the checkout URL back on the contract + context.
+  # All three fire off ONE dispatch of MollieCheckoutSessionRequestEvent from
+  # MolliePaymentController::execute() — see EventListenerProvider priority-DESC ordering.
+  # ===========================================================================
+
+  OxidEsales\Payments\Mollie\EventSystem\Handler\MollieContractCreationHandler:
+    tags:
+      - { name: payment.event_handler }
+    public: true
+
+  OxidEsales\PaymentBase\EventSystem\Handler\EarlyOrderCreationHandler:
+    arguments:
+      $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
+      $shopOrderService: '@OxidEsales\PaymentBase\Adapter\ShopOrderServiceInterface'
+    tags:
+      - { name: payment.event_handler, priority: 90 }
+    public: false
+
+  OxidEsales\Payments\Mollie\EventSystem\Handler\MollieCheckoutSessionHandler:
+    tags:
+      - { name: payment.event_handler }
+    public: true
+
+  # MollieStatusMapper lives under Adapter/ (not swept by any resource glob — that tree also
+  # holds Mollie-SDK-coupled classes that must not be autowired) but is itself a plain,
+  # dependency-free mapper, so it is registered directly for MollieReturnResolver to consume.
+  OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper:
+    public: false
+
+  # MollieReturnResolver is excluded from the Service/* resource sweep above (it lives in the
+  # Return/ subdirectory, mirroring Stripe's own split) and registered explicitly here.
+  OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver:
+    public: true
+
+  OxidEsales\Payments\Mollie\Service\CheckoutPaymentServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Service\CheckoutPaymentService
+    public: true
+
+  # Contract-id return-URL security (Sprint 4 Story 5). Mirrors Stripe's binding: the
+  # HMAC secret is derived from the configured Mollie API key, no extra secret needed.
+  OxidEsales\PaymentBase\Service\TokenServiceInterface:
+    class: OxidEsales\Payments\Mollie\Service\ContractTokenService
+    public: true
+  OxidEsales\Payments\Mollie\Service\ContractTokenService:
+    alias: OxidEsales\PaymentBase\Service\TokenServiceInterface
+    public: true
+
+  # ===========================================================================
+  # Sprint 4 Story 6: central user-data validation (payment-base shared system).
+  # Mirrors Stripe's Sprint 119/124 (STRP-129) wiring; module id is a YAML literal
+  # because YAML cannot reference PHP constants (MollieDefinitions::MODULE_ID resolves to
+  # the same 'oe_payments_mollie' value).
+  # ===========================================================================
+
+  OxidEsales\PaymentBase\Validation\ValidationBaseInterface:
+    class: OxidEsales\PaymentBase\Validation\ValidationBase
+    arguments:
+      $pluginModuleId: 'oe_payments_mollie'
+      $loader: '@OxidEsales\PaymentBase\Validation\ValidationRuleLoaderInterface'
+    public: false
+
+  OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface:
+    class: OxidEsales\Payments\Mollie\Service\UserDataValidator
+    arguments:
+      - '@OxidEsales\PaymentBase\Validation\ValidationBaseInterface'
+    public: true
+
+  OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface:
+    class: OxidEsales\Payments\Mollie\Service\OxidLanguageTranslator
+    public: false
+
+  OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter:
+    arguments:
+      $translator: '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
+      $rulesProvider: '@OxidEsales\Payments\Mollie\Service\ValidationRulesProvider'
+    tags:
+      - { name: oe.payment_base.validation_message_formatter }
+    public: true
+
+  # ===========================================================================
+  # Sprint 5: webhook pipeline.
+  #
+  # Mollie's checkout return (Sprint 4) never tags payment-base's shared
+  # PaymentAuthorizedEvent/ContractReadyToCommitEvent handler chain — commit +
+  # fulfillment is left entirely to this webhook. Registered here so
+  # `oe:module:activate oe_payments_mollie` validates standalone (Symfony
+  # tolerates the same interface being (re)bound by another active module —
+  # Stripe and one-page-checkout both already do this for the exact same
+  # interfaces).
+  # ===========================================================================
+
+  OxidEsales\PaymentBase\EventSystem\EventListenerProviderInterface:
+    class: OxidEsales\PaymentBase\EventSystem\EventListenerProvider
+    arguments:
+      - !tagged_iterator payment.event_handler
+    public: true
+
+  OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface:
+    class: OxidEsales\PaymentBase\EventSystem\EventDispatcher
+    arguments:
+      - '@OxidEsales\PaymentBase\EventSystem\EventListenerProviderInterface'
+    public: true
+
+  OxidEsales\PaymentBase\Service\OrderPaymentStateServiceInterface:
+    class: OxidEsales\PaymentBase\Service\OrderPaymentStateService
+    arguments:
+      $connection: '@doctrine.dbal.connection'
+      $logger: '@oxid_esales.monolog.logger'
+    public: true
+
+  OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface:
+    class: OxidEsales\PaymentBase\Service\ContractFulfillmentService
+    arguments:
+      $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
+      $eventDispatcher: '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
+      $logger: '@oxid_esales.monolog.logger'
+    public: true
+
+  # Marks OXPAID via OrderPaymentStateService when the shared ContractFulfillmentService
+  # dispatches ContractFulfilledEvent (called from WebhookContractFulfillmentHandler::handlePaymentPaid()).
+  OxidEsales\PaymentBase\EventSystem\Handler\OrderPaymentCompletedHandler:
+    arguments:
+      $orderPaymentStateService: '@OxidEsales\PaymentBase\Service\OrderPaymentStateServiceInterface'
+      $logger: '@oxid_esales.monolog.logger'
+    tags:
+      - { name: payment.event_handler, priority: 0 }
+    public: false
+
+  # NOTE: kept public:false to match Stripe's binding of the same shared interface — in this
+  # dev shop both modules are active simultaneously and the merged container's visibility for a
+  # given service id is decided by whichever module's services.yaml is merged last, so the two
+  # declarations must agree. The Story 6 integration test verifies the recorded transaction via
+  # a direct SQL SELECT instead of resolving this service from the container.
+  OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface:
+    class: OxidEsales\PaymentBase\Repository\DoctrineTransactionRepository
+    arguments:
+      $connection: '@doctrine.dbal.connection'
+    public: false
+
+  # public: true — needed by the Story 3 idempotency-claim integration test.
+  OxidEsales\PaymentBase\Repository\WebhookLogRepositoryInterface:
+    class: OxidEsales\PaymentBase\Repository\DoctrineWebhookLogRepository
+    arguments:
+      $connection: '@doctrine.dbal.connection'
+    public: true
+
+  OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface:
+    alias: OxidEsales\Payments\Mollie\Service\OxidContractLinkedOrderUpdater
+    public: true
+
+  OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandler:
+    public: true
+  OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandlerInterface:
+    alias: OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandler
+    public: true
+
+  # Status handlers — each tagged mollie.webhook_handler, collected by MollieWebhookProcessor via
+  # !tagged_iterator (OCP: a new status is a new handler, never an edit to the processor).
+  OxidEsales\Payments\Mollie\Webhook\Handler\PaymentPaidHandler:
+    tags: [mollie.webhook_handler]
+    public: true
+  OxidEsales\Payments\Mollie\Webhook\Handler\PaymentFailedHandler:
+    tags: [mollie.webhook_handler]
+    public: true
+  OxidEsales\Payments\Mollie\Webhook\Handler\PaymentExpiredHandler:
+    tags: [mollie.webhook_handler]
+    public: true
+  OxidEsales\Payments\Mollie\Webhook\Handler\PaymentCanceledHandler:
+    tags: [mollie.webhook_handler]
+    public: true
+  # Closes the AUTHORIZED-state gap (see docs/architecture/00-overview.md "Known limitation"
+  # note, now resolved): drives the two-step/manual-capture ladder from NOT_FINISHED/PENDING to
+  # AUTHORIZED so CaptureService/CancelAuthorizationService become reachable.
+  OxidEsales\Payments\Mollie\Webhook\Handler\PaymentAuthorizedHandler:
+    tags: [mollie.webhook_handler]
+    public: true
+  OxidEsales\Payments\Mollie\Webhook\Handler\PaymentRefundedHandler:
+    tags: [mollie.webhook_handler]
+    public: true
+  OxidEsales\Payments\Mollie\Webhook\Handler\ChargebackCreatedHandler:
+    tags: [mollie.webhook_handler]
+    public: true
+
+  OxidEsales\Payments\Mollie\Webhook\MollieWebhookProcessor:
+    arguments:
+      $handlers: !tagged_iterator mollie.webhook_handler
+    public: true
+
+  # Guard chain (Story 1). Cheapest check first: payload size -> HTTPS -> rate limit.
+  # WebhookIpAllowlistGuard is built (see its docblock) but intentionally NOT wired here —
+  # Mollie publishes no fixed webhook source ranges, unlike PayPal.
+  OxidEsales\Payments\Mollie\Controller\Webhook\WebhookHttpsGuard:
+    public: false
+  OxidEsales\Payments\Mollie\Controller\Webhook\WebhookPayloadSizeGuard:
+    public: false
+  OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRateLimitGuard:
+    public: false
+  OxidEsales\Payments\Mollie\Controller\Webhook\WebhookIpAllowlistGuard:
+    public: false
+
+  OxidEsales\Payments\Mollie\Controller\Webhook\WebhookGuardChain:
+    arguments:
+      $guards:
+        - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookPayloadSizeGuard'
+        - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookHttpsGuard'
+        - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRateLimitGuard'
+    public: true
+
+  OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRequestGuardInterface:
+    alias: OxidEsales\Payments\Mollie\Controller\Webhook\WebhookGuardChain
+    public: true
+
+  # ===========================================================================
+  # Sprint 8 Story 2: logging control. One level select (sMollieLogLevel, off/errors/
+  # normal/debug) gates the file-audit-trail channel via a `?\Closure`, mirroring Stripe's
+  # harmonised logging design (2026-06-24). "off" resolves NullFileLogger (writes nothing);
+  # any other level resolves a real FileLogger. Bound to a plain string service id (not the
+  # shared FileLoggerInterface directly) so it never collides with Stripe's/PayPal's own
+  # bindings of the same interface in this dev shop's merged container.
+  # ===========================================================================
+
+  OxidEsales\Payments\Mollie\Service\Factory\MollieWebhookFileLoggerFactory:
+    autowire: false
+    arguments:
+      $config: '@OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface'
+    public: false
+
+  mollie.webhook.file_logger:
+    class: OxidEsales\PaymentBase\Service\FileLoggerInterface
+    factory: ['@OxidEsales\Payments\Mollie\Service\Factory\MollieWebhookFileLoggerFactory', 'create']
+    public: true
+
+  # ===========================================================================
+  # Sprint 6: admin actions (capture / refund / cancel authorization).
+  #
+  # RefundService/CaptureService/CancelAuthorizationService implement their own focused
+  # interfaces rather than extending payment-base's AbstractPaymentRefundService/
+  # AbstractPaymentCaptureService — those templates depend on the generic, non-segregated
+  # PaymentAdapterInterface and derive refund/capture bounds from local arithmetic
+  # (getCapturedAmount()/getTotalRefundedForContract()), whereas this sprint's own risk
+  # analysis requires bounds to come from the live Mollie payment (API truth) via the
+  # ISP-segregated Mollie adapters. Mirrors Stripe's RefundService/CaptureService, which made
+  # the same call for the same reasons.
+  # ===========================================================================
+
+  OxidEsales\Payments\Mollie\Service\RefundServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Service\RefundService
+    public: true
+  OxidEsales\Payments\Mollie\Service\CaptureServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Service\CaptureService
+    public: true
+  OxidEsales\Payments\Mollie\Service\CancelAuthorizationServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Service\CancelAuthorizationService
+    public: true
+  OxidEsales\Payments\Mollie\Service\OxpaidReconciliationServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Service\OxpaidReconciliationService
+    public: true
+
+  # Admin request handlers — delegate to the services above, tagged so
+  # EventListenerProvider dispatches the Mollie concrete event produced by the translator.
+  OxidEsales\Payments\Mollie\EventSystem\Handler\MollieRefundRequestHandler:
+    tags:
+      - { name: payment.event_handler }
+    public: true
+  OxidEsales\Payments\Mollie\EventSystem\Handler\MollieCaptureRequestHandler:
+    tags:
+      - { name: payment.event_handler }
+    public: true
+  OxidEsales\Payments\Mollie\EventSystem\Handler\MollieCancelAuthorizationRequestHandler:
+    tags:
+      - { name: payment.event_handler }
+    public: true
+
+  # Translator — maps payment-base's provider-agnostic *RequestedEvent onto the Mollie
+  # concrete events above. Collected by the EventBroker below via !tagged_iterator.
+  OxidEsales\Payments\Mollie\EventSystem\Translator\MollieEventTranslator:
+    tags:
+      - { name: oe.payment.event_translator }
+    public: true
+
+  # Event Broker — routes abstract request events through registered translators. Bound here
+  # (not by payment-base) exactly like Stripe/PayPal each bind their own copy; the shared
+  # tagged_iterator picks up every active module's translator regardless of which module's
+  # EventBroker instance ends up resolved.
+  OxidEsales\PaymentBase\EventSystem\Broker\EventBroker:
+    arguments:
+      - '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
+      - !tagged_iterator oe.payment.event_translator
+    public: true
+  OxidEsales\PaymentBase\EventSystem\Broker\EventBrokerInterface:
+    alias: OxidEsales\PaymentBase\EventSystem\Broker\EventBroker
+    public: true
+
+  # Controller/ is not swept by the Service/* resource glob, so this is registered explicitly
+  # (mirrors PayPal's and Stripe's own OrderActionDispatcher wiring). Consumed by
+  # MolliePaymentPanelProvider below (Sprint 7).
+  OxidEsales\Payments\Mollie\Controller\Admin\OrderActionDispatcher:
+    public: true
+
+  # ===========================================================================
+  # Sprint 7: admin panel (oe.payment.admin_panel) + storefront method selector.
+  #
+  # Admin/ is not swept by the Service/* resource glob (same reasoning as Controller/), so every
+  # class below is registered explicitly. MolliePaymentPanelProvider is wired to the CONCRETE
+  # OrderActionDispatcher, not a global AdminActionDispatcherInterface alias — Stripe and PayPal
+  # both implement that interface too, so a global alias would collide (mirrors PayPal's own
+  # services.yaml comment on the identical wiring).
+  # ===========================================================================
+
+  # TransactionHistoryService and MollieUrlBuilder are plain classes directly under Service/, so
+  # the resource sweep above already registers them (public, autowired) — only the interface
+  # alias needs an explicit block.
+  OxidEsales\Payments\Mollie\Service\TransactionHistoryServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Service\TransactionHistoryService
+    public: true
+
+  OxidEsales\Payments\Mollie\Admin\AdminActionBoundsInterface:
+    alias: OxidEsales\Payments\Mollie\Admin\AdminActionBounds
+    public: true
+  OxidEsales\Payments\Mollie\Admin\AdminActionBounds:
+    public: true
+
+  OxidEsales\Payments\Mollie\Admin\AdminAmountValidator:
+    public: true
+
+  # NOT tagged `oe.payment_base.validation_message_formatter` — that tag feeds the shared
+  # ValidationApiController's iterator, which resolves a formatter by `pluginModuleId` alone.
+  # UserDataValidationMessageFormatter already owns that slot for MollieDefinitions::MODULE_ID
+  # (character-level checkout validation); tagging this one too would make that endpoint's
+  # formatter resolution ambiguous. This formatter implements the same MessageFormatterInterface
+  # SPI/"plumbing" and is instead injected directly, by class, into AdminValidationFeedback below.
+  OxidEsales\Payments\Mollie\Admin\AdminAmountValidationMessageFormatter:
+    public: true
+
+  OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface:
+    alias: OxidEsales\Payments\Mollie\Admin\AdminValidationFeedback
+    public: true
+  OxidEsales\Payments\Mollie\Admin\AdminValidationFeedback:
+    arguments:
+      $messageFormatter: '@OxidEsales\Payments\Mollie\Admin\AdminAmountValidationMessageFormatter'
+    public: true
+
+  OxidEsales\Payments\Mollie\Admin\MolliePanelOrderLoader:
+    public: false
+
+  OxidEsales\Payments\Mollie\Admin\MolliePanelViewDataBuilder:
+    public: false
+
+  OxidEsales\Payments\Mollie\Admin\MolliePaymentPanelProvider:
+    arguments:
+      $actionDispatcher: '@OxidEsales\Payments\Mollie\Controller\Admin\OrderActionDispatcher'
+    tags:
+      - { name: oe.payment.admin_panel }
+    public: true
+
+  # Storefront method selector (Story 5). PaymentMethodListService is a plain class under
+  # Service/, already covered by the resource sweep — only the interface alias is explicit here.
+  OxidEsales\Payments\Mollie\Service\PaymentMethodListServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Service\PaymentMethodListService
+    public: true
+
+  OxidEsales\Payments\Mollie\Adapter\MollieMethodsAdapterInterface:
+    alias: OxidEsales\Payments\Mollie\Adapter\LazyMollieAdapter
+    public: true

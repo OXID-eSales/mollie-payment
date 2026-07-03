@@ -1,0 +1,18 @@
+{
+  "name": "oxid-mollie-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright E2E tests for the OXID Mollie payment module. CI/manual-run-only — requires Mollie sandbox credentials (see README.md).",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:standard": "playwright test tests/MollieStandard",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.46.0",
+    "@types/node": "^20.10.0",
+    "dotenv": "^16.3.1",
+    "typescript": "^5.5.0"
+  }
+}

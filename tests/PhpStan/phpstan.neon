@@ -1,0 +1,29 @@
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    bootstrapFiles:
+        - phpstan-bootstrap.php
+    level: 6
+    # Definitions live in typed class constants; defensive is_array()/array_values() guards on
+    # them read as "always true" under certainty. Don't treat inferred/PHPDoc types as certain so
+    # the guards (which protect against unknown runtime payment ids) stay without false positives.
+    treatPhpDocTypesAsCertain: false
+    paths:
+        - ../../src
+    excludePaths:
+        - ../../vendor (?)
+        - ../../var (?)
+    reportUnmatchedIgnoredErrors: false
+    ignoreErrors:
+        # OXID virtual parent pattern — `{Core}_parent` classes are synthesised by the
+        # composer plugin on module activation. PHPStan can't see them statically.
+        - '#Class .*_parent not found#'
+
+        # OXID legacy globals
+        - '#Function oxNew not found#'
+        - '#Constant VENDOR_PATH not found#'
+
+        # OXID Order magic properties
+        - '#Access to an undefined property OxidEsales\\Eshop\\Application\\Model\\Order::\$oxorder__#'
+        - '#Access to an undefined property OxidEsales\\Eshop\\Application\\Model\\Order#'
