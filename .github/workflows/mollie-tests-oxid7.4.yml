@@ -1,0 +1,421 @@
+name: Mollie full tests OXID CE 7.4
+
+on: [ push, pull_request ]
+
+
+env:
+  PACKAGE_NAME: 'oxid-esales/mollie-payment'
+  MODULE_ID: 'oe_payments_mollie'
+  PHP_VERSION: '8.2'
+  MYSQL_VERSION: '5.7'
+  TEMPLATE_ENGINE: 'twig'
+  # Branch of OXID-eSales/payment-base to test against. Change in sync with
+  # the mollie branch when the two repos co-evolve.
+  PAYMENT_BASE_BRANCH: 'b-7.4.x'
+
+jobs:
+  install_shop_with_module:
+    runs-on: [arc-runner-set]
+    steps:
+      - name: Print run parameters
+        run: |
+          echo "Running job with:\
+            PHP version: ${{ env.PHP_VERSION }}\
+            MySQL version: ${{ env.MYSQL_VERSION }}\
+            Template engine: ${{ env.TEMPLATE_ENGINE }}\
+            Trigger event: ${{ github.event_name }}"
+
+      - name: Cleanup workspace
+        run: |
+          ls -la ./
+          sudo rm -rf ./* || true
+          sudo rm -rf ./.??* || true
+          ls -la ./
+
+      - name: Clone testing environment
+        run: git clone https://github.com/OXID-eSales/docker-eshop-sdk.git .
+
+      - name: Clone the shop
+        run: git clone --depth 1 https://github.com/OXID-eSales/oxideshop_ce.git --branch b-7.4.x --single-branch source
+
+      - name: Cache current installation
+        # Restore-only: the dedicated "Save cache" step (actions/cache/save@v4) below is the
+        # sole writer of this key. Using actions/cache@v4 here would ALSO save in its post-step,
+        # and two saves of the same key now race ("Unable to reserve … another job may be
+        # creating this cache"), leaving the entry unrestorable for downstream jobs.
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ./*
+          key: installation-${{ env.PHP_VERSION }}-${{ env.MYSQL_VERSION }}-${{ env.TEMPLATE_ENGINE }}-${{ github.run_number }}-${{ github.run_attempt }}
+
+      - name: Prepare container configuration
+        run: |
+          make setup
+          make addbasicservices
+          perl -pi\
+            -e 's#PHP_VERSION=.*#PHP_VERSION=${{ env.PHP_VERSION }}#g;'\
+            -e "s#MYSQL_VERSION=.*#MYSQL_VERSION=${{ env.MYSQL_VERSION }}#g;"\
+            .env
+          perl -pi\
+            -e 's#display_errors =.*#display_errors = false#g;'\
+            -e 's#error_reporting = .*#error_reporting = E_ALL ^ E_WARNING ^ E_DEPRECATED#g;'\
+            -e 'print "xdebug.max_nesting_level=1000\nxdebug.mode=coverage\n\n"'\
+            containers/php/custom.ini
+          perl -pi\
+            -e 's#/var/www/#/var/www/source/#g;'\
+            containers/httpd/project.conf
+
+      - name: Prepare shop configuration
+        run: |
+          cp source/source/config.inc.php.dist source/source/config.inc.php
+          sed -i "1s+^+SetEnvIf Authorization "\(.*\)" HTTP_AUTHORIZATION=\$1\n\n+" source/source/.htaccess
+          sed -i -e 's/<dbHost>/mysql/'\
+                 -e 's/<dbUser>/root/'\
+                 -e 's/<dbName>/example/'\
+                 -e 's/<dbPwd>/root/'\
+                 -e 's/<dbPort>/3306/'\
+                 -e 's/<sShopURL>/https:\/\/oxideshop.local\//'\
+                 -e 's/<sShopDir>/\/var\/www\/source\//'\
+                 -e 's/<sCompileDir>/\/var\/www\/source\/tmp\//'\
+              source/source/config.inc.php
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Start containers
+        run: |
+          make up
+          sleep 2
+
+      - name: Checkout current module
+        uses: actions/checkout@v5
+        with:
+          path: source/test-module
+
+      - name: Checkout payment-base (private dependency)
+        uses: actions/checkout@v5
+        with:
+          repository: OXID-eSales/payment-base
+          ref: ${{ env.PAYMENT_BASE_BRANCH }}
+          path: source/payment-base
+          token: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+
+      - name: Configure path repository for payment-base
+        run: |
+          docker compose exec -T php composer config repositories.payment-base \
+            --json '{"type":"path","url":"./payment-base","options":{"symlink":true}}'
+
+      - name: Install payment-base at shop level
+        run: |
+          docker compose exec -T php composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH} as v1.0.0" --no-interaction --no-update
+
+      - name: Install module
+        run: |
+          docker compose exec -T \
+            php composer config repositories.${{ env.PACKAGE_NAME }} \
+            --json '{"type":"path", "url":"./test-module", "options": {"symlink": true}}'
+          docker compose exec -T \
+            php composer require ${{ env.PACKAGE_NAME }}:* --no-interaction --no-update
+
+      - name: Install demodata
+        run: |
+          docker compose exec -T \
+            php composer config repositories.oxid-esales/oxideshop-demodata-ce \
+            --json '{"type":"git", "url":"https://github.com/OXID-eSales/oxideshop_demodata_ce"}'
+          docker compose exec -T php composer require oxid-esales/oxideshop-demodata-ce:dev-master --no-update
+          docker compose exec -T php composer require oxid-esales/apex-theme:dev-b-7.4.x --no-update
+
+
+      - name: Install dependencies, reset shop, activate theme
+        env:
+          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+        run: |
+          docker compose exec -T -e COMPOSER_AUTH="{\"github-oauth\":{\"github.com\":\"${GH_TOKEN}\"}}" \
+            php composer update --with-all-dependencies --no-interaction
+
+      # Workaround for a CI-environment-specific bug in
+      # `oxid-esales/oxideshop-unified-namespace-generator`: on the CI runner image its
+      # `Path::join()` leaves backslashes in place, so `Eshop\` shim files land in directories
+      # literally named `OxidEsales\Eshop\Core` (one component) instead of the nested
+      # `OxidEsales/Eshop/Core/` hierarchy PSR-4 autoload expects, and `bin/oe-console` then
+      # fatals at bootstrap with `Class "OxidEsales\Eshop\Core\ConfigFile" not found`. Local
+      # Docker reproduces the correct layout with the same code, so this is environmental — we
+      # rename the backslash-named directories into the forward-slash hierarchy ourselves.
+      - name: Workaround — rename backslash-named generator dirs
+        run: |
+          docker compose exec -T php sh -c '
+            cd /var/www/vendor/oxid-esales/oxideshop-unified-namespace-generator/generated
+            for src in $(find . -mindepth 1 -maxdepth 1 -type d -name "*\\\\*" | sort -r); do
+              target=$(echo "${src#./}" | sed "s|\\\\|/|g")
+              mkdir -p "$(dirname "$target")"
+              if [ -d "$target" ]; then
+                cp -rT "$src" "$target" && rm -rf "$src"
+              else
+                mv "$src" "$target"
+              fi
+            done
+            ls -la /var/www/vendor/oxid-esales/oxideshop-unified-namespace-generator/generated/OxidEsales/Eshop/Core/ConfigFile.php
+          '
+
+      # `oe:database:reset` MUST run before any `oe:module:install`: install writes module
+      # config via ModuleConfigurationDao->save(), which fires the cache-invalidation subscriber,
+      # which loads `oxconfig` from the database. Without the schema, that load fatals with
+      # "Table 'example.oxconfig' doesn't exist".
+      - name: Reset database
+        run: |
+          docker compose exec -T php bin/oe-console oe:database:reset \
+            --db-host=mysql --db-port=3306 --db-name=example --db-user=root --db-password=root --force
+
+      - name: Install demodata
+        run: |
+          docker compose exec -T php bash -c "bin/oe-console oe:setup:demodata"
+
+      - name: Activate theme
+        run: |
+          docker compose exec -T php bin/oe-console oe:theme:activate apex
+
+      # payment-base is an oxideshop-module and must be installed and activated before the PSP
+      # module activates. Otherwise the `oe.payment.admin_panel` tagged-iterator that powers the
+      # shared admin tab is empty at runtime.
+      - name: Install + activate payment-base module
+        run: |
+          docker compose exec -T php bin/oe-console oe:module:install \
+            /var/www/vendor/oxid-esales/payment-base
+          docker compose exec -T php bin/oe-console oe:module:activate \
+            oe_payment_base
+
+      - name: Run payment-base database migrations
+        run: |
+          docker compose exec -T php php vendor/bin/doctrine-migrations migrate --configuration=vendor/oxid-esales/payment-base/migration/migrations.yml --db-configuration=vendor/oxid-esales/oxideshop-doctrine-migration-wrapper/src/migrations-db.php --no-interaction --allow-no-migration
+
+      # Install + activate the Mollie module the same way we just installed payment-base, so
+      # OXID's module registry has a complete picture.
+      - name: Install + activate mollie-payment module
+        run: |
+          docker compose exec -T php bin/oe-console oe:module:install /var/www/test-module
+          docker compose exec -T php bin/oe-console oe:module:activate ${{ env.MODULE_ID }}
+
+      - name: Show docker log
+        if: always()
+        run: |
+          docker compose logs
+
+      - name: Stop containers
+        if: always()
+        run: |
+          docker compose down
+          sleep 2
+
+      - name: Save cache
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ./*
+          key: installation-${{ env.PHP_VERSION }}-${{ env.MYSQL_VERSION }}-${{ env.TEMPLATE_ENGINE }}-${{ github.run_number }}-${{ github.run_attempt }}
+
+
+      - name: Upload configuration artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: InstallShopWithModules-${{ env.PHP_VERSION }}-${{ env.MYSQL_VERSION }}-${{ env.TEMPLATE_ENGINE }}
+          path: |
+            docker-compose.yml
+            source/composer.json
+            source/composer.lock
+            source/config.inc.php
+            data/php/logs/error_log.txt
+
+  styles:
+    strategy:
+      matrix:
+        php: [ '8.2' ]
+    runs-on: [arc-runner-set]
+    steps:
+      - name: Checkout current module
+        uses: actions/checkout@v5
+        with:
+          path: source/test-module
+          fetch-depth: 0  # Fetch all commits for accurate diff
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: xdebug
+          extensions: gd, zip
+
+      - name: Checkout payment-base (private dependency)
+        uses: actions/checkout@v5
+        with:
+          repository: OXID-eSales/payment-base
+          ref: ${{ env.PAYMENT_BASE_BRANCH }}
+          path: source/payment-base
+          token: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+
+      - name: Configure path repository for payment-base
+        working-directory: source/test-module
+        run: |
+          composer config repositories --unset
+          composer config repositories.payment-base \
+            --json '{"type":"path","url":"../payment-base","options":{"symlink":true}}'
+
+      - name: Pin payment-base
+        working-directory: source/test-module
+        run: composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH} as v1.0.0" --no-update --no-interaction
+
+      - name: Install module dependencies
+        id: dependencies
+        working-directory: source/test-module
+        env:
+          COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}"}}'
+        run: composer update --no-interaction
+
+      # In GitHub Actions the module's pre-commit-check.sh runs the composer style scripts
+      # (phpcs / phpstan level max / phpmd) and skips PHPUnit — unit + integration run in their
+      # own jobs below.
+      - name: Run style check
+        working-directory: source/test-module
+        run: |
+          ./bin/pre-commit-check.sh
+
+  isolated_unit_tests:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        php: [  '8.2' ]
+        mysql: [ '5.7' ]
+    needs: [ install_shop_with_module ]
+    runs-on: [arc-runner-set]
+    steps:
+      - name: Load current installation from cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ./*
+          key: installation-${{ env.PHP_VERSION }}-${{ env.MYSQL_VERSION }}-${{ env.TEMPLATE_ENGINE }}-${{ github.run_number }}-${{ github.run_attempt }}
+          fail-on-cache-miss: true
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Start containers
+        run: |
+          make up
+          sleep 2
+
+      - name: Checkout payment-base (private dependency)
+        uses: actions/checkout@v5
+        with:
+          repository: OXID-eSales/payment-base
+          ref: ${{ env.PAYMENT_BASE_BRANCH }}
+          path: source/payment-base
+          token: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+
+      - name: Configure path repository for payment-base
+        run: |
+          docker compose exec -T php bash -c "cd /var/www/test-module && composer config repositories --unset"
+          docker compose exec -T php bash -c "cd /var/www/test-module && composer config repositories.payment-base --json '{\"type\":\"path\",\"url\":\"/var/www/payment-base\",\"options\":{\"symlink\":true}}'"
+
+      - name: Pin payment-base
+        run: |
+          docker compose exec -T php bash -c "cd /var/www/test-module && composer require 'oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH} as v1.0.0' --no-update --no-interaction"
+
+      - name: Install module dependencies
+        run: |
+          docker compose exec -T php bash -c "cd /var/www/test-module && composer update --no-interaction"
+
+      - name: Run isolated unit tests
+        # Use the SHOP's PHPUnit binary (/var/www/vendor), not the module's own
+        # (test-module/vendor). The test bootstrap loads the shop, which registers the shop's
+        # PHPUnit autoloader; running the module's separately-pinned PHPUnit alongside it puts
+        # two PHPUnit versions on the classpath and fatals. Always use the shop's binary so the
+        # PHPUnit version matches the bootstrap.
+        run: |
+          docker compose exec -T php bash -c "cd /var/www/test-module && /var/www/vendor/bin/phpunit -c tests/phpunit.xml --testsuite Unit --bootstrap=/var/www/source/bootstrap.php"
+
+  integration_tests:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        php:  [ '8.2',  '8.4' ]
+        mysql: [ '8.1' ]
+    needs: [ install_shop_with_module ]
+    runs-on: [arc-runner-set]
+    steps:
+      - name: Load current installation from cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ./*
+          key: installation-${{ env.PHP_VERSION }}-${{ env.MYSQL_VERSION }}-${{ env.TEMPLATE_ENGINE }}-${{ github.run_number }}-${{ github.run_attempt }}
+          fail-on-cache-miss: true
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Start containers
+        run: |
+          make up
+          sleep 2
+
+      - name: Checkout payment-base (private dependency)
+        uses: actions/checkout@v5
+        with:
+          repository: OXID-eSales/payment-base
+          ref: ${{ env.PAYMENT_BASE_BRANCH }}
+          path: source/payment-base
+          token: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+
+      - name: Configure path repository for payment-base
+        run: |
+          docker compose exec -T php bash -c "cd /var/www/test-module && composer config repositories --unset"
+          docker compose exec -T php bash -c "cd /var/www/test-module && composer config repositories.payment-base --json '{\"type\":\"path\",\"url\":\"/var/www/payment-base\",\"options\":{\"symlink\":true}}'"
+          docker compose exec -T php composer config repositories.payment-base \
+            --json '{"type":"path","url":"./payment-base","options":{"symlink":true}}'
+
+      - name: Install payment-base at shop level
+        run: |
+          docker compose exec -T php composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH} as v1.0.0" --no-interaction --no-update
+
+      - name: Install testing dependencies
+        run: |
+          docker compose exec -T php composer update --no-interaction
+
+      - name: Install module
+        run: |
+          docker compose exec -T php bin/oe-console oe:module:install ./test-module
+
+      - name: Run payment-base database migrations
+        run: |
+          docker compose exec -T php php vendor/bin/doctrine-migrations migrate --configuration=vendor/oxid-esales/payment-base/migration/migrations.yml --db-configuration=vendor/oxid-esales/oxideshop-doctrine-migration-wrapper/src/migrations-db.php --no-interaction --allow-no-migration
+
+      - name: Run integration tests with shop bootstrap
+        run: |
+          docker compose exec -T -e XDEBUG_MODE=coverage php vendor/bin/phpunit \
+            -c /var/www/test-module/tests/phpunit.xml \
+            --testsuite Integration \
+            --bootstrap=/var/www/source/bootstrap.php
+
+      - name: Upload log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: IntegrationTestsLog-${{ matrix.php }}-${{ matrix.mysql }}
+          path: |
+            source/source/log/oxideshop.log
+            source/data/php/logs/error_log.txt
+            source/composer.lock
+            source/composer.json
