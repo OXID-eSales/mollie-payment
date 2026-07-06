@@ -9,116 +9,67 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller;
 
-use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\Payments\Mollie\Controller\PaymentController;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 
 #[CoversClass(PaymentController::class)]
 final class MolliePaymentControllerTest extends TestCase
 {
-    public function testExecuteWhenMollieMethodSelectedDispatchesCheckoutSessionRequestEvent(): void
+    public function testValidatePaymentAlwaysDelegatesToTheParentFirst(): void
     {
-        $dispatcher = $this->createMock(EventDispatcherInterface::class);
-        $dispatcher->expects(self::once())
-            ->method('dispatch')
-            ->with(self::isInstanceOf(MollieCheckoutSessionRequestEvent::class))
-            ->willReturnCallback(function (MollieCheckoutSessionRequestEvent $event) {
-                $event->getContext()->set('checkoutUrl', 'https://mollie.test/checkout/tr_1');
-                return $event;
-            });
+        $controller = new TestableMolliePaymentController('oxidcashondel', delegateResult: 'order');
 
-        $controller = $this->controller(MollieDefinitions::PAYMENT_ID, $dispatcher);
+        $controller->validatePayment();
 
-        $controller->execute();
-
-        self::assertSame(['https://mollie.test/checkout/tr_1'], $controller->redirectedTo);
-        self::assertFalse($controller->delegatedToParent);
+        self::assertTrue($controller->delegatedValidatePayment);
     }
 
-    public function testExecuteWhenNonMollieMethodDelegatesToParent(): void
+    public function testValidatePaymentWhenNonMollieMethodSkipsUserDataCheckAndReturnsParentResult(): void
     {
-        $dispatcher = $this->createMock(EventDispatcherInterface::class);
-        $dispatcher->expects(self::never())->method('dispatch');
-
-        $controller = $this->controller('oxidcashondel', $dispatcher);
-
-        $controller->execute();
-
-        self::assertTrue($controller->delegatedToParent);
-        self::assertSame([], $controller->redirectedTo);
-    }
-
-    public function testExecuteWhenDispatcherUnavailableDelegatesToParent(): void
-    {
-        $controller = $this->controller(MollieDefinitions::PAYMENT_ID, null);
-
-        $controller->execute();
-
-        self::assertTrue($controller->delegatedToParent);
-    }
-
-    public function testExecuteWhenDispatchThrowsDelegatesToParent(): void
-    {
-        $dispatcher = $this->createMock(EventDispatcherInterface::class);
-        $dispatcher->method('dispatch')->willThrowException(new RuntimeException('boom'));
-
-        $controller = $this->controller(MollieDefinitions::PAYMENT_ID, $dispatcher);
-
-        $controller->execute();
-
-        self::assertTrue($controller->delegatedToParent);
-        self::assertSame([], $controller->redirectedTo);
-    }
-
-    public function testExecuteWhenUserDataInvalidBlocksCheckoutDispatch(): void
-    {
-        $dispatcher = $this->createMock(EventDispatcherInterface::class);
-        $dispatcher->expects(self::never())->method('dispatch');
-
         $controller = new TestableMolliePaymentController(
-            MollieDefinitions::PAYMENT_ID,
-            $dispatcher,
+            'oxidcashondel',
             userDataValid: false,
+            delegateResult: 'order',
         );
 
-        $controller->execute();
-
-        self::assertTrue($controller->invalidUserDataErrorShown);
-        self::assertTrue($controller->delegatedToParent);
-        self::assertSame([], $controller->redirectedTo);
+        self::assertSame('order', $controller->validatePayment());
+        self::assertFalse($controller->invalidUserDataErrorShown);
     }
 
-    public function testBuildCheckoutContext_IncludesTheSelectedMollieMethod(): void
+    public function testValidatePaymentWhenMollieSelectedAndUserDataValidReturnsParentResult(): void
     {
         $controller = new TestableMolliePaymentController(
             MollieDefinitions::PAYMENT_ID,
-            null,
-            true,
-            'ideal',
+            userDataValid: true,
+            delegateResult: 'order',
         );
 
-        $context = $controller->realBuildCheckoutContext(MollieDefinitions::PAYMENT_ID);
-
-        self::assertSame('ideal', $context->get('mollieMethod'));
+        self::assertSame('order', $controller->validatePayment());
+        self::assertFalse($controller->invalidUserDataErrorShown);
     }
 
-    public function testBuildCheckoutContext_WithNoMethodSelected_IsNull(): void
+    public function testValidatePaymentWhenMollieSelectedAndUserDataInvalidBlocksProgression(): void
     {
-        $controller = new TestableMolliePaymentController(MollieDefinitions::PAYMENT_ID, null);
+        $controller = new TestableMolliePaymentController(
+            MollieDefinitions::PAYMENT_ID,
+            userDataValid: false,
+            delegateResult: 'order',
+        );
 
-        $context = $controller->realBuildCheckoutContext(MollieDefinitions::PAYMENT_ID);
-
-        self::assertNull($context->get('mollieMethod'));
+        self::assertSame('payment', $controller->validatePayment());
+        self::assertTrue($controller->invalidUserDataErrorShown);
     }
 
-    private function controller(
-        string $paymentId,
-        ?EventDispatcherInterface $dispatcher,
-    ): TestableMolliePaymentController {
-        return new TestableMolliePaymentController($paymentId, $dispatcher);
+    public function testValidatePaymentWhenParentRejectsAndMollieSelectedWithValidDataReturnsParentResult(): void
+    {
+        $controller = new TestableMolliePaymentController(
+            MollieDefinitions::PAYMENT_ID,
+            userDataValid: true,
+            delegateResult: null,
+        );
+
+        self::assertNull($controller->validatePayment());
     }
 }

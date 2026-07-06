@@ -25,3 +25,9 @@ if (!class_exists('OxidEsales\\Payments\\Mollie\\Controller\\PaymentController_p
         'OxidEsales\\Payments\\Mollie\\Controller\\PaymentController_parent',
     );
 }
+if (!class_exists('OxidEsales\\Payments\\Mollie\\Controller\\MollieOrderController_parent', false)) {
+    class_alias(
+        \OxidEsales\Eshop\Application\Controller\OrderController::class,
+        'OxidEsales\\Payments\\Mollie\\Controller\\MollieOrderController_parent',
+    );
+}

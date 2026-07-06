@@ -12,77 +12,54 @@ namespace OxidEsales\Payments\Mollie\Controller;
 use OxidEsales\Eshop\Application\Model\User;
 use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\EshopCommunity\Core\Di\ContainerFacade;
-use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
-use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use OxidEsales\Payments\Mollie\Service\OxidUserFieldReader;
 use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
 use OxidEsales\Payments\Mollie\Service\UserFieldReaderInterface;
 use Throwable;
 
 /**
- * Thin extension of OXID's core PaymentController that intercepts Mollie selections.
+ * Thin extension of OXID's core PaymentController.
  *
- * All business logic stays in services/handlers (SRP): this controller only
- *  - builds the request-scoped {@see EventContext},
- *  - dispatches {@see MollieCheckoutSessionRequestEvent},
- *  - redirects to the checkout URL the handler chain wrote back onto the context.
+ * Story 6: gates progression past the payment-selection step when the customer's stored
+ * billing/delivery data fails the shared character-level validation rules — mirrors Stripe's
+ * `validatePayment()` override.
  *
- * Non-Mollie payment methods are untouched (early return / parent delegate — LSP).
+ * This controller does NOT dispatch the checkout session or redirect to Mollie: core's
+ * `PaymentController` has `validatePayment()`, not `execute()` — the "Place order" button
+ * actually submits to `cl=order&fnc=execute` (core `OrderController::execute()`). That is why
+ * the checkout-session dispatch + redirect logic lives in
+ * {@see \OxidEsales\Payments\Mollie\Controller\MollieOrderController::execute()} instead.
  *
  * @phpstan-ignore class.notFound
  */
 class PaymentController extends PaymentController_parent
 {
-    public function execute(): mixed
+    public function validatePayment()
     {
-        $paymentId = $this->getSelectedPaymentId();
-        if ($paymentId !== MollieDefinitions::PAYMENT_ID) {
-            return $this->delegateToParent();
+        $result = $this->delegateValidatePayment();
+
+        if ($this->getSelectedPaymentId() !== MollieDefinitions::PAYMENT_ID) {
+            return $result;
         }
 
         if (!$this->userDataIsValid()) {
             $this->showInvalidUserDataError();
-            return $this->delegateToParent();
+            return 'payment';
         }
 
-        $dispatcher = $this->resolveDispatcher();
-        if ($dispatcher === null) {
-            return $this->delegateToParent();
-        }
-
-        $context = $this->buildCheckoutContext($paymentId);
-
-        try {
-            $dispatcher->dispatch(new MollieCheckoutSessionRequestEvent($context));
-        } catch (Throwable $e) {
-            Registry::getLogger()->error('MolliePaymentController: checkout session event failed', [
-                'error' => $e->getMessage(),
-            ]);
-            return $this->delegateToParent();
-        }
-
-        $checkoutUrl = $context->get('checkoutUrl');
-        if (is_string($checkoutUrl) && $checkoutUrl !== '') {
-            $this->redirect($checkoutUrl);
-            return null;
-        }
-
-        $this->showCheckoutUnavailableError();
-        return $this->delegateToParent();
+        return $result;
     }
 
     /**
      * Testability seam: real OXID execution delegates to the class-chain parent.
      */
-    protected function delegateToParent(): mixed
+    protected function delegateValidatePayment(): mixed
     {
-        // OXID virtual parent: whether PaymentController_parent::execute() exists depends on
-        // the active module class chain and can't be resolved statically (mirrors PayPal's
-        // identical PaymentController::execute() -> parent call).
+        // OXID virtual parent: whether PaymentController_parent::validatePayment() exists
+        // depends on the active module class chain and can't be resolved statically.
         // @phpstan-ignore-next-line staticMethod.notFound
-        return parent::execute();
+        return parent::validatePayment();
     }
 
     protected function getSelectedPaymentId(): string
@@ -92,74 +69,12 @@ class PaymentController extends PaymentController_parent
         return is_scalar($paymentId) ? (string) $paymentId : '';
     }
 
-    protected function resolveDispatcher(): ?EventDispatcherInterface
-    {
-        try {
-            $dispatcher = ContainerFacade::get(EventDispatcherInterface::class);
-        } catch (Throwable) {
-            return null;
-        }
-
-        return $dispatcher instanceof EventDispatcherInterface ? $dispatcher : null;
-    }
-
-    protected function buildCheckoutContext(string $paymentId): EventContext
-    {
-        $session = Registry::getSession();
-        $basket = $session->getBasket();
-        $user = $session->getUser();
-        $userId = is_object($user) && method_exists($user, 'getId') ? (string) $user->getId() : '';
-
-        return new EventContext([
-            'paymentId' => $paymentId,
-            'userId' => $userId,
-            'basket' => $basket,
-            'user' => is_object($user) ? $user : null,
-            'sessionId' => (string) $session->getId(),
-            'conditionTypes' => ['payment_authorized'],
-            // Sprint 7: the specific Mollie method (iDEAL, card, …) chosen on the storefront
-            // selector. MollieCheckoutSessionHandler reads this key when building
-            // CreatePaymentRequest; null means "let Mollie's own hosted picker decide".
-            'mollieMethod' => $this->selectedMollieMethod(),
-        ]);
-    }
-
     /**
-     * Reads the storefront method-selector's choice (Sprint 7 Story 5). The field name
-     * `mollie_method` matches the radio input in `views/twig/frontend/mollie_methods.html.twig`.
-     */
-    protected function selectedMollieMethod(): ?string
-    {
-        $method = Registry::getRequest()->getRequestEscapedParameter('mollie_method');
-
-        return is_string($method) && $method !== '' ? $method : null;
-    }
-
-    /**
-     * Testability seam: Registry::getUtils()->redirect() ends the request (exit()), which
-     * would kill the PHPUnit process if called directly from execute().
-     */
-    protected function redirect(string $url): void
-    {
-        Registry::getUtils()->redirect($url, false);
-    }
-
-    /**
-     * Guard: the checkout-session handler chain ran but produced no checkout URL (the
-     * MollieCheckoutSessionHandler already failed the contract in this case) — surface a
-     * user-facing error instead of silently falling through.
-     */
-    protected function showCheckoutUnavailableError(): void
-    {
-        Registry::getUtilsView()->addErrorToDisplay('MOLLIE_CHECKOUT_UNAVAILABLE');
-    }
-
-    /**
-     * Pre-dispatch gate (Story 6): rejects malformed customer data server-side, before the
-     * checkout-session event — and therefore before createPayment — ever fires. Fails open
-     * (returns true) when the validator or a usable field reader is unavailable, so a wiring
-     * problem in the validation subsystem never blocks checkout entirely; the shared
-     * character-level rules are defense-in-depth, not the only gate against malformed data.
+     * Pre-progression gate (Story 6): rejects malformed customer data server-side, before the
+     * shopper can proceed to the order-confirmation step. Fails open (returns true) when the
+     * validator or a usable field reader is unavailable, so a wiring problem in the validation
+     * subsystem never blocks checkout entirely; the shared character-level rules are
+     * defense-in-depth, not the only gate against malformed data.
      */
     protected function userDataIsValid(): bool
     {

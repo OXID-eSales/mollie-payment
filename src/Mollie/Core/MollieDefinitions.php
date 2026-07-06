@@ -28,8 +28,10 @@ final class MollieDefinitions
     public const PROVIDER_NAME = 'mollie';
 
     // The `cl=` value of the controller that handles the post-checkout return
-    // (index.php?cl=<this>&fnc=checkoutReturn). Registered in metadata.php `controllers`.
-    public const ORDER_CONTROLLER_ID = 'MollieOrderController';
+    // (index.php?cl=<this>&fnc=checkoutReturn). MollieOrderController is a class-chain
+    // extension of OXID's core OrderController (metadata.php `extend`), so it is reachable
+    // at the core's own `cl=order`, not a standalone controller key.
+    public const ORDER_CONTROLLER_ID = 'order';
 
     // The `cl=` value of the webhook endpoint controller. Registered in metadata.php `controllers`.
     public const WEBHOOK_CONTROLLER_ID = 'MollieWebhookController';

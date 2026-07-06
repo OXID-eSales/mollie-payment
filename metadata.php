@@ -7,6 +7,7 @@
 
 declare(strict_types=1);
 
+use OxidEsales\Eshop\Application\Controller\OrderController;
 use OxidEsales\Eshop\Application\Controller\PaymentController;
 use OxidEsales\Eshop\Core\ViewConfig;
 use OxidEsales\Payments\Mollie\Controller\MollieOrderController;
@@ -36,17 +37,18 @@ $aModule = [
     'extend' => [
         ViewConfig::class => MollieViewConfig::class,
         PaymentController::class => MolliePaymentController::class,
-        // Note: OrderController is NOT extended via the class-chain, and MollieOrderController
-        // (below) is NOT tagged `oxid.view_controller` either. payment-base's own services.yaml
-        // documents why: tagging a controller service forces the DI compiler to reflect/autoload
-        // it, which re-enters the OXID module class-chain build and fails with "Controller
-        // namespace duplication" on activation. Registering a brand-new `cl=` key via this
-        // `controllers` map (the same pattern PayPal's PayPalOrderController and payment-base's
-        // own ValidationApiController already use) sidesteps that entirely.
+        // OrderController::execute() (NOT PaymentController::execute(), which core doesn't
+        // even declare) is where "Place order" finalizes the order — MollieOrderController
+        // intercepts it here to redirect to Mollie's hosted checkout instead, mirroring
+        // Stripe's `OrderController::class => StripeOrderController::class`. It is a pure
+        // class-chain extension, NOT tagged `oxid.view_controller`: tagging a chain extension
+        // as a service forces the DI compiler to reflect/autoload it, which re-enters the
+        // OXID module class-chain build and fails with "Controller namespace duplication" on
+        // activation.
+        OrderController::class => MollieOrderController::class,
     ],
     'controllers' => [
         MollieDefinitions::WEBHOOK_CONTROLLER_ID => MollieWebhookController::class,
-        MollieDefinitions::ORDER_CONTROLLER_ID => MollieOrderController::class,
     ],
     'events' => [
         'onActivate' => Events::class . '::onActivate',
@@ -58,8 +60,6 @@ $aModule = [
         // (mirrors PayPal's/Stripe's own panel template registration).
         '@oe_payments_mollie/admin/panel/mollie_panel' => 'views/twig/admin/panel/mollie_panel.html.twig',
         '@oe_payments_mollie/admin/panel/mollie_panel.html.twig' => 'views/twig/admin/panel/mollie_panel.html.twig',
-        '@oe_payments_mollie/frontend/mollie_methods' => 'views/twig/frontend/mollie_methods.html.twig',
-        '@oe_payments_mollie/frontend/mollie_methods.html.twig' => 'views/twig/frontend/mollie_methods.html.twig',
     ],
     'settings' => [
         [

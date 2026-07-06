@@ -9,37 +9,79 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Controller;
 
-use OxidEsales\Eshop\Application\Controller\FrontendController;
 use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\EshopCommunity\Core\Di\ContainerFacade;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Controller\CheckoutReturnResponder;
 use OxidEsales\PaymentBase\Controller\HandlesCheckoutReturn;
+use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
+use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\PaymentBase\Service\TokenServiceInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
+use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver;
 use RuntimeException;
 use Throwable;
 
 /**
- * Registered directly in metadata.php `controllers` (cl=MollieOrderController) — NOT a
- * class-chain extension of OXID's OrderController and NOT tagged `oxid.view_controller`.
- * payment-base's own services.yaml documents why: tagging a controller forces the DI compiler
- * to reflect/autoload it, which re-enters the OXID module class-chain build and causes a
- * "Controller namespace duplication" failure on activation. Registering a brand-new `cl=` key
- * via the metadata controllers map (as ValidationApiController and PayPal's own
- * PayPalOrderController already do in this codebase) sidesteps that entirely.
+ * Class-chain extension of OXID's core OrderController (metadata.php `extend`), reachable at
+ * `cl=order` — NOT tagged `oxid.view_controller`. payment-base's own services.yaml documents why:
+ * tagging a class-chain extension as a service forces the DI compiler to reflect/autoload it,
+ * which re-enters the OXID module class-chain build and fails with "Controller namespace
+ * duplication" on activation. A pure `extend` map entry (mirroring Stripe's
+ * `OrderController::class => StripeOrderController::class`) sidesteps that entirely.
  *
- * Handles the single post-checkout return leg: Mollie always redirects back to one
- * `redirectUrl` regardless of outcome (there is no separate cancel URL like PayPal's), so
- * {@see MollieReturnResolver} maps every Mollie payment status onto the shared
- * ReturnResolution and this controller just reacts to success/failure.
+ * Bug fix: core's `PaymentController` has `validatePayment()`, NOT `execute()` — the "Place
+ * order" button actually submits to `cl=order&fnc=execute` (core `OrderController::execute()`),
+ * which is where a redirect-based PSP must intercept. Mollie is a pure server-side redirect (no
+ * JS Checkout like Stripe's), so `execute()` here dispatches the checkout-session event and
+ * redirects directly — no PaymentController involvement.
+ *
+ * Also handles the single post-checkout return leg on this same class (`checkoutReturn()`):
+ * Mollie always redirects back to one `redirectUrl` regardless of outcome (there is no separate
+ * cancel URL like PayPal's), so {@see MollieReturnResolver} maps every Mollie payment status onto
+ * the shared ReturnResolution and this controller just reacts to success/failure. The webhook
+ * remains the source of truth for fulfillment; the return only advances safely.
+ *
+ * @phpstan-ignore class.notFound
  */
-class MollieOrderController extends FrontendController
+class MollieOrderController extends MollieOrderController_parent
 {
     use HandlesCheckoutReturn;
+
+    public function execute(): ?string
+    {
+        $paymentId = $this->getSelectedPaymentId();
+        if ($paymentId !== MollieDefinitions::PAYMENT_ID) {
+            return $this->delegateToParent();
+        }
+
+        $dispatcher = $this->resolveDispatcher();
+        if ($dispatcher === null) {
+            return $this->onCheckoutUnavailable();
+        }
+
+        $context = $this->buildCheckoutContext($paymentId);
+
+        try {
+            $dispatcher->dispatch(new MollieCheckoutSessionRequestEvent($context));
+        } catch (Throwable $e) {
+            Registry::getLogger()->error('MollieOrderController: checkout session event failed', [
+                'error' => $e->getMessage(),
+            ]);
+            return $this->onCheckoutUnavailable();
+        }
+
+        $checkoutUrl = $context->get('checkoutUrl');
+        if (is_string($checkoutUrl) && $checkoutUrl !== '') {
+            $this->redirect($checkoutUrl);
+            return null;
+        }
+
+        return $this->onCheckoutUnavailable();
+    }
 
     public function checkoutReturn(): string
     {
@@ -86,6 +128,68 @@ class MollieOrderController extends FrontendController
         return $responder instanceof CheckoutReturnResponder
             ? $responder
             : throw new RuntimeException('CheckoutReturnResponder not available');
+    }
+
+    /**
+     * Testability seam: real OXID execution delegates to the class-chain parent, which performs
+     * the standard `finalizeOrder()` flow for non-Mollie payment methods.
+     */
+    protected function delegateToParent(): ?string
+    {
+        return parent::execute();
+    }
+
+    protected function getSelectedPaymentId(): string
+    {
+        $paymentId = Registry::getSession()->getVariable('paymentid');
+
+        return is_scalar($paymentId) ? (string) $paymentId : '';
+    }
+
+    protected function resolveDispatcher(): ?EventDispatcherInterface
+    {
+        $dispatcher = $this->resolveService(EventDispatcherInterface::class);
+
+        return $dispatcher instanceof EventDispatcherInterface ? $dispatcher : null;
+    }
+
+    protected function buildCheckoutContext(string $paymentId): EventContext
+    {
+        $session = Registry::getSession();
+        $basket = $session->getBasket();
+        $user = $session->getUser();
+        $userId = is_object($user) && method_exists($user, 'getId') ? (string) $user->getId() : '';
+
+        return new EventContext([
+            'paymentId' => $paymentId,
+            'userId' => $userId,
+            'basket' => $basket,
+            'user' => is_object($user) ? $user : null,
+            'sessionId' => (string) $session->getId(),
+            'conditionTypes' => ['payment_authorized'],
+        ]);
+    }
+
+    /**
+     * Testability seam: Registry::getUtils()->redirect() ends the request (exit()), which
+     * would kill the PHPUnit process if called directly from execute().
+     */
+    protected function redirect(string $url): void
+    {
+        Registry::getUtils()->redirect($url, false);
+    }
+
+    /**
+     * Guard: either the dispatcher/event chain was unavailable, or it ran but produced no
+     * checkout URL (MollieCheckoutSessionHandler already failed the contract in that case).
+     * Surface a user-facing error and stay on the payment step — the order must NOT finalize
+     * without a successful redirect to Mollie.
+     */
+    protected function onCheckoutUnavailable(): string
+    {
+        Registry::getUtilsView()->addErrorToDisplay('MOLLIE_CHECKOUT_UNAVAILABLE');
+
+        return 'payment';
     }
 
     private function resolveReturnResolver(): ?ReturnResolverInterface

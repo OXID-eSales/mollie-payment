@@ -10,6 +10,8 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller;
 
 use OxidEsales\PaymentBase\Controller\CheckoutReturnResponder;
+use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
+use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\PaymentBase\Service\TokenServiceInterface;
@@ -17,11 +19,16 @@ use OxidEsales\Payments\Mollie\Controller\MollieOrderController;
 use OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver;
 
 /**
- * Testable subclass: overrides every Registry/container-touching seam so checkoutReturn() can be
- * exercised as a pure unit.
+ * Testable subclass: overrides every Registry/container-touching seam so both execute() and
+ * checkoutReturn() can be exercised as pure units.
  */
 final class TestableMollieOrderController extends MollieOrderController
 {
+    /** @var list<string> */
+    public array $redirectedTo = [];
+    public bool $delegatedToParent = false;
+    public bool $unavailableErrorShown = false;
+
     /**
      * @param array<string, string> $requestParams
      */
@@ -31,6 +38,8 @@ final class TestableMollieOrderController extends MollieOrderController
         private readonly ContractRepositoryInterface $contractRepository,
         private readonly ?ReturnResolverInterface $resolver,
         private readonly ?CheckoutReturnResponder $responder,
+        private readonly string $paymentId = '',
+        private readonly ?EventDispatcherInterface $dispatcher = null,
     ) {
         // Intentionally does NOT call parent::__construct() — no OXID bootstrap needed.
     }
@@ -46,6 +55,7 @@ final class TestableMollieOrderController extends MollieOrderController
             TokenServiceInterface::class => $this->tokenService,
             ContractRepositoryInterface::class => $this->contractRepository,
             MollieReturnResolver::class => $this->resolver,
+            EventDispatcherInterface::class => $this->dispatcher,
             default => null,
         };
     }
@@ -55,5 +65,34 @@ final class TestableMollieOrderController extends MollieOrderController
         $value = $this->requestParams[$name] ?? '';
 
         return $value !== '' ? $value : null;
+    }
+
+    protected function getSelectedPaymentId(): string
+    {
+        return $this->paymentId;
+    }
+
+    protected function buildCheckoutContext(string $paymentId): EventContext
+    {
+        return new EventContext(['paymentId' => $paymentId]);
+    }
+
+    protected function redirect(string $url): void
+    {
+        $this->redirectedTo[] = $url;
+    }
+
+    protected function onCheckoutUnavailable(): string
+    {
+        $this->unavailableErrorShown = true;
+
+        return 'payment';
+    }
+
+    protected function delegateToParent(): ?string
+    {
+        $this->delegatedToParent = true;
+
+        return null;
     }
 }

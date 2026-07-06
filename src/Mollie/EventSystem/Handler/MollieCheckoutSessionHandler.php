@@ -72,14 +72,12 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
             );
         }
 
-        $method = $context->get('mollieMethod');
         $redirectUrl = $this->buildRedirectUrl($contract);
 
-        $request = $this->checkoutPaymentService->buildCreatePaymentRequest(
-            $contract,
-            is_string($method) && $method !== '' ? $method : null,
-            $redirectUrl,
-        );
+        // No storefront method selector (Mollie's own hosted checkout page offers the
+        // individual methods enabled in the merchant's Mollie dashboard) — method is always
+        // null so Mollie decides which methods to present.
+        $request = $this->checkoutPaymentService->buildCreatePaymentRequest($contract, null, $redirectUrl);
 
         try {
             $payment = $this->paymentsAdapter->createPayment($request);

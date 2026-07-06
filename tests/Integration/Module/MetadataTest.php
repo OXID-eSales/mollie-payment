@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Integration\Module;
 
+use OxidEsales\Eshop\Application\Controller\OrderController as CoreOrderController;
 use OxidEsales\Eshop\Application\Controller\PaymentController as CorePaymentController;
 use OxidEsales\Eshop\Core\ViewConfig as CoreViewConfig;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
@@ -46,12 +47,13 @@ final class MetadataTest extends TestCase
         self::assertSame(MollieDefinitions::PAYMENT_ID, $aModule['id']);
     }
 
-    public function testMetadata_ExtendsViewConfigAndPaymentController(): void
+    public function testMetadata_ExtendsViewConfigPaymentControllerAndOrderController(): void
     {
         $extend = $this->metadata()['extend'] ?? [];
         self::assertIsArray($extend);
         self::assertArrayHasKey(CoreViewConfig::class, $extend);
         self::assertArrayHasKey(CorePaymentController::class, $extend);
+        self::assertArrayHasKey(CoreOrderController::class, $extend);
         foreach ($extend as $class) {
             self::assertTrue($this->classFileExists($class), "extending class missing: $class");
         }
@@ -63,6 +65,19 @@ final class MetadataTest extends TestCase
         self::assertIsArray($controllers);
         self::assertArrayHasKey('MollieWebhookController', $controllers);
         self::assertTrue($this->classFileExists($controllers['MollieWebhookController']));
+    }
+
+    /**
+     * MollieOrderController is reached at `cl=order` via the class-chain `extend` (checked
+     * above) — NOT as a standalone `controllers` entry (that was the pre-fix wiring bug: the
+     * standalone `cl=MollieOrderController` route was never hit by the "Place order" submit,
+     * which posts to `cl=order&fnc=execute`).
+     */
+    public function testMetadata_DoesNotRegisterMollieOrderControllerAsAStandaloneController(): void
+    {
+        $controllers = $this->metadata()['controllers'] ?? [];
+        self::assertIsArray($controllers);
+        self::assertArrayNotHasKey('MollieOrderController', $controllers);
     }
 
     public function testMetadata_DeclaresFiveSettingGroups(): void

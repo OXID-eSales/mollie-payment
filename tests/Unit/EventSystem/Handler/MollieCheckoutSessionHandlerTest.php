@@ -43,7 +43,7 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
         self::assertSame(10, $this->handler()['handler']->getPriority());
     }
 
-    public function testHandleCallsCreatePaymentWithAmountMethodAndOrderNumber(): void
+    public function testHandleCallsCreatePaymentWithAmountAndOrderNumber(): void
     {
         $contract = $this->contractStub();
         ['handler' => $handler, 'checkoutPaymentService' => $checkoutPaymentService, 'adapter' => $adapter]
@@ -64,12 +64,16 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
 
         $context = new EventContext();
         $context->setContract($contract);
-        $context->set('mollieMethod', 'ideal');
 
         $handler->handle(new MollieCheckoutSessionRequestEvent($context));
     }
 
-    public function testHandleSendsRedirectUrlAndWebhookUrlViaCheckoutPaymentService(): void
+    /**
+     * There is no storefront method selector: the module intentionally always builds the
+     * create-payment request with `method = null` so Mollie's hosted checkout page offers every
+     * method enabled in the merchant's Mollie dashboard.
+     */
+    public function testHandleSendsNullMethodRedirectUrlAndWebhookUrlViaCheckoutPaymentService(): void
     {
         $contract = $this->contractStub();
         ['handler' => $handler, 'checkoutPaymentService' => $checkoutPaymentService, 'adapter' => $adapter]
@@ -79,7 +83,7 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
             ->method('buildCreatePaymentRequest')
             ->with(
                 $contract,
-                'ideal',
+                null,
                 self::stringContains('cl=' . MollieDefinitions::ORDER_CONTROLLER_ID . '&fnc=checkoutReturn'),
             )
             ->willReturn(new CreatePaymentRequest(
@@ -93,7 +97,6 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
 
         $context = new EventContext();
         $context->setContract($contract);
-        $context->set('mollieMethod', 'ideal');
 
         $handler->handle(new MollieCheckoutSessionRequestEvent($context));
     }

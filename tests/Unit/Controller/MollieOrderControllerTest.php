@@ -11,17 +11,113 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller;
 
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Controller\CheckoutReturnResponder;
+use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\PaymentBase\Service\TokenServiceInterface;
 use OxidEsales\Payments\Mollie\Controller\MollieOrderController;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
+use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 #[CoversClass(MollieOrderController::class)]
 final class MollieOrderControllerTest extends TestCase
 {
+    public function testExecuteWhenMollieSelectedDispatchesCheckoutSessionRequestEventAndRedirects(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::once())
+            ->method('dispatch')
+            ->with(self::isInstanceOf(MollieCheckoutSessionRequestEvent::class))
+            ->willReturnCallback(function (MollieCheckoutSessionRequestEvent $event) {
+                $event->getContext()->set('checkoutUrl', 'https://mollie.test/checkout/tr_1');
+                return $event;
+            });
+
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, $dispatcher);
+
+        $result = $controller->execute();
+
+        self::assertNull($result);
+        self::assertSame(['https://mollie.test/checkout/tr_1'], $controller->redirectedTo);
+        self::assertFalse($controller->delegatedToParent);
+        self::assertFalse($controller->unavailableErrorShown);
+    }
+
+    public function testExecuteWhenNonMollieMethodDelegatesToParentSoTheOrderFinalizesNormally(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::never())->method('dispatch');
+
+        $controller = $this->executeController('oxidcashondel', $dispatcher);
+
+        $controller->execute();
+
+        self::assertTrue($controller->delegatedToParent);
+        self::assertSame([], $controller->redirectedTo);
+    }
+
+    public function testExecuteWhenDispatcherUnavailableShowsErrorAndDoesNotFinalize(): void
+    {
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, null);
+
+        $result = $controller->execute();
+
+        self::assertSame('payment', $result);
+        self::assertTrue($controller->unavailableErrorShown);
+        self::assertFalse($controller->delegatedToParent);
+        self::assertSame([], $controller->redirectedTo);
+    }
+
+    public function testExecuteWhenDispatchThrowsShowsErrorAndDoesNotFinalize(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willThrowException(new RuntimeException('boom'));
+
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, $dispatcher);
+
+        $result = $controller->execute();
+
+        self::assertSame('payment', $result);
+        self::assertTrue($controller->unavailableErrorShown);
+        self::assertFalse($controller->delegatedToParent);
+        self::assertSame([], $controller->redirectedTo);
+    }
+
+    public function testExecuteWhenNoCheckoutUrlShowsErrorAndDoesNotFinalize(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        // MollieCheckoutSessionHandler already failed the contract in this scenario; the
+        // context simply carries no checkoutUrl back to the controller.
+        $dispatcher->method('dispatch')->willReturnArgument(0);
+
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, $dispatcher);
+
+        $result = $controller->execute();
+
+        self::assertSame('payment', $result);
+        self::assertTrue($controller->unavailableErrorShown);
+        self::assertFalse($controller->delegatedToParent);
+        self::assertSame([], $controller->redirectedTo);
+    }
+
+    private function executeController(
+        string $paymentId,
+        ?EventDispatcherInterface $dispatcher,
+    ): TestableMollieOrderController {
+        return new TestableMollieOrderController(
+            requestParams: [],
+            tokenService: $this->createMock(TokenServiceInterface::class),
+            contractRepository: $this->createMock(ContractRepositoryInterface::class),
+            resolver: null,
+            responder: null,
+            paymentId: $paymentId,
+            dispatcher: $dispatcher,
+        );
+    }
+
     public function testCheckoutReturnWithValidTokenDispatchesReturnFlowAndGoesToThankyou(): void
     {
         $contract = $this->createMock(PaymentContractInterface::class);
