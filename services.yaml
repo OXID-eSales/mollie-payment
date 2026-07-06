@@ -470,3 +470,23 @@ services:
   OxidEsales\Payments\Mollie\Adapter\MollieMethodsAdapterInterface:
     alias: OxidEsales\Payments\Mollie\Adapter\LazyMollieAdapter
     public: true
+
+  # ===========================================================================
+  # payment-base infrastructure bindings (self-sufficiency).
+  #
+  # payment-base itself does NOT bind these — in this repo they have historically
+  # only been bound by Stripe's/PayPal's services.yaml, which happened to also be
+  # active in every shop Mollie was developed/tested in. A shop with ONLY
+  # payment-base + mollie active (no other PSP) failed to compile its DI
+  # container as a result. These mirror Stripe's own bindings for the identical
+  # payment-base concretes (same classes/constructor args) so Mollie activates
+  # standalone. Binding the same interface that another active PSP module also
+  # binds is safe (Symfony tolerates re-declaration to an identical concrete);
+  # coexistence with Stripe/PayPal was verified after adding these.
+  # ===========================================================================
+
+  OxidEsales\PaymentBase\Service\ContractServiceInterface:
+    class: OxidEsales\PaymentBase\Service\ContractService
+    arguments:
+      $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
+    public: true
