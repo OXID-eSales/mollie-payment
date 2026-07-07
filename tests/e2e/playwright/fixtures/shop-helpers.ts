@@ -1,49 +1,90 @@
 import { Page, expect } from '@playwright/test';
 
+const EMAIL = process.env.TEST_USER_EMAIL || 'playwright.user@oxid-esales.dev';
+const PW = process.env.TEST_USER_PASSWORD || 'useruser';
+
 /**
- * Drops a product into the basket without depending on any specific catalog entry.
- * Relies on OXID's default demodata (mirrors the PayPal/Stripe sibling helpers) — adjust the
- * selectors here if the shop under test uses a custom theme.
+ * A product-detail URL from the standard OXID demodata (Apex theme). Checkout requires a
+ * non-empty basket; this drops one known article in without depending on the homepage slider
+ * (whose overlay links are not reliably clickable headless).
+ */
+const DEMO_PRODUCT_URL = '/Merchandise/Sonnenbrillen/Ocean-Eyes.html';
+
+/**
+ * Logs the storefront customer in via the account page. `cl=payment` bounces to the login/user
+ * step for anonymous sessions, so every checkout spec must call this first.
+ */
+export async function loginStorefront(page: Page): Promise<void> {
+    await page.goto('/index.php?cl=account');
+    const loginForm = page.locator('form').filter({ has: page.locator('input[name="lgn_pwd"]:visible') }).first();
+    await loginForm.locator('input[name="lgn_usr"]:visible').first().fill(EMAIL);
+    await loginForm.locator('input[name="lgn_pwd"]:visible').first().fill(PW);
+    await loginForm.locator('button[type="submit"], input[type="submit"]').first().click();
+    await page.waitForLoadState('domcontentloaded');
+}
+
+/**
+ * Drops a known demodata product into the basket from its detail page.
  */
 export async function addFirstFeaturedProductToBasket(page: Page): Promise<void> {
-    await page.goto('/');
-    const firstProductLink = page.locator('[data-testid="featured-product-link"], a.product-details').first();
-    await firstProductLink.click();
-    await page.getByRole('button', { name: /add to (cart|basket)/i }).click();
-    await expect(page.locator('.minicart, .basket-item-count')).toBeVisible();
-}
-
-export async function goToCheckoutPayment(page: Page): Promise<void> {
-    await page.goto('/index.php?cl=payment');
+    await page.goto(DEMO_PRODUCT_URL);
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('button', { name: /In den Warenkorb|add to (cart|basket)/i }).first().click();
+    await page.waitForLoadState('domcontentloaded');
 }
 
 /**
- * Selects the Mollie payment option (see `MollieDefinitions::PAYMENT_ID`) and, if a specific
- * method was requested, picks it from the storefront method selector rendered by
- * `views/twig/frontend/mollie_methods.html.twig` (`data-testid="mollie-methods"`).
+ * Walks the standard OXID checkout (basket -> user -> payment). The Apex theme advances with a
+ * "Weiter"/"Continue" button; we then land on the payment-method step.
  */
-export async function selectMolliePaymentMethod(page: Page, method?: string): Promise<void> {
-    await page.locator('[data-testid="mollie-payment-option"] input[value="oe_payments_mollie"]').check();
-
-    if (method) {
-        await page.locator(`[data-testid="mollie-methods"] input[value="${method}"]`).check();
+export async function goToCheckoutPayment(page: Page): Promise<void> {
+    await page.goto('/index.php?cl=user');
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('button', { name: /weiter|continue/i }).first().click();
+    await page.waitForLoadState('domcontentloaded');
+    if (!/cl=payment/.test(page.url())) {
+        await page.goto('/index.php?cl=payment');
+        await page.waitForLoadState('domcontentloaded');
     }
 }
 
-export async function continueToOrderReview(page: Page): Promise<void> {
-    await page.getByRole('button', { name: /continue|weiter/i }).click();
+/**
+ * Selects the Mollie payment option. Mollie is a plain OXID payment radio
+ * (`paymentid=oe_payments_mollie`); there is no storefront sub-method selector — the individual
+ * methods (iDEAL, card, PayPal, …) are chosen on Mollie's own hosted checkout page. The `method`
+ * argument is therefore accepted for call-site readability but is a no-op here.
+ */
+export async function selectMolliePaymentMethod(page: Page, _method?: string): Promise<void> {
+    await page.locator('input[name="paymentid"][value="oe_payments_mollie"]').check();
 }
 
 /**
- * Mollie's TEST-mode hosted checkout does not ask for real card/iDEAL credentials — it shows a
- * simple "Change payment state" screen with explicit outcome buttons. This mirrors that (buttons
- * seen on https://www.mollie.com/checkout/... in test mode: "Pay.", "Fail.", "Expire.", ...).
+ * Advances from the payment step to the order-review step.
+ */
+export async function continueToOrderReview(page: Page): Promise<void> {
+    await page.getByRole('button', { name: /weiter|continue/i }).first().click();
+    await page.waitForLoadState('domcontentloaded');
+}
+
+/**
+ * Completes payment on Mollie's TEST-mode hosted checkout.
+ *
+ * Test mode first shows a method-selection page (the methods enabled in the merchant's Mollie
+ * dashboard). We pick PayPal, a redirect-style method whose test page is the simple
+ * "select the final payment status" screen (radios Pending/Paid/Failed/Canceled/Expired + a
+ * "Continue" button) — as opposed to the card method, which renders a full card-entry form.
  */
 export async function completeMollieTestPayment(page: Page, outcome: 'paid' | 'failed' = 'paid'): Promise<void> {
-    await expect(page).toHaveURL(/mollie\.com\/checkout/i);
+    await expect(page).toHaveURL(/mollie\.com\/checkout/i, { timeout: 30_000 });
 
-    const buttonLabel = outcome === 'paid' ? /^pay\.?$/i : /^fail\.?$/i;
-    await page.getByRole('button', { name: buttonLabel }).click();
+    // Method-selection page -> PayPal.
+    await page.getByRole('button', { name: /^paypal$/i }).first().click();
+    await page.waitForURL(/mollie\.com\/checkout\/test-mode/i, { timeout: 30_000 });
+
+    // Test-mode status page -> pick the outcome, then continue.
+    const status = outcome === 'paid' ? 'Paid' : 'Failed';
+    await page.getByText(status, { exact: true }).click();
+    await page.getByRole('button', { name: /continue/i }).click();
 }
 
 export async function loginShopAdmin(page: Page, adminUser: string, adminPassword: string): Promise<void> {

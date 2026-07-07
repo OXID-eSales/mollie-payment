@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
+    loginStorefront,
     addFirstFeaturedProductToBasket,
     goToCheckoutPayment,
     selectMolliePaymentMethod,
@@ -8,40 +9,41 @@ import {
 } from '../../fixtures/shop-helpers';
 
 /**
- * CI/manual-run-only — requires a real Mollie sandbox (test-mode) API key configured on the
- * shop under test. See README.md. Not run as part of this sprint's PHP quality gates.
+ * Requires a real Mollie sandbox (test-mode) API key configured on the shop under test
+ * (Admin -> Modules -> Mollie -> Settings) and the shop reachable at SHOP_URL. See README.md.
  *
  * Proves the full happy-path spine end to end:
- *   standard checkout -> Mollie sandbox pay -> return -> webhook finalizes -> thank-you + OXPAID.
+ *   login -> standard checkout -> Mollie test-mode pay -> return -> thank-you page.
  *
- * Because the webhook delivery is asynchronous (Mollie calls the shop's server, not the
- * browser), this spec polls the thank-you/order-history page rather than asserting the instant
- * the browser returns — the browser-return leg alone is not guaranteed to finalize the order
- * (see docs/architecture/00-overview.md: both the return AND the webhook can independently
- * advance the contract; the webhook is authoritative).
+ * The module's return leg is `cl=order&fnc=checkoutReturn`, which re-fetches the payment status
+ * from Mollie's API and (for a paid payment) finalizes the order and renders the `thankyou`
+ * template — so the browser return alone is sufficient here; a public webhook is not required
+ * (the webhook remains authoritative for OXPAID in production, but is not exercised by this run).
  */
 test.describe('Mollie standard checkout — happy path', () => {
     test('customer pays with Mollie and the order finalizes', async ({ page }) => {
+        await loginStorefront(page);
         await addFirstFeaturedProductToBasket(page);
         await goToCheckoutPayment(page);
         await selectMolliePaymentMethod(page, 'ideal');
         await continueToOrderReview(page);
 
-        await page.getByRole('button', { name: /place order|order now|zahlungspflichtig/i }).click();
+        // "Place order" submits to cl=order&fnc=execute; MolliePaymentController hands off to
+        // MollieOrderController::execute(), which 302s straight to Mollie's hosted checkout.
+        await page.getByRole('button', { name: /zahlungspflichtig bestellen|place order|order now/i }).click();
 
-        // MolliePaymentController::execute() issues a 302 straight to Mollie's hosted checkout —
-        // no intermediate OXID page in between (see docs/architecture/00-overview.md).
         await completeMollieTestPayment(page, 'paid');
 
-        // Mollie 302s back to MollieOrderController::checkoutReturn(), which either finalizes
-        // immediately or (if the webhook beats the browser back) leaves it to the webhook —
-        // either way the customer must land on the thank-you page, never a raw error.
-        await expect(page).toHaveURL(/cl=thankyou|fnc=thankyou/i, { timeout: 30_000 });
+        // Mollie 302s back to MollieOrderController::checkoutReturn(); on a paid payment the
+        // return re-fetches the status, finalizes the order, and renders the thank-you page
+        // (which OXID redirects to the canonical cl=thankyou URL).
+        await page.waitForURL(/cl=thankyou|fnc=checkoutReturn/i, { timeout: 45_000 });
+        await page.waitForLoadState('domcontentloaded');
 
-        // The webhook is authoritative for OXPAID; give it a moment to arrive if the browser won.
-        await expect(async () => {
-            await page.reload();
-            await expect(page.locator('body')).not.toContainText(/error|failed/i);
-        }).toPass({ timeout: 30_000 });
+        // Confirm a real, finalized order — never a raw checkout/return error.
+        const body = (await page.locator('body').innerText());
+        expect(body).not.toMatch(/MOLLIE_CHECKOUT_UNAVAILABLE|MOLLIE_RETURN_/i);
+        expect(body).toMatch(/Vielen Dank|thank you/i);
+        expect(body).toMatch(/Nummer\s*\d+|order number/i);
     });
 });
