@@ -46,6 +46,19 @@ final class MolliePaymentDtoTest extends TestCase
         self::assertSame([], $dto->metadata);
         self::assertSame(0.0, $dto->amountRefunded);
         self::assertSame(0.0, $dto->amountChargedBack);
+        self::assertNull($dto->createdAt);
+    }
+
+    public function testFromArray_MapsCreatedAt(): void
+    {
+        $dto = MolliePaymentDto::fromArray([
+            'id' => 'tr_ts',
+            'status' => 'paid',
+            'amount' => ['currency' => 'EUR', 'value' => '10.00'],
+            'createdAt' => '2026-07-08T10:15:30+00:00',
+        ]);
+
+        self::assertSame('2026-07-08T10:15:30+00:00', $dto->createdAt);
     }
 
     public function testFromArray_MapsAmountChargedBack(): void

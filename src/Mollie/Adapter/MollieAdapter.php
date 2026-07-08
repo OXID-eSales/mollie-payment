@@ -220,6 +220,7 @@ final class MollieAdapter implements
             $payment->getAmountRemaining(),
             MollieValueMapper::toNullableString($payment->redirectUrl),
             MollieValueMapper::toNullableString($payment->webhookUrl),
+            createdAt: MollieValueMapper::toNullableString($payment->createdAt),
         );
     }
 
@@ -230,6 +231,7 @@ final class MollieAdapter implements
             (string) $refund->paymentId,
             MollieValueMapper::toAmount($refund->amount),
             (string) $refund->status,
+            MollieValueMapper::toNullableString($refund->createdAt),
         );
     }
 
@@ -240,6 +242,7 @@ final class MollieAdapter implements
             (string) $capture->paymentId,
             MollieValueMapper::toAmount($capture->amount),
             (string) $capture->status,
+            MollieValueMapper::toNullableString($capture->createdAt),
         );
     }
 }

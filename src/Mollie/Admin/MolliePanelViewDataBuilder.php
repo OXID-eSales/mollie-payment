@@ -45,21 +45,27 @@ class MolliePanelViewDataBuilder
             return $this->empty($orderId, 'No Mollie contract is linked to this order.', $validationErrors);
         }
 
-        return $this->fromContract($orderId, $contract, $validationErrors);
+        return $this->fromContract($orderId, $contract, $order, $validationErrors);
     }
 
     /**
      * @param list<string> $validationErrors
      * @return array<string, mixed>
      */
-    private function fromContract(string $orderId, PaymentContractInterface $contract, array $validationErrors): array
-    {
+    private function fromContract(
+        string $orderId,
+        PaymentContractInterface $contract,
+        Order $order,
+        array $validationErrors,
+    ): array {
         $providerOrderId = $contract->getProviderOrderId();
         $captureBound = $this->bounds->captureBound($contract);
         $refundBound = $this->bounds->refundBound($contract);
 
         return [
             'orderId' => $orderId,
+            'orderNumber' => $this->readOrderField($order, 'oxordernr'),
+            'paymentType' => $this->readOrderField($order, 'oxpaymenttype'),
             'contractId' => (string) $contract->getId(),
             'providerOrderId' => $providerOrderId,
             'contractState' => $contract->getStateValue(),
@@ -97,6 +103,8 @@ class MolliePanelViewDataBuilder
     {
         return [
             'orderId' => $orderId,
+            'orderNumber' => '',
+            'paymentType' => '',
             'contractId' => '',
             'providerOrderId' => null,
             'contractState' => '',
@@ -120,5 +128,15 @@ class MolliePanelViewDataBuilder
     private function money(?float $amount): string
     {
         return number_format($amount ?? 0.0, 2, '.', '');
+    }
+
+    /**
+     * OXID's Order::getFieldData() is typed `mixed`; coerce only genuine scalars to string.
+     */
+    private function readOrderField(Order $order, string $field): string
+    {
+        $value = $order->getFieldData($field);
+
+        return is_scalar($value) ? (string) $value : '';
     }
 }

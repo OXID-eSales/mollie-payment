@@ -84,6 +84,21 @@ final class MolliePanelViewDataBuilderTest extends TestCase
         self::assertFalse($viewData['isRefundable'], 'refund bound is 0.0, so refund must not be offered');
     }
 
+    public function testBuild_IncludesOrderNumberAndPaymentType(): void
+    {
+        $order = $this->stubOrder('order-fields', '4711', 'oe_payments_mollie');
+        $contract = $this->authorizedContract();
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('captureBound')->willReturn(10.0);
+        $this->bounds->method('refundBound')->willReturn(0.0);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+
+        $viewData = $this->builder->build($order);
+
+        self::assertSame('4711', $viewData['orderNumber']);
+        self::assertSame('oe_payments_mollie', $viewData['paymentType']);
+    }
+
     public function testBuild_FulfilledContractWithRefundBalance_IsRefundable(): void
     {
         $order = $this->stubOrder('order-3');
@@ -99,10 +114,14 @@ final class MolliePanelViewDataBuilderTest extends TestCase
         self::assertFalse($viewData['isCapturable']);
     }
 
-    private function stubOrder(string $id): Order
+    private function stubOrder(string $id, string $orderNumber = '', string $paymentType = ''): Order
     {
         $order = $this->createMock(Order::class);
         $order->method('getId')->willReturn($id);
+        $order->method('getFieldData')->willReturnMap([
+            ['oxordernr', $orderNumber],
+            ['oxpaymenttype', $paymentType],
+        ]);
 
         return $order;
     }

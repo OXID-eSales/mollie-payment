@@ -5,12 +5,12 @@
    wrapper owns all of that.
 
    View-data shape produced by MolliePanelViewDataBuilder::build():
-   - orderId, contractId, providerOrderId, contractState, currency
+   - orderId, orderNumber, paymentType, contractId, providerOrderId, contractState, currency
    - capturedAmount, refundedAmount (formatted strings)
    - captureBound/captureBoundFormatted, refundBound/refundBoundFormatted
    - isCapturable, isRefundable, isCancellable
    - dashboardUrl (optional), errorMessage (optional)
-   - transactions: list<TransactionRow> (type/id/amount/currency/status/badgeTone())
+   - transactions: list<TransactionRow> (type/id/amount/currency/status/createdAt/badgeTone())
    - validationErrors: list<string> (Story 3 — consumed once per render)
    ============================================================================ #}
 
@@ -32,6 +32,16 @@
     <table class="pc-card" data-testid="mollie-panel-card">
         <tbody>
         <tr>
+            <th class="pc-label">{{ "MOLLIE_ORDER_NUMBER"|translate }}</th>
+            <td class="pc-value" data-testid="order-number">
+                {% if orderNumber is defined and orderNumber and orderNumber != '0' %}
+                    <strong>{{ orderNumber }}</strong>
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
             <th class="pc-label">{{ "MOLLIE_CONTRACT_ID"|translate }}</th>
             <td class="pc-value"><code data-testid="contract-id">{{ contractId|default('—') }}</code></td>
         </tr>
@@ -48,6 +58,10 @@
                     —
                 {% endif %}
             </td>
+        </tr>
+        <tr>
+            <th class="pc-label">{{ "MOLLIE_PAYMENT_TYPE"|translate }}</th>
+            <td class="pc-value" data-testid="payment-type">{{ paymentType|default('—') }}</td>
         </tr>
         <tr>
             <th class="pc-label">{{ "MOLLIE_CONTRACT_STATE"|translate }}</th>
@@ -76,6 +90,7 @@
                         <th>{{ "MOLLIE_TRANSACTION_ID"|translate }}</th>
                         <th class="text-right">{{ "MOLLIE_AMOUNT"|translate }}</th>
                         <th>{{ "MOLLIE_TRANSACTION_STATUS"|translate }}</th>
+                        <th>{{ "MOLLIE_TRANSACTION_DATE"|translate }}</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -85,6 +100,7 @@
                             <td><code>{{ row.id }}</code></td>
                             <td class="text-right">{{ '%.2f'|format(row.amount) }} {{ row.currency }}</td>
                             <td><span class="pc-badge pc-badge-{{ row.badgeTone() == 'success' ? 'green' : (row.badgeTone() == 'warning' ? 'orange' : (row.badgeTone() == 'danger' ? 'blue' : 'gray')) }}">{{ row.status }}</span></td>
+                            <td>{{ row.createdAt ? row.createdAt|date('Y-m-d H:i') : '—' }}</td>
                         </tr>
                     {% endfor %}
                     </tbody>
@@ -155,7 +171,12 @@
                         </div>
                         <div class="pc-form-group">
                             <label class="pc-form-label" for="refund_reason">{{ "MOLLIE_REFUND_REASON"|translate }}</label>
-                            <input type="text" class="pc-form-input" id="refund_reason" name="refund_reason" maxlength="140">
+                            <select class="pc-form-input" id="refund_reason" name="refund_reason" data-testid="refund-reason-select">
+                                <option value="">{{ "MOLLIE_PLEASE_SELECT"|translate }}</option>
+                                <option value="requested_by_customer">{{ "MOLLIE_REASON_REQUESTED_BY_CUSTOMER"|translate }}</option>
+                                <option value="duplicate">{{ "MOLLIE_REASON_DUPLICATE"|translate }}</option>
+                                <option value="fraudulent">{{ "MOLLIE_REASON_FRAUDULENT"|translate }}</option>
+                            </select>
                         </div>
                     </div>
 
@@ -183,7 +204,13 @@
                     <div class="pc-form-row">
                         <div class="pc-form-group">
                             <label class="pc-form-label" for="cancel_reason">{{ "MOLLIE_CANCEL_REASON"|translate }}</label>
-                            <input type="text" class="pc-form-input" id="cancel_reason" name="cancel_reason" maxlength="140">
+                            <select class="pc-form-input" id="cancel_reason" name="cancel_reason" data-testid="cancel-reason-select">
+                                <option value="">{{ "MOLLIE_PLEASE_SELECT"|translate }}</option>
+                                <option value="requested_by_customer">{{ "MOLLIE_REASON_REQUESTED_BY_CUSTOMER"|translate }}</option>
+                                <option value="duplicate">{{ "MOLLIE_REASON_DUPLICATE"|translate }}</option>
+                                <option value="fraudulent">{{ "MOLLIE_REASON_FRAUDULENT"|translate }}</option>
+                                <option value="abandoned">{{ "MOLLIE_REASON_ABANDONED"|translate }}</option>
+                            </select>
                         </div>
                     </div>
 

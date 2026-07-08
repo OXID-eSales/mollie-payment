@@ -14,8 +14,10 @@ $aLang = [
     'charset' => 'UTF-8',
 
     'MOLLIE_ORDER_PAYMENT_DETAILS' => 'Zahlungsdetails',
+    'MOLLIE_ORDER_NUMBER' => 'Bestellnummer',
     'MOLLIE_CONTRACT_ID' => 'Vertrags-ID',
     'MOLLIE_PAYMENT_ID' => 'Mollie-Zahlungs-ID',
+    'MOLLIE_PAYMENT_TYPE' => 'Zahlungsart',
     'MOLLIE_CONTRACT_STATE' => 'Status',
     'MOLLIE_CAPTURED_AMOUNT' => 'Erfasst',
     'MOLLIE_REFUNDED_AMOUNT' => 'Erstattet',
@@ -25,7 +27,15 @@ $aLang = [
     'MOLLIE_TRANSACTION_TYPE' => 'Typ',
     'MOLLIE_TRANSACTION_ID' => 'ID',
     'MOLLIE_TRANSACTION_STATUS' => 'Status',
+    'MOLLIE_TRANSACTION_DATE' => 'Datum',
     'MOLLIE_AMOUNT' => 'Betrag',
+
+    // Vordefinierte Gründe für Erstattung / Stornierung (analog zu Stripe).
+    'MOLLIE_PLEASE_SELECT' => '— Bitte wählen —',
+    'MOLLIE_REASON_REQUESTED_BY_CUSTOMER' => 'Vom Kunden angefordert',
+    'MOLLIE_REASON_DUPLICATE' => 'Doppelbuchung',
+    'MOLLIE_REASON_FRAUDULENT' => 'Betrug',
+    'MOLLIE_REASON_ABANDONED' => 'Abgebrochen',
 
     'MOLLIE_CAPTURE' => 'Erfassen',
     'MOLLIE_CAPTURABLE_AMOUNT' => 'Erfassbarer Betrag',

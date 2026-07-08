@@ -83,6 +83,31 @@ final class TransactionHistoryServiceTest extends TestCase
         self::assertSame('EUR', $rows[2]->currency);
     }
 
+    public function testHistory_ThreadsCreatedAtIntoRows(): void
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getProviderOrderId')->willReturn('tr_ts');
+
+        $this->paymentsAdapter->method('getPayment')->with('tr_ts')->willReturn(new MolliePaymentDto(
+            id: 'tr_ts',
+            status: 'paid',
+            amount: MollieAmountDto::fromComponents('EUR', 100.0),
+            createdAt: '2026-07-08T10:00:00+00:00',
+        ));
+        $this->captureAdapter->method('listCaptures')->with('tr_ts')->willReturn([
+            new MollieCaptureDto('cpt_1', 'tr_ts', MollieAmountDto::fromComponents('EUR', 100.0), 'succeeded', '2026-07-08T10:05:00+00:00'),
+        ]);
+        $this->refundAdapter->method('listRefunds')->with('tr_ts')->willReturn([
+            new MollieRefundDto('re_1', 'tr_ts', MollieAmountDto::fromComponents('EUR', 25.0), 'refunded', '2026-07-08T10:10:00+00:00'),
+        ]);
+
+        $rows = $this->service->fetch($contract);
+
+        self::assertSame('2026-07-08T10:00:00+00:00', $rows[0]->createdAt);
+        self::assertSame('2026-07-08T10:05:00+00:00', $rows[1]->createdAt);
+        self::assertSame('2026-07-08T10:10:00+00:00', $rows[2]->createdAt);
+    }
+
     public function testHistory_MapsStatusesToBadges(): void
     {
         $contract = $this->createMock(PaymentContractInterface::class);

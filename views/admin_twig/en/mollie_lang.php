@@ -15,8 +15,10 @@ $aLang = [
 
     // Sprint 7 — Mollie panel body inside the shared Payment admin tab.
     'MOLLIE_ORDER_PAYMENT_DETAILS' => 'Payment details',
+    'MOLLIE_ORDER_NUMBER' => 'Order number',
     'MOLLIE_CONTRACT_ID' => 'Contract ID',
     'MOLLIE_PAYMENT_ID' => 'Mollie payment ID',
+    'MOLLIE_PAYMENT_TYPE' => 'Payment method',
     'MOLLIE_CONTRACT_STATE' => 'State',
     'MOLLIE_CAPTURED_AMOUNT' => 'Captured',
     'MOLLIE_REFUNDED_AMOUNT' => 'Refunded',
@@ -26,7 +28,15 @@ $aLang = [
     'MOLLIE_TRANSACTION_TYPE' => 'Type',
     'MOLLIE_TRANSACTION_ID' => 'ID',
     'MOLLIE_TRANSACTION_STATUS' => 'Status',
+    'MOLLIE_TRANSACTION_DATE' => 'Date',
     'MOLLIE_AMOUNT' => 'Amount',
+
+    // Predefined refund / cancel reasons (mirrors Stripe's reason dropdowns).
+    'MOLLIE_PLEASE_SELECT' => '— Please select —',
+    'MOLLIE_REASON_REQUESTED_BY_CUSTOMER' => 'Requested by customer',
+    'MOLLIE_REASON_DUPLICATE' => 'Duplicate',
+    'MOLLIE_REASON_FRAUDULENT' => 'Fraudulent',
+    'MOLLIE_REASON_ABANDONED' => 'Abandoned',
 
     'MOLLIE_CAPTURE' => 'Capture',
     'MOLLIE_CAPTURABLE_AMOUNT' => 'Capturable amount',

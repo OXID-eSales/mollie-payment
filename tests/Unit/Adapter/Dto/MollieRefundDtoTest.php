@@ -30,4 +30,24 @@ final class MollieRefundDtoTest extends TestCase
         self::assertSame(5.0, $dto->amount->value);
         self::assertSame('pending', $dto->status);
     }
+
+    public function testFromArray_MapsCreatedAt(): void
+    {
+        $dto = MollieRefundDto::fromArray([
+            'id' => 're_ts',
+            'paymentId' => 'tr_abc',
+            'amount' => ['currency' => 'EUR', 'value' => '5.00'],
+            'status' => 'refunded',
+            'createdAt' => '2026-07-08T11:00:00+00:00',
+        ]);
+
+        self::assertSame('2026-07-08T11:00:00+00:00', $dto->createdAt);
+    }
+
+    public function testFromArray_CreatedAtDefaultsToNull(): void
+    {
+        $dto = MollieRefundDto::fromArray(['id' => 're_x', 'paymentId' => 'tr_x']);
+
+        self::assertNull($dto->createdAt);
+    }
 }

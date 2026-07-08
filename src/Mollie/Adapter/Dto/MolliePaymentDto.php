@@ -30,6 +30,7 @@ final readonly class MolliePaymentDto
         public ?string $redirectUrl = null,
         public ?string $webhookUrl = null,
         public float $amountChargedBack = 0.0,
+        public ?string $createdAt = null,
     ) {
     }
 
@@ -45,7 +46,8 @@ final readonly class MolliePaymentDto
      *     amountRemaining?: string|int|float|null,
      *     redirectUrl?: string|null,
      *     webhookUrl?: string|null,
-     *     amountChargedBack?: string|int|float|null
+     *     amountChargedBack?: string|int|float|null,
+     *     createdAt?: string|null
      * } $data
      */
     public static function fromArray(array $data): self
@@ -62,6 +64,7 @@ final readonly class MolliePaymentDto
             isset($data['redirectUrl']) ? (string) $data['redirectUrl'] : null,
             isset($data['webhookUrl']) ? (string) $data['webhookUrl'] : null,
             (float) ($data['amountChargedBack'] ?? 0.0),
+            isset($data['createdAt']) ? (string) $data['createdAt'] : null,
         );
     }
 

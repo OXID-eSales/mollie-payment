@@ -364,6 +364,14 @@ services:
     alias: OxidEsales\Payments\Mollie\Service\OxpaidReconciliationService
     public: true
 
+  # Console entrypoint for the reconciliation service. Command/ is not swept by the Service/*
+  # resource glob, so it is registered explicitly and tagged for OXID's console (mirrors Stripe's
+  # stripe:reconcile-oxpaid wiring).
+  OxidEsales\Payments\Mollie\Command\ReconcileOxpaidCommand:
+    tags:
+      - { name: 'console.command', command: 'mollie:reconcile-oxpaid' }
+    public: true
+
   # Admin request handlers — delegate to the services above, tagged so
   # EventListenerProvider dispatches the Mollie concrete event produced by the translator.
   OxidEsales\Payments\Mollie\EventSystem\Handler\MollieRefundRequestHandler:

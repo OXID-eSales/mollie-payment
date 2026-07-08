@@ -69,6 +69,7 @@ final class TransactionHistoryService implements TransactionHistoryServiceInterf
             $payment->amount->currency,
             $payment->status,
             $this->statusMapper->map($payment->status),
+            $payment->createdAt,
         );
     }
 
@@ -81,6 +82,7 @@ final class TransactionHistoryService implements TransactionHistoryServiceInterf
             $capture->amount->currency,
             $capture->status,
             $this->statusMapper->map($capture->status),
+            $capture->createdAt,
         );
     }
 
@@ -93,6 +95,7 @@ final class TransactionHistoryService implements TransactionHistoryServiceInterf
             $refund->amount->currency,
             $refund->status,
             $this->statusMapper->map($refund->status),
+            $refund->createdAt,
         );
     }
 

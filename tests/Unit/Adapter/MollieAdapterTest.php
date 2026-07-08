@@ -168,6 +168,7 @@ final class MollieAdapterTest extends TestCase
 
         self::assertCount(1, $dtos);
         self::assertSame('re_1', $dtos[0]->id);
+        self::assertSame('2026-07-08T11:00:00+00:00', $dtos[0]->createdAt);
     }
 
     public function testListRefunds_OnSdkException_ThrowsDomainException(): void
@@ -188,6 +189,7 @@ final class MollieAdapterTest extends TestCase
 
         self::assertCount(1, $dtos);
         self::assertSame('cpt_1', $dtos[0]->id);
+        self::assertSame('2026-07-08T12:00:00+00:00', $dtos[0]->createdAt);
     }
 
     public function testListCaptures_OnSdkException_ThrowsDomainException(): void
@@ -245,6 +247,7 @@ final class MollieAdapterTest extends TestCase
         $payment->status = $props['status'] ?? 'open';
         $payment->amount = (object) ['currency' => 'EUR', 'value' => '24.00'];
         $payment->metadata = (object) ['order_number' => '4711'];
+        $payment->createdAt = '2026-07-08T10:00:00+00:00';
         if (isset($props['checkout'])) {
             $payment->_links = (object) ['checkout' => (object) ['href' => $props['checkout']]];
         }
@@ -258,6 +261,7 @@ final class MollieAdapterTest extends TestCase
         $refund->paymentId = 'tr_abc';
         $refund->amount = (object) ['currency' => 'EUR', 'value' => '3.50'];
         $refund->status = 'pending';
+        $refund->createdAt = '2026-07-08T11:00:00+00:00';
         return $refund;
     }
 
@@ -268,6 +272,7 @@ final class MollieAdapterTest extends TestCase
         $capture->paymentId = 'tr_abc';
         $capture->amount = (object) ['currency' => 'EUR', 'value' => '24.00'];
         $capture->status = 'pending';
+        $capture->createdAt = '2026-07-08T12:00:00+00:00';
         return $capture;
     }
 

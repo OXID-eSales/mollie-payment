@@ -19,6 +19,7 @@ final readonly class MollieRefundDto
         public string $paymentId,
         public MollieAmountDto $amount,
         public string $status,
+        public ?string $createdAt = null,
     ) {
     }
 
@@ -27,7 +28,8 @@ final readonly class MollieRefundDto
      *     id?: string|null,
      *     paymentId?: string|null,
      *     amount?: array{currency?: string|null, value?: string|int|float|null}|null,
-     *     status?: string|null
+     *     status?: string|null,
+     *     createdAt?: string|null
      * } $data
      */
     public static function fromArray(array $data): self
@@ -37,6 +39,7 @@ final readonly class MollieRefundDto
             (string) ($data['paymentId'] ?? ''),
             MollieAmountDto::fromArray($data['amount'] ?? []),
             (string) ($data['status'] ?? ''),
+            isset($data['createdAt']) ? (string) $data['createdAt'] : null,
         );
     }
 }

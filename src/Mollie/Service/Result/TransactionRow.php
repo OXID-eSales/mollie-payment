@@ -29,6 +29,7 @@ final readonly class TransactionRow
         public string $currency,
         public string $status,
         public MollieOutcome $outcome,
+        public ?string $createdAt = null,
     ) {
     }
 
