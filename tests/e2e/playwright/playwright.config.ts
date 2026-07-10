@@ -33,5 +33,20 @@ export default defineConfig({
             testMatch: 'tests/MollieStandard/**/*.spec.ts',
             use: { ...devices['Desktop Chrome'] },
         },
+        {
+            name: 'mollie-admin',
+            testMatch: 'tests/MollieAdmin/**/*.spec.ts',
+            use: { ...devices['Desktop Chrome'] },
+        },
+        {
+            name: 'mollie-checkout',
+            testMatch: 'tests/mollie-checkout.spec.ts',
+            use: { ...devices['Desktop Chrome'] },
+        },
+        {
+            name: 'admin-access',
+            testMatch: 'tests/admin-access.spec.ts',
+            use: { ...devices['Desktop Chrome'] },
+        },
     ],
 });

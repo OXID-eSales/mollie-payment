@@ -17,6 +17,8 @@ use OxidEsales\PaymentBase\EventSystem\Event\EventInterface;
  * `PayPalRefundRequestEvent` shape: carries the contract directly (translated from the abstract
  * request event's `EventContext` by {@see \OxidEsales\Payments\Mollie\EventSystem\Translator\MollieEventTranslator})
  * and exposes mutable result fields the handler fills in after calling {@see \OxidEsales\Payments\Mollie\Service\RefundServiceInterface}.
+ *
+ * Story 3 (Sprint 9): Added `description` field for admin audit trail.
  */
 final class MollieRefundRequestEvent implements EventInterface
 {
@@ -29,6 +31,7 @@ final class MollieRefundRequestEvent implements EventInterface
         public readonly ?float $amount = null,
         public readonly ?string $reason = null,
         public readonly ?string $idempotencyKey = null,
+        public readonly ?string $description = null,
     ) {
     }
 

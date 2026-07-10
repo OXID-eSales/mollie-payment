@@ -44,11 +44,13 @@ final class MollieRefundRequestHandler implements HandlerInterface
         }
 
         try {
+            // Story 3 (Sprint 9): Pass optional description for audit trail.
             $refund = $this->refundService->refund(
                 $event->contract,
                 $event->amount,
                 $event->reason,
                 $event->idempotencyKey,
+                $event->description,
             );
             $event->setResult($refund->id);
         } catch (InvalidArgumentException $e) {

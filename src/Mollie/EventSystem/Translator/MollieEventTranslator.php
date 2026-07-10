@@ -50,11 +50,16 @@ final class MollieEventTranslator implements ProviderEventTranslatorInterface
         }
 
         if ($event instanceof RefundRequestedEvent) {
+            // Story 3 (Sprint 9): Extract optional description from context for audit trail.
+            $rawDescription = $event->getContext()->get('refundDescription');
+            $description = is_string($rawDescription) ? $rawDescription : null;
+
             return new MollieRefundRequestEvent(
                 $contract,
                 $event->getAmount(),
                 $event->getReason(),
                 $this->buildIdempotencyKey($contract->getId(), self::ACTION_REFUND, $event->getAmount()),
+                $description,
             );
         }
 

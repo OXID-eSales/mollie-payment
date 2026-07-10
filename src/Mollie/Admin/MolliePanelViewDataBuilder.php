@@ -139,4 +139,20 @@ class MolliePanelViewDataBuilder
 
         return is_scalar($value) ? (string) $value : '';
     }
+
+    /**
+     * Reset any cached API data.
+     *
+     * Story 2 (Sprint 9): Added for API parity with Stripe. Mollie's TransactionHistoryService
+     * reads directly from the Mollie API on each fetch() call, so there is no per-request
+     * cache to bust. This no-op exists so both panel providers share the same interface
+     * and the calling code (MolliePaymentPanelProvider) can call it uniformly after any
+     * admin action without branching on the provider.
+     *
+     * @see StripePanelViewDataBuilder::resetViewCache()
+     */
+    public function resetViewCache(): void
+    {
+        // No-op: Mollie reads directly from API on each call, no stale cache.
+    }
 }

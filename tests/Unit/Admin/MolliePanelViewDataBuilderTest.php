@@ -114,6 +114,18 @@ final class MolliePanelViewDataBuilderTest extends TestCase
         self::assertFalse($viewData['isCapturable']);
     }
 
+    // =========================================================================
+    // Story 2: View Cache Reset (no-op for Mollie)
+    // =========================================================================
+
+    public function testResetViewCache_NoOpDoesNotThrow(): void
+    {
+        // Mollie reads directly from API on each fetch(), so resetViewCache() is a no-op.
+        // This test ensures the method exists and doesn't throw.
+        $this->builder->resetViewCache();
+        $this->assertTrue(true); // Assert passes if no exception thrown
+    }
+
     private function stubOrder(string $id, string $orderNumber = '', string $paymentType = ''): Order
     {
         $order = $this->createMock(Order::class);

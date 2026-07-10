@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 use OxidEsales\PaymentBase\Contract\ContractState;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\PaymentBase\Service\StockRestorationServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieRefundDto;
@@ -30,6 +31,7 @@ final class RefundServiceTest extends TestCase
     private MolliePaymentsAdapterInterface&MockObject $paymentsAdapter;
     private MollieRefundAdapterInterface&MockObject $refundAdapter;
     private ContractRepositoryInterface&MockObject $contractRepository;
+    private StockRestorationServiceInterface&MockObject $stockRestorationService;
     private ContractRefundRecorder $refundRecorder;
     private RefundService $service;
 
@@ -38,12 +40,14 @@ final class RefundServiceTest extends TestCase
         $this->paymentsAdapter = $this->createMock(MolliePaymentsAdapterInterface::class);
         $this->refundAdapter = $this->createMock(MollieRefundAdapterInterface::class);
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
+        $this->stockRestorationService = $this->createMock(StockRestorationServiceInterface::class);
         $this->refundRecorder = new ContractRefundRecorder($this->contractRepository);
 
         $this->service = new RefundService(
             $this->paymentsAdapter,
             $this->refundAdapter,
             $this->refundRecorder,
+            $this->stockRestorationService,
         );
     }
 
@@ -131,6 +135,90 @@ final class RefundServiceTest extends TestCase
         $this->expectException(\DomainException::class);
 
         $this->service->refund($contract);
+    }
+
+    // =========================================================================
+    // Story 1: Stock Restoration on Admin Refund
+    // =========================================================================
+
+    public function testRefund_Successful_RestoresStockForOrder(): void
+    {
+        $contract = $this->fulfilledContractWithOrderId('tr_123', '5', 'order_42');
+
+        $this->paymentsAdapter->method('getPayment')->with('tr_123')->willReturn(
+            $this->payment('tr_123', 100.0, 0.0),
+        );
+
+        $this->refundAdapter->method('createRefund')->willReturn(
+            $this->refundDto('re_1', 'tr_123', 100.0),
+        );
+
+        // Expect stock restoration to be called with the order ID
+        $this->stockRestorationService->expects(self::once())
+            ->method('restoreStockForOrder')
+            ->with('order_42')
+            ->willReturn(3);
+
+        $this->service->refund($contract);
+    }
+
+    public function testRefund_WhenRefundFails_DoesNotRestoreStock(): void
+    {
+        $contract = $this->fulfilledContractWithOrderId('tr_123', '5', 'order_42');
+
+        $this->paymentsAdapter->method('getPayment')->willReturn(
+            $this->payment('tr_123', 100.0, 90.0),
+        );
+
+        // Exceeds refundable - should not call stock restoration
+        $this->stockRestorationService->expects(self::never())
+            ->method('restoreStockForOrder');
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->service->refund($contract, 50.0);
+    }
+
+    public function testRefund_WithOrderIdNull_DoesNotRestoreStock(): void
+    {
+        $state = $this->createMock(ContractState::class);
+        $state->method('isFulfilled')->willReturn(true);
+
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getState')->willReturn($state);
+        $contract->method('getProviderOrderId')->willReturn('tr_123');
+        $contract->method('getId')->willReturn('5');
+        $contract->method('getOrderId')->willReturn(null); // No order linked
+
+        $this->paymentsAdapter->method('getPayment')->willReturn(
+            $this->payment('tr_123', 100.0, 0.0),
+        );
+
+        $this->refundAdapter->method('createRefund')->willReturn(
+            $this->refundDto('re_1', 'tr_123', 100.0),
+        );
+
+        // Stock restoration should not be called when orderId is null
+        $this->stockRestorationService->expects(self::never())
+            ->method('restoreStockForOrder');
+
+        $dto = $this->service->refund($contract);
+
+        self::assertSame('re_1', $dto->id);
+    }
+
+    private function fulfilledContractWithOrderId(string $providerOrderId, string $id, string $orderId): PaymentContractInterface&MockObject
+    {
+        $state = $this->createMock(ContractState::class);
+        $state->method('isFulfilled')->willReturn(true);
+
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getState')->willReturn($state);
+        $contract->method('getProviderOrderId')->willReturn($providerOrderId);
+        $contract->method('getId')->willReturn($id);
+        $contract->method('getOrderId')->willReturn($orderId);
+
+        return $contract;
     }
 
     private function fulfilledContract(string $providerOrderId, string $id): PaymentContractInterface&MockObject

@@ -180,6 +180,14 @@
                         </div>
                     </div>
 
+                    {# Story 3 (Sprint 9): Optional admin description for audit trail #}
+                    <div class="pc-form-group">
+                        <label class="pc-form-label" for="refund_description">{{ "MOLLIE_REFUND_DESCRIPTION"|translate }}</label>
+                        <input type="text" class="pc-form-input" id="refund_description" name="refund_description"
+                               maxlength="140" placeholder="{{ "MOLLIE_REFUND_DESCRIPTION_PLACEHOLDER"|translate }}"
+                               data-testid="refund-description-input">
+                    </div>
+
                     <input type="submit" class="pc-btn pc-btn-warning" data-testid="refund-submit"
                            value="{{ "MOLLIE_REFUND_SUBMIT"|translate }}"
                            onclick="return confirm('{{ "MOLLIE_REFUND_CONFIRM"|translate }}');">

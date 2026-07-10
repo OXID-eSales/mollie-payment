@@ -195,6 +195,83 @@ final class MolliePaymentPanelProviderTest extends TestCase
         ));
     }
 
+    // =========================================================================
+    // Story 2: View Cache Reset After Admin Actions
+    // =========================================================================
+
+    public function testHandleAction_Refund_ResetsViewCacheAfterAction(): void
+    {
+        $order = $this->stubOrder('order-cache-1');
+        $this->orderLoader->order = $order;
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('refundBound')->willReturn(50.0);
+
+        $this->actionDispatcher->expects(self::once())->method('refund');
+        $this->viewDataBuilder->expects(self::once())->method('resetViewCache');
+
+        $this->provider->handleAction('refund', ['refund_amount' => '25.00'], new PaymentPanelContext(
+            'order-cache-1',
+            MollieDefinitions::PAYMENT_ID,
+            $contract,
+        ));
+    }
+
+    public function testHandleAction_Capture_ResetsViewCacheAfterAction(): void
+    {
+        $order = $this->stubOrder('order-cache-2');
+        $this->orderLoader->order = $order;
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('captureBound')->willReturn(100.0);
+
+        $this->actionDispatcher->expects(self::once())->method('capture');
+        $this->viewDataBuilder->expects(self::once())->method('resetViewCache');
+
+
+        $this->provider->handleAction('capture', [], new PaymentPanelContext(
+            'order-cache-2',
+            MollieDefinitions::PAYMENT_ID,
+            $contract,
+        ));
+    }
+
+    public function testHandleAction_Cancel_ResetsViewCacheAfterAction(): void
+    {
+        $order = $this->stubOrder('order-cache-3');
+        $this->orderLoader->order = $order;
+
+        $this->actionDispatcher->expects(self::once())->method('cancel');
+        $this->viewDataBuilder->expects(self::once())->method('resetViewCache');
+
+        $this->provider->handleAction('cancel', ['cancel_reason' => 'abandoned'], new PaymentPanelContext(
+            'order-cache-3',
+            MollieDefinitions::PAYMENT_ID,
+            null,
+        ));
+    }
+
+    public function testHandleAction_Refund_ValidationFails_DoesNotResetCache(): void
+    {
+        $order = $this->stubOrder('order-cache-4');
+        $this->orderLoader->order = $order;
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('refundBound')->willReturn(10.0);
+
+
+        $this->actionDispatcher->expects(self::never())->method('refund');
+        // Cache should NOT be reset when validation fails (no action was taken)
+        $this->viewDataBuilder->expects(self::never())->method('resetViewCache');
+        $this->validationFeedback->expects(self::once())->method('reject');
+
+        $this->provider->handleAction('refund', ['refund_amount' => '99.00'], new PaymentPanelContext(
+            'order-cache-4',
+            MollieDefinitions::PAYMENT_ID,
+            $contract,
+        ));
+    }
+
     private function stubOrder(string $id): Order
     {
         $order = $this->createMock(Order::class);

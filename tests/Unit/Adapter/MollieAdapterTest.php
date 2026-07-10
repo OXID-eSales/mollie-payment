@@ -113,7 +113,9 @@ final class MollieAdapterTest extends TestCase
         $dto = (new MollieAdapter($this->client))->createRefund(new RefundRequest(
             'tr_abc',
             new MollieAmountDto('EUR', 3.5),
-            'partial refund',
+            null, // reason
+            null, // idempotencyKey
+            'partial refund', // description
         ));
 
         self::assertSame('tr_abc', $captured['paymentId']);

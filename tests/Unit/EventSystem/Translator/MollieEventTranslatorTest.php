@@ -50,6 +50,20 @@ final class MollieEventTranslatorTest extends TestCase
         self::assertSame(25.0, $translated->amount);
         self::assertSame('requested', $translated->reason);
         self::assertSame('contract-1:refund:25.00', $translated->idempotencyKey);
+        self::assertNull($translated->description);
+    }
+
+    public function testTranslate_RefundRequested_WithDescription_PassesThroughToEvent(): void
+    {
+        $contract = $this->contractWithId('contract-desc-1');
+        $context = $this->contextWithContract($contract);
+        $context->set('refundDescription', 'Admin note: customer requested');
+
+        $translated = $this->translator->translate(new RefundRequestedEvent($context, 25.0, 'requested'));
+
+
+        self::assertInstanceOf(MollieRefundRequestEvent::class, $translated);
+        self::assertSame('Admin note: customer requested', $translated->description);
     }
 
     public function testTranslate_CaptureRequested_ToMollieCaptureRequestEvent(): void

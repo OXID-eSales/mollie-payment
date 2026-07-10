@@ -43,7 +43,17 @@ final class OrderActionDispatcher implements AdminActionDispatcherInterface
     /** @param array<string, mixed> $extras */
     public function refund(Order $order, ?float $amount, ?string $reason, array $extras = []): void
     {
-        $this->dispatch(new RefundRequestedEvent($this->buildContext($order), $amount, $reason));
+        // Story 3 (Sprint 9): Extract optional description from extras for audit trail.
+        $description = isset($extras['description']) && is_string($extras['description']) && $extras['description'] !== ''
+            ? $extras['description']
+            : null;
+
+        $context = $this->buildContext($order);
+        if ($description !== null) {
+            $context->set('refundDescription', $description);
+        }
+
+        $this->dispatch(new RefundRequestedEvent($context, $amount, $reason));
     }
 
     /** @param array<string, mixed> $extras */

@@ -12,12 +12,15 @@ namespace OxidEsales\Payments\Mollie\Service;
 use DomainException;
 use InvalidArgumentException;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
+use OxidEsales\PaymentBase\Service\StockRestorationServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieRefundDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\RefundRequest;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 /**
  * Admin-initiated refund orchestrator (full & partial, accumulating).
@@ -32,6 +35,9 @@ use OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface;
  *
  * DRY: the actual contract bookkeeping (FULFILLED guard + delta-only accumulation) is delegated
  * to {@see ContractRefundRecorder}, the same collaborator the webhook-driven refund path uses.
+ *
+ * Story 1 (Sprint 9): Stock restoration on admin refund. When a refund succeeds, stock is restored
+ * for the associated order articles via {@see StockRestorationServiceInterface}.
  */
 final class RefundService implements RefundServiceInterface
 {
@@ -39,6 +45,8 @@ final class RefundService implements RefundServiceInterface
         private readonly MolliePaymentsAdapterInterface $paymentsAdapter,
         private readonly MollieRefundAdapterInterface $refundAdapter,
         private readonly ContractRefundRecorder $refundRecorder,
+        private readonly StockRestorationServiceInterface $stockRestorationService,
+        private readonly LoggerInterface $logger = new NullLogger(),
     ) {
     }
 
@@ -47,24 +55,51 @@ final class RefundService implements RefundServiceInterface
         ?float $amount = null,
         ?string $reason = null,
         ?string $idempotencyKey = null,
+        ?string $description = null,
     ): MollieRefundDto {
         $this->assertFulfilled($contract);
         $providerOrderId = $this->requireProviderOrderId($contract);
+
 
         $payment = $this->paymentsAdapter->getPayment($providerOrderId);
         $refundable = $this->refundableAmount($payment);
         $effectiveAmount = $this->resolveRefundAmount($amount, $refundable, $contract->getId() ?? 'unknown');
 
+        // Story 3 (Sprint 9): Optional admin description for audit trail.
+        // Stored in Mollie's refund metadata for retrieval.
         $refund = $this->refundAdapter->createRefund(new RefundRequest(
             $providerOrderId,
             MollieAmountDto::fromComponents($payment->amount->currency, $effectiveAmount),
             $reason,
             $idempotencyKey,
+            $description,
         ));
 
         $this->refundRecorder->record($contract, (float) $refund->amount->value, $contract->getId());
 
+        $this->restoreStockIfOrderLinked($contract);
+
         return $refund;
+    }
+
+    /**
+     * Restore stock for the order if one is linked to the contract.
+     * Silently skips if no order ID is present (order may not be created yet
+     * in edge cases).
+     */
+    private function restoreStockIfOrderLinked(PaymentContractInterface $contract): void
+    {
+        $orderId = $contract->getOrderId();
+        if ($orderId === null || $orderId === '') {
+            return;
+        }
+
+        $articlesProcessed = $this->stockRestorationService->restoreStockForOrder($orderId);
+        $this->logger->info('Stock restored after refund', [
+            'contractId' => $contract->getId(),
+            'orderId' => $orderId,
+            'articlesProcessed' => $articlesProcessed,
+        ]);
     }
 
     private function assertFulfilled(PaymentContractInterface $contract): void

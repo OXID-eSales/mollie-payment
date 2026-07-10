@@ -93,11 +93,21 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
             return;
         }
 
+        // Story 3 (Sprint 9): Optional admin description for audit trail.
+        $description = $this->parseString($request['refund_description'] ?? null);
+        $extras = $description !== null ? ['description' => $description] : [];
+
+
         $this->actionDispatcher->refund(
             $order,
             $amountResult->amount,
             $this->parseString($request['refund_reason'] ?? null),
+            $extras,
         );
+
+        // Story 2 (Sprint 9): Bust the per-request cache after refund so the same-request
+        // re-render reads fresh post-refund data from Mollie (no-op but called for parity).
+        $this->viewDataBuilder->resetViewCache();
     }
 
     /**
@@ -116,6 +126,9 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
             $amountResult->amount,
             $this->parseString($request['capture_reason'] ?? null),
         );
+
+        // Story 2 (Sprint 9): Bust the per-request cache after capture.
+        $this->viewDataBuilder->resetViewCache();
     }
 
     /**
@@ -124,6 +137,9 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
     private function handleCancel(Order $order, array $request): void
     {
         $this->actionDispatcher->cancel($order, $this->parseString($request['cancel_reason'] ?? null));
+
+        // Story 2 (Sprint 9): Bust the per-request cache after cancel.
+        $this->viewDataBuilder->resetViewCache();
     }
 
     /**

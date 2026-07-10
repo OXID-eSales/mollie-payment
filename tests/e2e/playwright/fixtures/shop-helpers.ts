@@ -35,12 +35,12 @@ export async function addFirstFeaturedProductToBasket(page: Page): Promise<void>
 
 /**
  * Walks the standard OXID checkout (basket -> user -> payment). The Apex theme advances with a
- * "Weiter"/"Continue" button; we then land on the payment-method step.
+ * "Weiter"/"Continue"/"Next" button; we then land on the payment-method step.
  */
 export async function goToCheckoutPayment(page: Page): Promise<void> {
     await page.goto('/index.php?cl=user');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /weiter|continue/i }).first().click();
+    await page.getByRole('button', { name: /weiter|continue|next/i }).first().click();
     await page.waitForLoadState('domcontentloaded');
     if (!/cl=payment/.test(page.url())) {
         await page.goto('/index.php?cl=payment');
@@ -62,7 +62,7 @@ export async function selectMolliePaymentMethod(page: Page, _method?: string): P
  * Advances from the payment step to the order-review step.
  */
 export async function continueToOrderReview(page: Page): Promise<void> {
-    await page.getByRole('button', { name: /weiter|continue/i }).first().click();
+    await page.getByRole('button', { name: /weiter|continue|next/i }).first().click();
     await page.waitForLoadState('domcontentloaded');
 }
 
