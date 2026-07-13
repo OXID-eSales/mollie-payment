@@ -10,7 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 
 use OxidEsales\PaymentBase\Validation\RuleSet;
-use OxidEsales\PaymentBase\Validation\ValidationBase;
+use OxidEsales\PaymentBase\Validation\ValidationBaseFactory;
 use OxidEsales\PaymentBase\Validation\ValidationRuleLoaderInterface;
 use OxidEsales\Payments\Mollie\Service\UserDataValidator;
 use OxidEsales\Payments\Mollie\Service\UserFieldReaderInterface;
@@ -101,7 +101,7 @@ final class UserDataValidatorTest extends TestCase
             }
         };
 
-        return new UserDataValidator(new ValidationBase('oe_payments_mollie', $loader));
+        return new UserDataValidator(new ValidationBaseFactory($loader));
     }
 
     /**
