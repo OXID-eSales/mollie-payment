@@ -151,18 +151,10 @@ stripe-wallet:
 
 ---
 
-## Blocking Issue
+## Blocking Issue - RESOLVED ✅
 
-Mollie CI cannot activate because:
-1. Mollie uses `ValidationBaseFactory` (new feature)
-2. `ValidationBaseFactory` is on `feat/mollie-panel-accent` (our fork)
-3. That branch doesn't exist on canonical `OXID-eSales/payment-base`
-4. Mollie CI checks out from canonical repo → factory not found
-
-**Solution Required:** Someone with access to `OXID-eSales/payment-base` needs to either:
-- Push `feat/mollie-panel-accent` to canonical repo, OR
-- Merge it to `b-7.4.x`, OR
-- Accept the duplicate interface binding design (revert changes)
+`ValidationBaseFactory` has been merged to `OXID-eSales/payment-base` `b-7.4.x`!
+Mollie CI now uses `PAYMENT_BASE_BRANCH: 'b-7.4.x'` and should be green.
 
 ---
 
