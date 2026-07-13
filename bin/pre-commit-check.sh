@@ -99,7 +99,15 @@ run_phpmd_docker() {
 
 echo ">>> Running PHP Code Sniffer..."
 if [ "$ENVIRONMENT" = "github" ]; then
-    cd "$MODULE_ROOT" && composer run phpcs 2>/dev/null || echo -e "${YELLOW}⊘ PHPCS skipped${NC}"
+    cd "$MODULE_ROOT"
+    if composer run phpcs; then
+        echo -e "${GREEN}✓ PHP Code Sniffer passed${NC}"
+    else
+        echo -e "${RED}✗ PHP Code Sniffer failed${NC}"
+        PHPCS_STATUS=1
+        OVERALL_STATUS=1
+        FAILED_CHECKS+=("PHP Code Sniffer")
+    fi
 else
     run_phpcs_docker
 fi
@@ -147,7 +155,15 @@ fi
 
 echo ">>> Running PHPStan static analysis..."
 if [ "$ENVIRONMENT" = "github" ]; then
-    cd "$MODULE_ROOT" && composer phpstan 2>/dev/null || echo -e "${YELLOW}⊘ PHPStan skipped${NC}"
+    cd "$MODULE_ROOT"
+    if composer phpstan; then
+        echo -e "${GREEN}✓ PHPStan passed${NC}"
+    else
+        echo -e "${RED}✗ PHPStan failed${NC}"
+        PHPSTAN_STATUS=1
+        OVERALL_STATUS=1
+        FAILED_CHECKS+=("PHPStan")
+    fi
 else
     run_phpstan_docker
 fi
@@ -163,7 +179,15 @@ echo ""
 
 echo ">>> Running PHPMD..."
 if [ "$ENVIRONMENT" = "github" ]; then
-    cd "$MODULE_ROOT" && composer phpmd 2>/dev/null || echo -e "${YELLOW}⊘ PHPMD skipped${NC}"
+    cd "$MODULE_ROOT"
+    if composer phpmd; then
+        echo -e "${GREEN}✓ PHPMD passed${NC}"
+    else
+        echo -e "${RED}✗ PHPMD failed${NC}"
+        PHPMD_STATUS=1
+        OVERALL_STATUS=1
+        FAILED_CHECKS+=("PHPMD")
+    fi
 else
     run_phpmd_docker
 fi

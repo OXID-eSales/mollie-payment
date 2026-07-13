@@ -56,7 +56,7 @@
   },
   "scripts": {
     "phpcs": "phpcs --standard=tests/phpcs.xml src/",
-    "phpstan": "phpstan analyse -c tests/PhpStan/phpstan.neon --level=max src/",
+    "phpstan": "phpstan analyse -c tests/PhpStan/phpstan.neon",
     "phpmd": "phpmd src text tests/PhpMd/phpmd.xml --baseline-file tests/PhpMd/phpmd.baseline.xml --exclude tests/ --suffixes php --strict",
     "phpunit": "phpunit -c tests/phpunit.xml",
     "style": [
