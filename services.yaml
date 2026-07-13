@@ -155,22 +155,15 @@ services:
 
   # ===========================================================================
   # Sprint 4 Story 6: central user-data validation (payment-base shared system).
-  # Mirrors Stripe's Sprint 119/124 (STRP-129) wiring; module id is a YAML literal
-  # because YAML cannot reference PHP constants (MollieDefinitions::MODULE_ID resolves to
-  # the same 'oe_payments_mollie' value).
+  # ValidationBase is created per-module via ValidationBaseFactory (defined in payment-base).
+  # Each provider gets an isolated instance with their specific module ID to avoid
+  # conflicts when multiple providers are active in the same shop.
   # ===========================================================================
-
-  OxidEsales\PaymentBase\Validation\ValidationBaseInterface:
-    class: OxidEsales\PaymentBase\Validation\ValidationBase
-    arguments:
-      $pluginModuleId: 'oe_payments_mollie'
-      $loader: '@OxidEsales\PaymentBase\Validation\ValidationRuleLoaderInterface'
-    public: false
 
   OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface:
     class: OxidEsales\Payments\Mollie\Service\UserDataValidator
     arguments:
-      - '@OxidEsales\PaymentBase\Validation\ValidationBaseInterface'
+      - '@OxidEsales\PaymentBase\Validation\ValidationBaseFactory'
     public: true
 
   OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface:

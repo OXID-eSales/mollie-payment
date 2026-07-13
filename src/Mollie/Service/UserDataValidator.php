@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Service;
 
+use OxidEsales\PaymentBase\Validation\ValidationBaseFactory;
 use OxidEsales\PaymentBase\Validation\ValidationBaseInterface;
 
 /**
@@ -27,7 +28,7 @@ final class UserDataValidator implements UserDataValidatorInterface
     ];
 
     public function __construct(
-        private readonly ValidationBaseInterface $validationBase,
+        private readonly ValidationBaseFactory $factory,
     ) {
     }
 
@@ -72,7 +73,8 @@ final class UserDataValidator implements UserDataValidatorInterface
             return null;
         }
 
-        $result = $this->validationBase->validateField($logicalName, $value);
+        $validationBase = $this->factory->create('oe_payments_mollie');
+        $result = $validationBase->validateField($logicalName, $value);
         if ($result->valid) {
             return null;
         }
