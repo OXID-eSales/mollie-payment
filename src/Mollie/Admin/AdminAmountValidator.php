@@ -17,7 +17,8 @@ namespace OxidEsales\Payments\Mollie\Admin;
  * An ABSENT amount means "full capture/refund" and stays legitimate (`ok(null)`); a
  * PRESENT-but-malformed amount is a failure and must never degrade to null/full-action.
  *
- * Mollie's supported currencies are EUR-only ({@see \OxidEsales\Payments\Mollie\Core\MollieDefinitions::getSupportedCurrencies()}),
+ * Mollie's supported currencies are EUR-only
+ * ({@see \OxidEsales\Payments\Mollie\Core\MollieDefinitions::getSupportedCurrencies()}),
  * so — unlike Stripe's minor-unit-aware validator — precision is a flat 2-decimal check; no
  * currency-aware conversion is needed here (YAGNI).
  */

@@ -26,9 +26,11 @@ use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
  *
  * Unlike PayPal's `OrderActionDispatcher` (which currently only builds a context — the concrete
  * event dispatch there is left to a future sprint), this dispatcher actually routes through the
- * broker: it builds an `EventContext` carrying the resolved contract + provider name, dispatches
- * the provider-agnostic `*RequestedEvent`, and lets {@see \OxidEsales\Payments\Mollie\EventSystem\Translator\MollieEventTranslator}
- * translate it into the Mollie concrete event that {@see \OxidEsales\Payments\Mollie\EventSystem\Handler\MollieRefundRequestHandler}
+ * broker: it builds an `EventContext` carrying the resolved contract + provider name,
+ * dispatches the provider-agnostic `*RequestedEvent`, and lets
+ * {@see \OxidEsales\Payments\Mollie\EventSystem\Translator\MollieEventTranslator}
+ * translate it into the Mollie concrete event that
+ * {@see \OxidEsales\Payments\Mollie\EventSystem\Handler\MollieRefundRequestHandler}
  * (and its capture/cancel siblings) consume. No admin UI is wired to this yet (Sprint 7) — Sprint
  * 6 exercises it directly from unit tests.
  */
@@ -44,9 +46,8 @@ final class OrderActionDispatcher implements AdminActionDispatcherInterface
     public function refund(Order $order, ?float $amount, ?string $reason, array $extras = []): void
     {
         // Story 3 (Sprint 9): Extract optional description from extras for audit trail.
-        $description = isset($extras['description']) && is_string($extras['description']) && $extras['description'] !== ''
-            ? $extras['description']
-            : null;
+        $hasDescription = isset($extras['description']) && is_string($extras['description']);
+        $description = $hasDescription && $extras['description'] !== '' ? $extras['description'] : null;
 
         $context = $this->buildContext($order);
         if ($description !== null) {

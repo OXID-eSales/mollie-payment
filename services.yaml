@@ -498,3 +498,19 @@ services:
     arguments:
       $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
     public: true
+
+  # ===========================================================================
+  # Sprint 9 Story 1: stock restoration on admin refund.
+  #
+  # payment-base defines StockRestorationServiceInterface but provides no
+  # implementation — each PSP module implements it themselves (Stripe, Mollie).
+  # This mirrors Stripe's OxidStockRestorationService binding for the same
+  # payment-base interface so Mollie can activate standalone.
+  # ===========================================================================
+
+  OxidEsales\Payments\Mollie\Service\OxidStockRestorationService:
+    public: false
+
+  OxidEsales\PaymentBase\Service\StockRestorationServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Service\OxidStockRestorationService
+    public: false

@@ -15,8 +15,10 @@ use OxidEsales\PaymentBase\EventSystem\Event\EventInterface;
 /**
  * Admin-initiated refund request (full or partial). Mirrors PayPal's
  * `PayPalRefundRequestEvent` shape: carries the contract directly (translated from the abstract
- * request event's `EventContext` by {@see \OxidEsales\Payments\Mollie\EventSystem\Translator\MollieEventTranslator})
- * and exposes mutable result fields the handler fills in after calling {@see \OxidEsales\Payments\Mollie\Service\RefundServiceInterface}.
+ * request event's `EventContext` by
+ * {@see \OxidEsales\Payments\Mollie\EventSystem\Translator\MollieEventTranslator})
+ * and exposes mutable result fields the handler fills in after calling
+ * {@see \OxidEsales\Payments\Mollie\Service\RefundServiceInterface}.
  *
  * Story 3 (Sprint 9): Added `description` field for admin audit trail.
  */

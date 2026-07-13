@@ -85,7 +85,10 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
 
         $contract->fail($reason);
         $this->contractRepository->save($contract);
-        $this->mirrorOnLinkedOrder($contract, fn (string $orderId) => $this->orderUpdater->markFailed($orderId, $reason));
+        $this->mirrorOnLinkedOrder(
+            $contract,
+            fn (string $orderId) => $this->orderUpdater->markFailed($orderId, $reason)
+        );
         $this->auditRecorder->record(
             $contract,
             MollieDefinitions::TRANSACTION_TYPE_FAILURE,
@@ -197,7 +200,9 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
     private function advanceToCommitted(PaymentContractInterface $contract): void
     {
         $this->attemptTransition(static fn () => $contract->transitionToPending());
-        $this->attemptTransition(static fn () => $contract->fulfillCondition(ContractCondition::TYPE_PAYMENT_AUTHORIZED));
+        $this->attemptTransition(
+            static fn () => $contract->fulfillCondition(ContractCondition::TYPE_PAYMENT_AUTHORIZED)
+        );
 
         $orderId = $contract->getOrderId();
         if ($orderId !== null && $orderId !== '') {

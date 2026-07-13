@@ -81,8 +81,16 @@ final class MollieReturnResolver implements ReturnResolverInterface
                 '',
                 requiresCapture: false,
             ),
-            MollieOutcome::CANCELED => ReturnResolution::failed('payment_canceled', 'Payment was canceled.', $paymentId),
-            MollieOutcome::EXPIRED => ReturnResolution::failed('payment_expired', 'Payment window expired.', $paymentId),
+            MollieOutcome::CANCELED => ReturnResolution::failed(
+                'payment_canceled',
+                'Payment was canceled.',
+                $paymentId
+            ),
+            MollieOutcome::EXPIRED => ReturnResolution::failed(
+                'payment_expired',
+                'Payment window expired.',
+                $paymentId
+            ),
             MollieOutcome::FAILED => ReturnResolution::failed('payment_failed', 'Payment failed.', $paymentId),
             MollieOutcome::IGNORED => ReturnResolution::failed(
                 'payment_status_ignored',

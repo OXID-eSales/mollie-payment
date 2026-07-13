@@ -24,7 +24,8 @@ use OxidEsales\Payments\Mollie\EventSystem\Event\MollieRefundRequestEvent;
  * Maps payment-base's provider-agnostic admin request events onto Mollie's concrete event
  * classes, and stamps a deterministic idempotency key on each: `{contractId}:{action}[:amount]`.
  * That key travels through to the Mollie SDK's idempotency-key header (via
- * {@see \OxidEsales\Payments\Mollie\Adapter\Dto\RefundRequest}/{@see \OxidEsales\Payments\Mollie\Adapter\Dto\CaptureRequest}),
+ * {@see \OxidEsales\Payments\Mollie\Adapter\Dto\RefundRequest}/
+ * {@see \OxidEsales\Payments\Mollie\Adapter\Dto\CaptureRequest}),
  * so a duplicate admin click (same contract, same action, same amount) short-circuits at the
  * Mollie API rather than creating a second refund/capture.
  *
