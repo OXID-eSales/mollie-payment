@@ -28,13 +28,25 @@ done
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 MODULE_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 
-if [ -n "$GITHUB_ACTIONS" ]; then
+if [ -n "$GITHUB_ACTIONS" ] || [ -n "$CI" ]; then
     ENVIRONMENT="github"
     WORKING_DIR="$MODULE_ROOT"
     echo "======================================"
     echo "Running Pre-Commit Checks (GitHub Actions)"
     echo "======================================"
     echo "Module root: $MODULE_ROOT"
+    # Check if PHP is available
+    if ! command -v php &> /dev/null; then
+        echo "Warning: PHP not found in PATH, attempting to locate..."
+        for path in /usr/local/bin/php /usr/bin/php /opt/php/bin/php; do
+            if [ -x "$path" ]; then
+                export PATH="$(dirname $path):$PATH"
+                echo "Found PHP at: $path"
+                break
+            fi
+        done
+    fi
+    echo "PHP location: $(which php 2>/dev/null || echo 'NOT FOUND')"
 else
     ENVIRONMENT="local"
     PROJECT_ROOT="$( cd "$SCRIPT_DIR/../../.." && pwd )"
