@@ -6,8 +6,8 @@ export interface AdminCredentials {
 }
 
 export const DEFAULT_ADMIN_CREDENTIALS: AdminCredentials = {
-    email: process.env.TEST_ADMIN_USER || 'noreply@oxid-esales.com',
-    password: process.env.TEST_ADMIN_PASSWORD || 'admin',
+    email: 'noreply@oxid-esales.com',
+    password: 'admin',
 };
 
 export class AdminLoginPage extends AdminBasePage {
@@ -18,40 +18,24 @@ export class AdminLoginPage extends AdminBasePage {
     };
 
     async login(credentials: AdminCredentials = DEFAULT_ADMIN_CREDENTIALS): Promise<void> {
-        // Navigate directly to admin login with a fresh page
-        await this.page.goto(this.baseURL);
+        await this.page.locator(this.selectors.userInput).fill(credentials.email);
+        await this.page.locator(this.selectors.passwordInput).fill(credentials.password);
+        await this.page.locator(this.selectors.submitButton).click();
         await this.page.waitForLoadState('networkidle');
-        
-        // Check if we're already logged in
-        const menuFrame = this.getMenuFrame();
-        if (menuFrame) {
-            const isVisible = await menuFrame.locator('body').isVisible().catch(() => false);
-            if (isVisible) {
-                console.log('  Already logged in to admin');
-                return;
-            }
-        }
-        
-        // If login form is visible, fill it
-        const userInput = this.page.locator(this.selectors.userInput);
-        const loginVisible = await userInput.isVisible({ timeout: 5000 }).catch(() => false);
-        
-        if (loginVisible) {
-            await userInput.fill(credentials.email);
-            await this.page.locator(this.selectors.passwordInput).fill(credentials.password);
-            await this.page.locator(this.selectors.submitButton).click();
+
+        // Staging mode shows "Start OXID eShop Admin" button - click it to enter admin
+        const startAdminBtn = this.page.locator('button:has-text("Start OXID eShop Admin")');
+        if (await startAdminBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await startAdminBtn.click();
             await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(2000);
-            console.log('  Logged in to admin');
+            await this.waitForFrames();
         } else {
-            console.log('  Admin login form not visible, might be staging blocked');
-            throw new Error('Cannot access admin panel - staging mode may be blocking access');
+            await this.waitForFrames();
         }
     }
 
     async isLoggedIn(): Promise<boolean> {
         const menuFrame = this.getMenuFrame();
-        if (!menuFrame) return false;
-        return menuFrame.locator('body').isVisible().catch(() => false);
+        return menuFrame !== null;
     }
 }

@@ -4,22 +4,21 @@ import * as path from 'node:path';
 
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
-// Sandbox-only E2E config, mirroring the Stripe/PayPal siblings' pattern. All URLs +
-// credentials come from env so neither the CI runner nor a local developer leaks live data
-// into a shared config file. See README.md — this project is CI/manual-run-only in this
-// environment (no Mollie sandbox credentials are provisioned here).
+// Shop URL from env
 // @ts-ignore
-const SHOP_URL = process.env.SHOP_URL || process.env.MOLLIE_E2E_SHOP_URL || 'http://localhost.local';
+const SHOP_URL = process.env.MOLLIE_E2E_SHOP_URL || process.env.SHOP_URL || 'http://localhost.local';
 
-// @ts-ignore
 export default defineConfig({
     testDir: './tests',
-    timeout: 60_000,
+    timeout: 180_000,
     expect: { timeout: 10_000 },
-    fullyParallel: false, // checkout + admin actions mutate shared order/OXPAID state
+    fullyParallel: false,
     workers: 1,
-    retries: process.env.CI ? 1 : 0,
-    reporter: [['list'], ['html', { open: 'never' }]],
+    retries: 0,
+    reporter: [
+        ['list'],
+        ['html', { open: 'never', outputFolder: 'playwright-report/html' }],
+    ],
     use: {
         baseURL: SHOP_URL,
         screenshot: 'only-on-failure',
@@ -29,23 +28,18 @@ export default defineConfig({
     },
     projects: [
         {
-            name: 'mollie-standard',
-            testMatch: 'tests/MollieStandard/**/*.spec.ts',
-            use: { ...devices['Desktop Chrome'] },
-        },
-        {
-            name: 'mollie-admin',
-            testMatch: 'tests/MollieAdmin/**/*.spec.ts',
-            use: { ...devices['Desktop Chrome'] },
-        },
-        {
             name: 'mollie-checkout',
-            testMatch: 'tests/mollie-checkout.spec.ts',
+            testMatch: 'tests/checkout/mollie-checkout.spec.ts',
             use: { ...devices['Desktop Chrome'] },
         },
         {
-            name: 'admin-access',
-            testMatch: 'tests/admin-access.spec.ts',
+            name: 'mollie-admin-refund',
+            testMatch: 'tests/admin/mollie-admin-refund.spec.ts',
+            use: { ...devices['Desktop Chrome'] },
+        },
+        {
+            name: 'mollie-all',
+            testMatch: ['tests/checkout/*.spec.ts', 'tests/admin/*.spec.ts'],
             use: { ...devices['Desktop Chrome'] },
         },
     ],

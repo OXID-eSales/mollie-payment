@@ -1,107 +1,265 @@
+import { Page, Frame, expect } from '@playwright/test';
 import { AdminBasePage } from './AdminBasePage';
+
+export interface MolliePaymentDetails {
+    contractId: string | null;
+    orderId: string | null;
+    paymentType: string;
+    transactionId: string;
+    dashboardLink: string | null;
+}
 
 export class AdminMollieOrderPage extends AdminBasePage {
     private readonly selectors = {
-        molliePanel: '[data-testid*="mollie"], .mollie-panel, #mollie-panel',
-        refundForm: '#mollieRefundForm, form[name="mollieRefundForm"]',
-        refundAmountInput: 'input[name="refund_amount"]',
-        refundDescriptionInput: 'input[name="refund_description"]',
-        refundSubmitButton: 'input[type="submit"][value*="refund"], button:has-text("Refund")',
+        // Payment details from mollie_panel.html.twig
+        molliePanel: '[data-testid="mollie-panel-card"]',
+        contractIdCell: '[data-testid="contract-id"]',
+        molliePaymentIdCell: '[data-testid="mollie-payment-id"]',
         capturedAmount: '[data-testid="captured-amount"]',
-        refundableAmount: 'text=/refundable/i',
-        transactionHistory: '[data-testid*="transaction"], .transaction-history',
-        molliePaymentId: 'text=/Mollie payment ID|payment id/i',
-        errorAlert: '.alert-danger, .pc-alert-danger',
+        refundedAmount: '[data-testid="refunded-amount"]',
+        dashboardLink: 'a[data-testid="mollie-dashboard-link"]',
+
+        // Refund form
+        refundForm: '#mollieRefundForm',
+        refundAmountInput: '#refund_amount',
+        refundDescriptionInput: '#refund_description',
+        refundReasonSelect: '#refund_reason',
+        refundSubmitButton: 'input[data-testid="refund-submit"]',
+        refundSuccessMessage: 'text=/Erstattung.*erfolgreich|refund.*successful/i',
+
+        // Capture form
+        captureForm: '#mollieCaptureForm',
+        captureAmountInput: '#capture_amount',
+        captureSubmitButton: 'input[data-testid="capture-submit"]',
+
+        // No contract notice
+        noContractNotice: '[data-testid="mollie-no-contract"]',
+
+        // Transaction history
+        transactionHistory: '[data-testid="mollie-transaction-history"]',
     };
 
-    async navigateToOrder(orderId: string): Promise<void> {
-        await this.navigate(`/index.php?cl=order_overview&oxid=${orderId}`);
-        await this.page.waitForLoadState('networkidle');
-        await this.page.waitForTimeout(1000);
+    /**
+     * Get payment details from the Mollie panel.
+     */
+    async getMolliePaymentDetails(): Promise<MolliePaymentDetails | null> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return null;
+
+        // Quick wait for panel (max 5s)
+        await editFrame.locator(this.selectors.molliePanel).waitFor({ timeout: 5000 }).catch(() => {});
+
+        // Get contract ID
+        let contractId: string | null = null;
+        try {
+            const contractIdText = await editFrame.locator(this.selectors.contractIdCell).textContent({ timeout: 3000 });
+            contractId = contractIdText?.trim() === '—' ? null : (contractIdText?.trim() || null);
+        } catch {}
+
+        // Get payment ID - try code element, fallback to link
+        let transactionId = '';
+        try {
+            const codeEl = editFrame.locator(this.selectors.molliePaymentIdCell);
+            if (await codeEl.isVisible({ timeout: 1000 }).catch(() => false)) {
+                transactionId = (await codeEl.textContent({ timeout: 2000 }))?.trim() || '';
+            }
+        } catch {}
+
+        // Get dashboard link if visible
+        let dashboardLink: string | null = null;
+        try {
+            const linkEl = editFrame.locator(this.selectors.dashboardLink);
+            if (await linkEl.isVisible({ timeout: 1000 }).catch(() => false)) {
+                dashboardLink = await linkEl.getAttribute('href', { timeout: 1000 }).catch(() => null);
+            }
+        } catch {}
+
+        return {
+            contractId,
+            orderId: null,
+            paymentType: 'Mollie',
+            transactionId,
+            dashboardLink,
+        };
     }
 
-    async openMollieTab(): Promise<void> {
-        const mollieTab = this.page.locator('a:has-text("Mollie"), a:has-text("Payment"), a[href*="payment"]').first();
-        if (await mollieTab.isVisible({ timeout: 5000 }).catch(() => false)) {
-            await mollieTab.click();
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(1000);
+    /**
+     * Check if refund form is visible and refundable.
+     */
+    async isRefundButtonVisible(): Promise<boolean> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return false;
+
+        return editFrame.locator(this.selectors.refundSubmitButton).isVisible({ timeout: 3000 }).catch(() => false);
+    }
+
+    /**
+     * Get the refundable amount from the form.
+     */
+    async getRefundableAmount(): Promise<number> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return 0;
+
+        const amountInput = editFrame.locator(this.selectors.refundAmountInput);
+        const value = await amountInput.inputValue({ timeout: 3000 }).catch(() => '0');
+        return parseFloat(value.replace(',', '.')) || 0;
+    }
+
+    /**
+     * Execute a refund. When amount is provided, sets partial amount.
+     */
+    async executeRefund(reason: string = 'requested_by_customer', amount?: number, description?: string): Promise<boolean> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return false;
+
+        // Set amount if provided (partial refund)
+        if (amount !== undefined) {
+            const amountInput = editFrame.locator(this.selectors.refundAmountInput);
+            if (await amountInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+                // Clear and fill to ensure the new value is set
+                await amountInput.clear();
+                await amountInput.fill(amount.toString());
+                // Verify the value was set
+                const currentValue = await amountInput.inputValue();
+                console.log(`  Set refund amount: ${amount} (input shows: ${currentValue})`);
+            }
         }
-    }
 
-    async isMolliePanelVisible(): Promise<boolean> {
-        const panel = this.page.locator(this.selectors.molliePanel).first();
-        return panel.isVisible({ timeout: 5000 }).catch(() => false);
-    }
-
-    async getCapturedAmount(): Promise<string | null> {
-        const captured = this.page.locator(this.selectors.capturedAmount).first();
-        if (await captured.isVisible({ timeout: 3000 }).catch(() => false)) {
-            return captured.textContent();
-        }
-        return null;
-    }
-
-    async executePartialRefund(amount: string, description?: string): Promise<boolean> {
-        const refundForm = this.page.locator(this.selectors.refundForm).first();
-        if (!await refundForm.isVisible({ timeout: 3000 }).catch(() => false)) {
-            console.log('  Refund form not visible');
-            return false;
-        }
-
-        const amountInput = this.page.locator(this.selectors.refundAmountInput);
-        await amountInput.fill(amount);
-
+        // Set description if provided
         if (description) {
-            const descInput = this.page.locator(this.selectors.refundDescriptionInput);
-            if (await descInput.isVisible({ timeout: 1000 }).catch(() => false)) {
+            const descInput = editFrame.locator(this.selectors.refundDescriptionInput);
+            if (await descInput.isVisible({ timeout: 2000 }).catch(() => false)) {
                 await descInput.fill(description);
             }
         }
 
-        const submitBtn = this.page.locator(this.selectors.refundSubmitButton).first();
-        if (!await submitBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-            console.log('  Refund submit button not visible');
-            return false;
+        // Select reason
+        const reasonSelect = editFrame.locator(this.selectors.refundReasonSelect);
+        if (await reasonSelect.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await reasonSelect.selectOption({ value: reason }).catch(async () => {
+                await reasonSelect.selectOption({ index: 1 }).catch(() => {});
+            });
         }
 
-        await Promise.all([
-            this.page.waitForLoadState('networkidle'),
-            submitBtn.click(),
-        ]);
-
-        await this.page.waitForTimeout(2000);
-
-        // Check for errors
-        const errorAlert = this.page.locator(this.selectors.errorAlert);
-        if (await errorAlert.isVisible({ timeout: 3000 }).catch(() => false)) {
-            const errorText = await errorAlert.textContent();
-            console.log(`  Refund error: ${errorText}`);
-            return false;
+        // Click refund button (dialog is handled at test level)
+        const refundBtn = editFrame.locator(this.selectors.refundSubmitButton);
+        if (await refundBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await refundBtn.click();
+            await this.page.waitForLoadState('networkidle').catch(() => {});
+            await this.page.waitForTimeout(2000);
+            return true;
         }
 
-        console.log(`  Refund of ${amount} executed`);
-        return true;
+        return false;
     }
 
+    /**
+     * Check if refund was successful (success message visible).
+     */
+    async wasRefundSuccessful(): Promise<boolean> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return false;
+
+        return editFrame.locator(this.selectors.refundSuccessMessage).isVisible({ timeout: 5000 }).catch(() => false);
+    }
+
+    /**
+     * Check if order is fully refunded (no refund button visible).
+     */
+    async isOrderFullyRefunded(): Promise<boolean> {
+        const refundVisible = await this.isRefundButtonVisible();
+        const captureVisible = await this.isCaptureButtonVisible();
+        return !refundVisible && !captureVisible;
+    }
+
+    /**
+     * Check if capture button is visible.
+     */
+    async isCaptureButtonVisible(): Promise<boolean> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return false;
+
+        return editFrame.locator(this.selectors.captureSubmitButton).isVisible({ timeout: 3000 }).catch(() => false);
+    }
+
+    /**
+     * Execute capture on the order.
+     */
+    async executeCapture(amount?: number, reason?: string): Promise<boolean> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return false;
+
+        if (amount !== undefined) {
+            const amountInput = editFrame.locator(this.selectors.captureAmountInput);
+            if (await amountInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await amountInput.fill(amount.toString());
+            }
+        }
+
+        const captureBtn = editFrame.locator(this.selectors.captureSubmitButton);
+        if (await captureBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await captureBtn.click();
+            await this.page.waitForLoadState('networkidle').catch(() => {});
+            await this.page.waitForTimeout(2000);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Wait for Mollie panel content to load.
+     */
+    async waitForContentLoaded(): Promise<void> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return;
+
+        await editFrame.locator(this.selectors.molliePanel)
+            .waitFor({ timeout: 15000 })
+            .catch(() => {});
+    }
+
+    /**
+     * Check if Mollie panel is visible (contract exists).
+     */
+    async isMolliePanelVisible(): Promise<boolean> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return false;
+
+        const panelVisible = await editFrame.locator(this.selectors.molliePanel).isVisible({ timeout: 5000 }).catch(() => false);
+        const noContractVisible = await editFrame.locator(this.selectors.noContractNotice).isVisible({ timeout: 2000 }).catch(() => false);
+
+        return panelVisible && !noContractVisible;
+    }
+
+    /**
+     * Get the captured amount as a number.
+     */
+    async getCapturedAmount(): Promise<number> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return 0;
+
+        const text = await editFrame.locator(this.selectors.capturedAmount).textContent({ timeout: 3000 }).catch(() => '');
+        const match = text?.match(/([\d.,]+)/);
+        if (match) {
+            return parseFloat(match[1].replace(',', '.')) || 0;
+        }
+        return 0;
+    }
+
+    /**
+     * Get transaction history rows.
+     */
     async getTransactionHistory(): Promise<string[]> {
-        const history = this.page.locator(this.selectors.transactionHistory).first();
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return [];
+
+        const history = editFrame.locator(this.selectors.transactionHistory);
         if (!await history.isVisible({ timeout: 3000 }).catch(() => false)) {
             return [];
         }
 
-        const rows = await history.locator('tr, .transaction-row').allTextContents();
+        const rows = await history.locator('tr[data-testid="mollie-transaction-row"]').allTextContents();
         return rows;
-    }
-
-    async getMolliePaymentId(): Promise<string | null> {
-        const paymentIdElement = this.page.locator(this.selectors.molliePaymentId).first();
-        if (!await paymentIdElement.isVisible({ timeout: 3000 }).catch(() => false)) {
-            return null;
-        }
-
-        const text = await paymentIdElement.textContent();
-        const match = text?.match(/(tr_[a-zA-Z0-9]+)/);
-        return match ? match[1] : null;
     }
 }
