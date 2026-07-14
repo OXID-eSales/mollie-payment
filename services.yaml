@@ -22,6 +22,9 @@ services:
     resource: 'src/Mollie/Service/*'
     exclude:
       - 'src/Mollie/Service/PaymentMethodInstaller.php'
+      # Explicitly wired below (autowire: false) — its Doctrine\DBAL\Connection arg cannot be
+      # autowired and must be aliased to @doctrine.dbal.connection, like Stripe's counterpart.
+      - 'src/Mollie/Service/OxidStockRestorationService.php'
       - 'src/Mollie/Service/Factory/*'
       - 'src/Mollie/Service/Result/*'
       - 'src/Mollie/Service/ConfigurationValidationResult.php'
@@ -502,6 +505,12 @@ services:
   # ===========================================================================
 
   OxidEsales\Payments\Mollie\Service\OxidStockRestorationService:
+    autowire: false
+    arguments:
+      $connection: '@doctrine.dbal.connection'
+      $logger: '@oxid_esales.monolog.logger'
+      $useStock: true
+      $allowNegativeStock: false
     public: false
 
   OxidEsales\PaymentBase\Service\StockRestorationServiceInterface:
