@@ -18,6 +18,7 @@ use OxidEsales\PaymentBase\Service\TokenServiceInterface;
 use OxidEsales\Payments\Mollie\Controller\MollieOrderController;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
+use OxidEsales\Payments\Mollie\Tests\Unit\Support\PreloadsModuleClassChain;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -25,6 +26,16 @@ use RuntimeException;
 #[CoversClass(MollieOrderController::class)]
 final class MollieOrderControllerTest extends TestCase
 {
+    use PreloadsModuleClassChain;
+
+    // TestableMollieOrderController extends the concrete MollieOrderController chain member — build
+    // the chain first so instantiating it does not re-enter ModuleChainsGenerator (see trait).
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+        self::preloadModuleClassChain('order');
+    }
+
     public function testExecuteWhenMollieSelectedDispatchesCheckoutSessionRequestEventAndRedirects(): void
     {
         $dispatcher = $this->createMock(EventDispatcherInterface::class);

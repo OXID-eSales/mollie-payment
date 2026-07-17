@@ -19,6 +19,7 @@ use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\PaymentBase\Service\TokenServiceInterface;
+use OxidEsales\Payments\Mollie\Service\ContractTokenService;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver;
@@ -201,7 +202,10 @@ class MollieOrderController extends MollieOrderController_parent
 
     private function tokenIsValid(string $contractToken, string $contractId): bool
     {
-        $tokenService = $this->resolveService(TokenServiceInterface::class);
+        // Resolve Mollie's CONCRETE token service, not the shared
+        // PaymentBase\TokenServiceInterface: that interface is single-valued in the merged DI
+        // container and, when another PSP is active, resolves to the wrong provider's HMAC.
+        $tokenService = $this->resolveService(ContractTokenService::class);
 
         return $tokenService instanceof TokenServiceInterface
             && $tokenService->validateToken($contractToken, $contractId);

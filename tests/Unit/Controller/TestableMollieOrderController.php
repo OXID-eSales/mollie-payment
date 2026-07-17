@@ -16,6 +16,7 @@ use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\PaymentBase\Service\TokenServiceInterface;
 use OxidEsales\Payments\Mollie\Controller\MollieOrderController;
+use OxidEsales\Payments\Mollie\Service\ContractTokenService;
 use OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver;
 
 /**
@@ -52,7 +53,7 @@ final class TestableMollieOrderController extends MollieOrderController
     protected function resolveService(string $className): ?object
     {
         return match ($className) {
-            TokenServiceInterface::class => $this->tokenService,
+            ContractTokenService::class => $this->tokenService,
             ContractRepositoryInterface::class => $this->contractRepository,
             MollieReturnResolver::class => $this->resolver,
             EventDispatcherInterface::class => $this->dispatcher,

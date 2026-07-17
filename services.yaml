@@ -128,6 +128,9 @@ services:
     public: false
 
   OxidEsales\Payments\Mollie\EventSystem\Handler\MollieCheckoutSessionHandler:
+    arguments:
+      # Concrete Mollie token service (see ContractTokenService note) — not the shared interface.
+      $tokenService: '@OxidEsales\Payments\Mollie\Service\ContractTokenService'
     tags:
       - { name: payment.event_handler }
     public: true
@@ -149,11 +152,16 @@ services:
 
   # Contract-id return-URL security (Sprint 4 Story 5). Mirrors Stripe's binding: the
   # HMAC secret is derived from the configured Mollie API key, no extra secret needed.
-  OxidEsales\PaymentBase\Service\TokenServiceInterface:
-    class: OxidEsales\Payments\Mollie\Service\ContractTokenService
-    public: true
+  # Return-URL HMAC token service (secret derived from the Mollie API key). Bound as a CONCRETE
+  # service and injected directly into Mollie's own handlers/controller — NEVER via the shared
+  # PaymentBase TokenServiceInterface. That interface is single-valued in the merged DI container,
+  # so when another PSP module (Stripe/PayPal) is active it resolves to that provider's token
+  # service (wrong API-key HMAC), which broke Mollie checkout-session creation. The interface alias
+  # below is kept only so a Mollie-only shop still satisfies a generic TokenServiceInterface lookup.
   OxidEsales\Payments\Mollie\Service\ContractTokenService:
-    alias: OxidEsales\PaymentBase\Service\TokenServiceInterface
+    public: true
+  OxidEsales\PaymentBase\Service\TokenServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Service\ContractTokenService
     public: true
 
   # ===========================================================================
