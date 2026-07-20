@@ -135,6 +135,18 @@ services:
       - { name: payment.event_handler }
     public: true
 
+  # One-page-checkout integration: register Mollie with OPC's PaymentHandlerRegistry
+  # (!tagged_iterator oe.payment.handler) so OPC can route oe_payments_mollie payments — otherwise
+  # OPC fails with "No payment handler found for payment method: oe_payments_mollie". Thin bridge
+  # over the standard MollieCheckoutSessionRequestEvent; mirrors PayPal's/Stripe's OPC handlers.
+  OxidEsales\Payments\Mollie\PaymentHandler\MolliePaymentHandler:
+    arguments:
+      $eventDispatcher: '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
+      $logger: '@oxid_esales.monolog.logger'
+    tags:
+      - { name: oe.payment.handler }
+    public: true
+
   # MollieStatusMapper lives under Adapter/ (not swept by any resource glob — that tree also
   # holds Mollie-SDK-coupled classes that must not be autowired) but is itself a plain,
   # dependency-free mapper, so it is registered directly for MollieReturnResolver to consume.
