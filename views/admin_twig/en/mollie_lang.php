@@ -47,6 +47,8 @@ $aLang = [
     'MOLLIE_REFUND' => 'Refund',
     'MOLLIE_REFUNDABLE_AMOUNT' => 'Refundable amount',
     'MOLLIE_REFUND_REASON' => 'Reason',
+    'MOLLIE_REFUND_DESCRIPTION' => 'Description (optional)',
+    'MOLLIE_REFUND_DESCRIPTION_PLACEHOLDER' => 'e.g. reason for the refund (max. 140 characters)',
     'MOLLIE_REFUND_SUBMIT' => 'Execute refund',
     'MOLLIE_REFUND_CONFIRM' => 'Refund the captured amount via Mollie?',
 

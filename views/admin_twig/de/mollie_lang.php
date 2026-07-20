@@ -46,6 +46,8 @@ $aLang = [
     'MOLLIE_REFUND' => 'Erstattung',
     'MOLLIE_REFUNDABLE_AMOUNT' => 'Erstattbarer Betrag',
     'MOLLIE_REFUND_REASON' => 'Grund',
+    'MOLLIE_REFUND_DESCRIPTION' => 'Beschreibung (optional)',
+    'MOLLIE_REFUND_DESCRIPTION_PLACEHOLDER' => 'z. B. Grund für die Erstattung (max. 140 Zeichen)',
     'MOLLIE_REFUND_SUBMIT' => 'Erstattung ausführen',
     'MOLLIE_REFUND_CONFIRM' => 'Den erfassten Betrag über Mollie erstatten?',
 
