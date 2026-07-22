@@ -14,6 +14,7 @@ use DomainException;
 use InvalidArgumentException;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\CaptureRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieCaptureDto;
@@ -25,12 +26,17 @@ use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
  * Admin-initiated capture of an authorized two-step Mollie payment (card/Klarna).
  *
  * Same design choice as {@see RefundService}: implements a focused interface rather than
- * extending payment-base's `AbstractPaymentCaptureService`, whose default `afterCapture()` hook
- * calls `$contract->fulfill()` — wrong transition for Mollie's two-step ladder, which advances
- * AUTHORIZED → READY_TO_COMMIT via `captureAuthorization()` and leaves final FULFILLED to the
- * existing webhook/commit path. `CaptureNotSupportedException` (thrown by the adapter when the
- * live Mollie payment isn't in `authorized` status) is intentionally left uncaught here — it is
- * the caller-facing signal that the payment method doesn't support two-step capture.
+ * extending payment-base's `AbstractPaymentCaptureService`.
+ *
+ * Capturable-state policy (mirrors Stripe's STRP-118 fix): both AUTHORIZED and COMMITTED
+ * contracts may be captured. A manual-capture order is driven to COMMITTED by the shared
+ * checkout-return chain (it never visits AUTHORIZED when Stripe/PayPal/OPC are co-active), so
+ * the live Mollie payment status — re-validated by the adapter, which throws
+ * `CaptureNotSupportedException` when the payment isn't in `authorized` status — is the real
+ * guard, not contract state. The post-capture transition branches on the current state:
+ * AUTHORIZED → READY_TO_COMMIT via `captureAuthorization()` (standalone ladder, webhook
+ * fulfills); COMMITTED → FULFILLED via the shared `ContractFulfillmentService` (dispatches
+ * ContractFulfilledEvent → stamps OXPAID).
  */
 final class CaptureService implements CaptureServiceInterface
 {
@@ -38,6 +44,7 @@ final class CaptureService implements CaptureServiceInterface
         private readonly MolliePaymentsAdapterInterface $paymentsAdapter,
         private readonly MollieCaptureAdapterInterface $captureAdapter,
         private readonly ContractRepositoryInterface $contractRepository,
+        private readonly ContractFulfillmentServiceInterface $contractFulfillmentService,
     ) {
     }
 
@@ -46,7 +53,7 @@ final class CaptureService implements CaptureServiceInterface
         ?float $amount = null,
         ?string $idempotencyKey = null,
     ): MollieCaptureDto {
-        $this->assertAuthorized($contract);
+        $this->assertCapturable($contract);
         $providerOrderId = $this->requireProviderOrderId($contract);
 
         $payment = $this->paymentsAdapter->getPayment($providerOrderId);
@@ -64,14 +71,14 @@ final class CaptureService implements CaptureServiceInterface
         return $capture;
     }
 
-    private function assertAuthorized(PaymentContractInterface $contract): void
+    private function assertCapturable(PaymentContractInterface $contract): void
     {
-        if ($contract->getState()->isAuthorized()) {
+        if ($contract->getState()->isAuthorized() || $contract->getState()->isCommitted()) {
             return;
         }
 
         throw new DomainException(sprintf(
-            'Cannot capture contract "%s": not in an authorized (two-step) state.',
+            'Cannot capture contract "%s": not in a capturable (authorized/committed) state.',
             $contract->getId() ?? 'unknown',
         ));
     }
@@ -119,7 +126,18 @@ final class CaptureService implements CaptureServiceInterface
         $existing = $contract->getCapturedAmount() ?? 0.0;
         $contract->setCapturedAmount($existing + $capturedValue);
         $contract->setCapturedAt(new DateTimeImmutable());
-        $contract->captureAuthorization();
+
+        if ($contract->getState()->isAuthorized()) {
+            $contract->captureAuthorization();
+            $this->contractRepository->save($contract);
+
+            return;
+        }
+
+        // COMMITTED (manual-capture order already finalized by the shared return chain):
+        // capturing the funds completes fulfillment — COMMITTED → FULFILLED, which stamps
+        // OXPAID via the ContractFulfilledEvent the fulfillment service dispatches.
         $this->contractRepository->save($contract);
+        $this->contractFulfillmentService->fulfill($contract);
     }
 }

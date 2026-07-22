@@ -23,4 +23,12 @@ interface AdminActionBoundsInterface
 
     /** Maximum refundable amount in major units (0.0 when nothing is refundable). */
     public function refundBound(PaymentContractInterface $contract): float;
+
+    /**
+     * True when the live Mollie payment is an uncaptured `authorized` hold — the source of truth
+     * for whether capture/cancel are still possible. Mirrors Stripe's live-PSP-status gate
+     * (`requires_capture`): the manual-capture contract may already read `committed` locally
+     * (the shared return chain commits it), so contract state alone cannot answer this.
+     */
+    public function isAuthorizedHold(PaymentContractInterface $contract): bool;
 }

@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 use OxidEsales\PaymentBase\Contract\ContractState;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\CaptureRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieCaptureDto;
@@ -30,6 +31,7 @@ final class CaptureServiceTest extends TestCase
     private MolliePaymentsAdapterInterface&MockObject $paymentsAdapter;
     private MollieCaptureAdapterInterface&MockObject $captureAdapter;
     private ContractRepositoryInterface&MockObject $contractRepository;
+    private ContractFulfillmentServiceInterface&MockObject $fulfillmentService;
     private CaptureService $service;
 
     protected function setUp(): void
@@ -37,11 +39,13 @@ final class CaptureServiceTest extends TestCase
         $this->paymentsAdapter = $this->createMock(MolliePaymentsAdapterInterface::class);
         $this->captureAdapter = $this->createMock(MollieCaptureAdapterInterface::class);
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
+        $this->fulfillmentService = $this->createMock(ContractFulfillmentServiceInterface::class);
 
         $this->service = new CaptureService(
             $this->paymentsAdapter,
             $this->captureAdapter,
             $this->contractRepository,
+            $this->fulfillmentService,
         );
     }
 
@@ -124,10 +128,33 @@ final class CaptureServiceTest extends TestCase
         $this->service->capture($contract, 150.0);
     }
 
-    public function testCapture_WhenAlreadyCaptured_Rejected(): void
+    public function testCapture_CommittedContract_CapturesAndFulfills(): void
+    {
+        // Manual-capture order finalized by the shared return chain: contract COMMITTED while the
+        // Mollie payment is still an uncaptured `authorized` hold. Capture must succeed and
+        // complete fulfillment (COMMITTED -> FULFILLED) rather than call captureAuthorization().
+        $contract = $this->committedContract('tr_c');
+        $this->paymentsAdapter->method('getPayment')->with('tr_c')->willReturn(
+            $this->payment('tr_c', 100.0, 100.0),
+        );
+        $this->captureAdapter->expects(self::once())
+            ->method('createCapture')
+            ->willReturn($this->captureDto('cp_c', 'tr_c', 100.0));
+
+        $contract->expects(self::once())->method('setCapturedAmount')->with(100.0);
+        $contract->expects(self::never())->method('captureAuthorization');
+        $this->fulfillmentService->expects(self::once())->method('fulfill')->with($contract);
+
+        $dto = $this->service->capture($contract);
+
+        self::assertSame('cp_c', $dto->id);
+    }
+
+    public function testCapture_WhenNotInCapturableState_Rejected(): void
     {
         $state = $this->createMock(ContractState::class);
         $state->method('isAuthorized')->willReturn(false);
+        $state->method('isCommitted')->willReturn(false);
 
         $contract = $this->createMock(PaymentContractInterface::class);
         $contract->method('getState')->willReturn($state);
@@ -149,6 +176,21 @@ final class CaptureServiceTest extends TestCase
         $contract->method('getState')->willReturn($state);
         $contract->method('getProviderOrderId')->willReturn($providerOrderId);
         $contract->method('getId')->willReturn('5');
+        $contract->method('getCapturedAmount')->willReturn(null);
+
+        return $contract;
+    }
+
+    private function committedContract(string $providerOrderId): PaymentContractInterface&MockObject
+    {
+        $state = $this->createMock(ContractState::class);
+        $state->method('isAuthorized')->willReturn(false);
+        $state->method('isCommitted')->willReturn(true);
+
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getState')->willReturn($state);
+        $contract->method('getProviderOrderId')->willReturn($providerOrderId);
+        $contract->method('getId')->willReturn('7');
         $contract->method('getCapturedAmount')->willReturn(null);
 
         return $contract;

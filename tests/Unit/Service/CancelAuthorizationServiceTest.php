@@ -66,10 +66,35 @@ final class CancelAuthorizationServiceTest extends TestCase
         $this->service->cancel($contract, 'fraud_suspected');
     }
 
-    public function testCancel_WhenAlreadyCaptured_Rejected(): void
+    public function testCancel_CommittedContract_CancelsAuthorization(): void
+    {
+        // Manual-capture order committed by the shared return chain while the Mollie payment is
+        // still an uncaptured `authorized` hold: the admin may still void it.
+        $state = $this->createMock(ContractState::class);
+        $state->method('isAuthorized')->willReturn(false);
+        $state->method('isCommitted')->willReturn(true);
+        $state->method('isCancelled')->willReturn(false);
+
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getState')->willReturn($state);
+        $contract->method('getProviderOrderId')->willReturn('tr_c');
+        $contract->method('getOrderId')->willReturn('order-c');
+        $contract->method('getId')->willReturn('7');
+
+        $this->paymentsAdapter->expects(self::once())->method('cancelPayment')->with('tr_c')
+            ->willReturn(new MolliePaymentDto('tr_c', 'canceled', MollieAmountDto::fromComponents('EUR', 10.0)));
+        $contract->expects(self::once())->method('cancel');
+        $this->contractRepository->expects(self::once())->method('save')->with($contract);
+        $this->orderUpdater->expects(self::once())->method('markCancelled')->with('order-c');
+
+        $this->service->cancel($contract);
+    }
+
+    public function testCancel_WhenNotInCancellableState_Rejected(): void
     {
         $state = $this->createMock(ContractState::class);
         $state->method('isAuthorized')->willReturn(false);
+        $state->method('isCommitted')->willReturn(false);
         $state->method('isCancelled')->willReturn(false);
 
         $contract = $this->createMock(PaymentContractInterface::class);

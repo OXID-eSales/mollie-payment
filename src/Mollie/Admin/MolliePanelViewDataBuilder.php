@@ -61,6 +61,11 @@ class MolliePanelViewDataBuilder
         $providerOrderId = $contract->getProviderOrderId();
         $captureBound = $this->bounds->captureBound($contract);
         $refundBound = $this->bounds->refundBound($contract);
+        // Gate capture/cancel on the LIVE Mollie payment status, not contract state: a
+        // manual-capture order is committed by the shared checkout-return chain (STRP-118
+        // pattern), so contract.isAuthorized() is never true after checkout even while the
+        // Mollie payment is still an uncaptured `authorized` hold. Mirrors Stripe's panel.
+        $authorizedHold = $this->bounds->isAuthorizedHold($contract);
 
         return [
             'orderId' => $orderId,
@@ -76,9 +81,9 @@ class MolliePanelViewDataBuilder
             'captureBoundFormatted' => $this->money($captureBound),
             'refundBound' => $refundBound,
             'refundBoundFormatted' => $this->money($refundBound),
-            'isCapturable' => $contract->getState()->isAuthorized() && $captureBound > 0.0,
+            'isCapturable' => $authorizedHold && $captureBound > 0.0,
             'isRefundable' => $contract->getState()->isFulfilled() && $refundBound > 0.0,
-            'isCancellable' => $contract->getState()->isAuthorized(),
+            'isCancellable' => $authorizedHold,
             'dashboardUrl' => $this->dashboardUrl($providerOrderId),
             'transactions' => $this->transactionHistory->fetch($contract),
             'errorMessage' => null,

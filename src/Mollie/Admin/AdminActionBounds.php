@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\Admin;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
+use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
 use Throwable;
 
 /**
@@ -35,6 +36,11 @@ final class AdminActionBounds implements AdminActionBoundsInterface
     public function refundBound(PaymentContractInterface $contract): float
     {
         return $this->loadPayment($contract)?->refundableAmount() ?? 0.0;
+    }
+
+    public function isAuthorizedHold(PaymentContractInterface $contract): bool
+    {
+        return $this->loadPayment($contract)?->status === MollieStatusMapper::STATUS_AUTHORIZED;
     }
 
     private function loadPayment(PaymentContractInterface $contract): ?MolliePaymentDto

@@ -50,12 +50,16 @@ final class CancelAuthorizationService implements CancelAuthorizationServiceInte
 
     private function assertCancellable(PaymentContractInterface $contract): void
     {
-        if ($contract->getState()->isAuthorized()) {
+        // AUTHORIZED or COMMITTED: a manual-capture order is committed by the shared return
+        // chain while its Mollie payment is still an uncaptured `authorized` hold (STRP-118
+        // pattern). Mollie's `payments->cancel` re-validates and rejects an already-captured
+        // payment, so the live PSP status is the real guard, not contract state.
+        if ($contract->getState()->isAuthorized() || $contract->getState()->isCommitted()) {
             return;
         }
 
         throw new DomainException(sprintf(
-            'Cannot cancel contract "%s": authorization already captured or not in an authorized state.',
+            'Cannot cancel contract "%s": authorization already captured or not in a cancellable state.',
             $contract->getId() ?? 'unknown',
         ));
     }

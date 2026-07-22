@@ -74,6 +74,7 @@ final class MolliePanelViewDataBuilderTest extends TestCase
         $this->contracts->method('findByOrderId')->willReturn($contract);
         $this->bounds->method('captureBound')->with($contract)->willReturn(45.5);
         $this->bounds->method('refundBound')->with($contract)->willReturn(0.0);
+        $this->bounds->method('isAuthorizedHold')->with($contract)->willReturn(true);
         $this->transactionHistory->method('fetch')->willReturn([]);
 
         $viewData = $this->builder->build($order);
@@ -81,7 +82,44 @@ final class MolliePanelViewDataBuilderTest extends TestCase
         self::assertSame(45.5, $viewData['captureBound']);
         self::assertSame('45.50', $viewData['captureBoundFormatted']);
         self::assertTrue($viewData['isCapturable']);
+        self::assertTrue($viewData['isCancellable']);
         self::assertFalse($viewData['isRefundable'], 'refund bound is 0.0, so refund must not be offered');
+    }
+
+    public function testBuild_CommittedContractWithLiveAuthorizedHold_IsCapturableAndCancellable(): void
+    {
+        // The fix: a manual-capture order is COMMITTED by the shared return chain, but its Mollie
+        // payment is still an uncaptured `authorized` hold — capture/cancel must still be offered.
+        $order = $this->stubOrder('order-committed');
+        $contract = $this->committedContract();
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('captureBound')->willReturn(50.0);
+        $this->bounds->method('refundBound')->willReturn(0.0);
+        $this->bounds->method('isAuthorizedHold')->willReturn(true);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+
+        $viewData = $this->builder->build($order);
+
+        self::assertTrue($viewData['isCapturable']);
+        self::assertTrue($viewData['isCancellable']);
+    }
+
+    public function testBuild_WhenNotAuthorizedHold_NotCapturableOrCancellable(): void
+    {
+        // No live authorized hold (e.g. already captured/paid): buttons hidden even if a stale
+        // capture bound is reported.
+        $order = $this->stubOrder('order-nohold');
+        $contract = $this->committedContract();
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('captureBound')->willReturn(50.0);
+        $this->bounds->method('refundBound')->willReturn(0.0);
+        $this->bounds->method('isAuthorizedHold')->willReturn(false);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+
+        $viewData = $this->builder->build($order);
+
+        self::assertFalse($viewData['isCapturable']);
+        self::assertFalse($viewData['isCancellable']);
     }
 
     public function testBuild_IncludesOrderNumberAndPaymentType(): void
@@ -146,6 +184,18 @@ final class MolliePanelViewDataBuilderTest extends TestCase
         $contract->method('getStateValue')->willReturn('authorized');
         $contract->method('getCurrency')->willReturn('EUR');
         $contract->method('getState')->willReturn(ContractState::authorized());
+
+        return $contract;
+    }
+
+    private function committedContract(): PaymentContractInterface&MockObject
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getId')->willReturn('contract-c');
+        $contract->method('getProviderOrderId')->willReturn('tr_c');
+        $contract->method('getStateValue')->willReturn('committed');
+        $contract->method('getCurrency')->willReturn('EUR');
+        $contract->method('getState')->willReturn(ContractState::committed());
 
         return $contract;
     }

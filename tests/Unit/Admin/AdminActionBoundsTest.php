@@ -74,4 +74,39 @@ final class AdminActionBoundsTest extends TestCase
 
         self::assertSame(0.0, $this->bounds->captureBound($contract));
     }
+
+    public function testIsAuthorizedHold_WhenPaymentAuthorized_True(): void
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getProviderOrderId')->willReturn('tr_a');
+        $this->paymentsAdapter->method('getPayment')->with('tr_a')->willReturn(new MolliePaymentDto(
+            id: 'tr_a',
+            status: 'authorized',
+            amount: MollieAmountDto::fromComponents('EUR', 100.0),
+        ));
+
+        self::assertTrue($this->bounds->isAuthorizedHold($contract));
+    }
+
+    public function testIsAuthorizedHold_WhenPaymentCaptured_False(): void
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getProviderOrderId')->willReturn('tr_p');
+        $this->paymentsAdapter->method('getPayment')->with('tr_p')->willReturn(new MolliePaymentDto(
+            id: 'tr_p',
+            status: 'paid',
+            amount: MollieAmountDto::fromComponents('EUR', 100.0),
+        ));
+
+        self::assertFalse($this->bounds->isAuthorizedHold($contract));
+    }
+
+    public function testIsAuthorizedHold_WhenLookupFails_False(): void
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getProviderOrderId')->willReturn('tr_x');
+        $this->paymentsAdapter->method('getPayment')->willThrowException(new \RuntimeException('boom'));
+
+        self::assertFalse($this->bounds->isAuthorizedHold($contract));
+    }
 }
