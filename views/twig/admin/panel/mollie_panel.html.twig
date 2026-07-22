@@ -14,6 +14,12 @@
    - validationErrors: list<string> (Story 3 — consumed once per render)
    ============================================================================ #}
 
+{# Mollie brand color for the shared .pc-btn-primary. The base tab holds only
+   a neutral fallback; each provider owns its brand via --pc-brand. #}
+<style>
+    .pc-admin[data-provider="mollie"] { --pc-brand: #0057ff; }
+</style>
+
 {% if errorMessage is defined and errorMessage %}
     <div class="pc-alert pc-alert-info" data-testid="mollie-panel-error">{{ errorMessage }}</div>
 {% endif %}
