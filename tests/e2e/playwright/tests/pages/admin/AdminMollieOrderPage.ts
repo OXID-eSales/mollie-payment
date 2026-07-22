@@ -32,6 +32,11 @@ export class AdminMollieOrderPage extends AdminBasePage {
         captureAmountInput: '#capture_amount',
         captureSubmitButton: 'input[data-testid="capture-submit"]',
 
+        // Cancel-authorization form
+        cancelForm: '#mollieCancelForm',
+        cancelReasonSelect: '#cancel_reason',
+        cancelSubmitButton: 'input[data-testid="cancel-submit"]',
+
         // No contract notice
         noContractNotice: '[data-testid="mollie-no-contract"]',
 
@@ -199,6 +204,67 @@ export class AdminMollieOrderPage extends AdminBasePage {
         const captureBtn = editFrame.locator(this.selectors.captureSubmitButton);
         if (await captureBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
             await captureBtn.click();
+            await this.page.waitForLoadState('networkidle').catch(() => {});
+            await this.page.waitForTimeout(2000);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if the cancel-authorization button is visible (shown only for an authorized,
+     * uncaptured two-step contract).
+     */
+    async isCancelButtonVisible(): Promise<boolean> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return false;
+
+        return editFrame.locator(this.selectors.cancelSubmitButton).isVisible({ timeout: 3000 }).catch(() => false);
+    }
+
+    /**
+     * Read the capturable bound (the capture amount input defaults to it). 0 if not present.
+     */
+    async getCaptureableAmount(): Promise<number> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return 0;
+
+        const input = editFrame.locator(this.selectors.captureAmountInput);
+        if (!(await input.isVisible({ timeout: 3000 }).catch(() => false))) return 0;
+        const value = await input.inputValue().catch(() => '0');
+        return parseFloat(value || '0') || 0;
+    }
+
+    /**
+     * True when the panel is showing a validation-error alert.
+     */
+    async hasValidationError(): Promise<boolean> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return false;
+
+        return editFrame
+            .locator('[data-testid="mollie-validation-errors"]')
+            .isVisible({ timeout: 2000 })
+            .catch(() => false);
+    }
+
+    /**
+     * Cancel (void) the authorization. Mollie cancel is all-or-nothing — no amount.
+     * The caller must accept the native confirm() dialog (page.on('dialog', d => d.accept())).
+     */
+    async executeCancel(reason: string = 'requested_by_customer'): Promise<boolean> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return false;
+
+        const reasonSelect = editFrame.locator(this.selectors.cancelReasonSelect);
+        if (await reasonSelect.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await reasonSelect.selectOption({ value: reason }).catch(() => {});
+        }
+
+        const cancelBtn = editFrame.locator(this.selectors.cancelSubmitButton);
+        if (await cancelBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await cancelBtn.click();
             await this.page.waitForLoadState('networkidle').catch(() => {});
             await this.page.waitForTimeout(2000);
             return true;
