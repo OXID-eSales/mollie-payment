@@ -143,6 +143,9 @@ services:
     arguments:
       $eventDispatcher: '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
       $logger: '@oxid_esales.monolog.logger'
+      # IFRAME-03: read the payment-base iframe flag so the handler can log the redirect
+      # fallback once (Mollie's hosted page forbids framing — X-Frame-Options: DENY).
+      $iframeSettings: '@OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface'
     tags:
       - { name: oe.payment.handler }
     public: true

@@ -17,6 +17,7 @@ use OxidEsales\PaymentBase\Adapter\PaymentHandlerInterface;
 use OxidEsales\PaymentBase\Adapter\PaymentHandlerResult;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
+use OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use Psr\Log\LoggerInterface;
@@ -42,9 +43,16 @@ use Throwable;
  */
 class MolliePaymentHandler implements PaymentHandlerInterface
 {
+    /**
+     * Guards the one-time "iframe requested but Mollie cannot be framed" log so it is not emitted
+     * on every checkout render (the handler is a DI singleton, so once per process).
+     */
+    private bool $iframeFallbackLogged = false;
+
     public function __construct(
         private readonly EventDispatcherInterface $eventDispatcher,
         private readonly ?LoggerInterface $logger = null,
+        private readonly ?IframeCheckoutSettingsInterface $iframeSettings = null,
     ) {
     }
 
@@ -123,10 +131,36 @@ class MolliePaymentHandler implements PaymentHandlerInterface
      */
     public function getFrontendConfig(): array
     {
+        // IFRAME-03: Mollie is redirect-only. Even when the payment-base "Use iframe instead of
+        // checkout button" flag is ON, Mollie's hosted checkout page sends `X-Frame-Options: DENY`
+        // and CSP `frame-ancestors 'self'` (verified 2026-07-29), so browsers refuse to render it
+        // in a cross-origin iframe on the shop. We therefore always advertise redirect mode and,
+        // when the flag is on, log the fallback once — never emitting an iframe renderMode that
+        // would produce a blank/broken embed for the customer.
+        $this->logIframeFallbackIfRequested();
+
         return [
             'type' => 'mollie',
+            'renderMode' => 'redirect',
             'requiresRedirect' => true,
         ];
+    }
+
+    /**
+     * Emit a single informational log when the merchant enabled iframe checkout but Mollie cannot
+     * honor it (its hosted page forbids framing). No-op when the flag is off.
+     */
+    private function logIframeFallbackIfRequested(): void
+    {
+        if ($this->iframeFallbackLogged || !($this->iframeSettings?->isEnabled() ?? false)) {
+            return;
+        }
+
+        $this->iframeFallbackLogged = true;
+        $this->logger?->info(
+            '[MolliePaymentHandler] Iframe checkout requested but Mollie\'s hosted page cannot be '
+            . 'framed (X-Frame-Options: DENY / frame-ancestors); falling back to redirect.',
+        );
     }
 
     /**

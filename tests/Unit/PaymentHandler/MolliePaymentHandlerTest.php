@@ -14,11 +14,13 @@ use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\Event\EventInterface;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
+use OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use OxidEsales\Payments\Mollie\PaymentHandler\MolliePaymentHandler;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use RuntimeException;
 
 /**
@@ -45,9 +47,56 @@ final class MolliePaymentHandlerTest extends TestCase
         self::assertSame('mollie', $handler->getId());
         self::assertSame('Mollie Payment', $handler->getName());
         self::assertSame(
-            ['type' => 'mollie', 'requiresRedirect' => true],
+            ['type' => 'mollie', 'renderMode' => 'redirect', 'requiresRedirect' => true],
             $handler->getFrontendConfig(),
         );
+    }
+
+    /**
+     * IFRAME-03: with the payment-base iframe flag OFF the frontend config is unchanged and no
+     * fallback log is emitted (the flag simply does not apply to a redirect-only PSP).
+     */
+    public function testFrontendConfigStaysRedirectAndIsSilentWhenIframeFlagOff(): void
+    {
+        $iframe = $this->createMock(IframeCheckoutSettingsInterface::class);
+        $iframe->method('isEnabled')->willReturn(false);
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::never())->method('info');
+
+        $handler = new TestableMolliePaymentHandler(
+            $this->dispatcherThatMutates(static fn () => null),
+            $logger,
+            $iframe,
+        );
+
+        self::assertSame(
+            ['type' => 'mollie', 'renderMode' => 'redirect', 'requiresRedirect' => true],
+            $handler->getFrontendConfig(),
+        );
+    }
+
+    /**
+     * IFRAME-03: with the flag ON, Mollie still advertises redirect (its hosted page forbids
+     * framing) and logs the fallback exactly once, no matter how many times the config is read.
+     */
+    public function testFrontendConfigFallsBackToRedirectAndLogsOnceWhenIframeFlagOn(): void
+    {
+        $iframe = $this->createMock(IframeCheckoutSettingsInterface::class);
+        $iframe->method('isEnabled')->willReturn(true);
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('info');
+
+        $handler = new TestableMolliePaymentHandler(
+            $this->dispatcherThatMutates(static fn () => null),
+            $logger,
+            $iframe,
+        );
+
+        $config = $handler->getFrontendConfig();
+        $handler->getFrontendConfig(); // second read must not log again
+
+        self::assertSame('redirect', $config['renderMode']);
+        self::assertTrue($config['requiresRedirect']);
     }
 
     public function testProcessPaymentReturnsTheMollieCheckoutUrlAsRedirect(): void
