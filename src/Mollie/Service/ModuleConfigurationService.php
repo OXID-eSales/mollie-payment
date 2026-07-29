@@ -82,6 +82,12 @@ class ModuleConfigurationService implements ModuleConfigurationServiceInterface
         return is_string($value) ? trim($value) : '';
     }
 
+    public function getProfileId(): string
+    {
+        $value = $this->get('sMollieProfileId');
+        return is_string($value) ? trim($value) : '';
+    }
+
     public function getCaptureMode(): string
     {
         return $this->get('sMollieCaptureMode') === MollieDefinitions::CAPTURE_MODE_MANUAL

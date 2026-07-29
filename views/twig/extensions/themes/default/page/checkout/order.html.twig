@@ -1,0 +1,95 @@
+{#
+ # IFRAME-04: Mollie inline card entry (Mollie Components) on the standard cl=order page.
+ #
+ # When the payment-base "Use iframe instead of checkout button" flag is ON and a Mollie profile id
+ # is configured, the shopper can pay by card inline (fields hosted in js.mollie.com iframes) instead
+ # of being redirected. Choosing "other Mollie methods" keeps the classic redirect flow. All other
+ # payment methods fall through to the core template unchanged.
+ #}
+{% extends "page/checkout/order.html.twig" %}
+
+{% block checkout_order_next_step_side %}
+    {% set mollieInlineCard = oView.getPayment() and oView.getPayment().getId() == oViewConf.getMollieModuleId() and oViewConf.isMollieInlineCardEnabled() %}
+    {% if not mollieInlineCard %}
+        {{ parent() }}
+    {% else %}
+        {% set displayBasketOrderButton = oViewConf.getViewThemeParam('basketLowOrderDisplayOrderButton') %}
+        {% if not oView.isLowOrderPrice() or (displayBasketOrderButton == 'show' or displayBasketOrderButton == 'disabled') %}
+            {# IFRAME-04: Mollie Components JS is emitted here (not in base_js) because the core
+               order template captures its body rather than extending the layout, so base_js
+               overrides collide across payment modules. Body scripts execute fine (Stripe loads
+               its bundle the same way on this page). Mollie's app.js reuses any existing Stimulus
+               app, so load order with Stripe's bundle is safe. #}
+            <script>
+                window.oMollie = window.oMollie || {};
+                window.oMollie.debug = {{ oViewConf.isMollieDebugLoggingEnabled() ? 'true' : 'false' }};
+            </script>
+            <script src="{{ oViewConf.getModuleUrl('oe_payments_mollie', oViewConf.getMollieJsPath()) }}?v={{ oViewConf.getMollieModuleVersion() }}"></script>
+
+            <div data-controller="mollie-components"
+                 data-mollie-components-profile-id-value="{{ oViewConf.getMollieProfileId() }}"
+                 data-mollie-components-testmode-value="{{ oViewConf.isMollieTestMode() ? 'true' : 'false' }}"
+                 data-mollie-components-locale-value="{{ oViewConf.getMollieComponentsLocale() }}"
+                 data-mollie-components-debug-value="{{ oViewConf.isMollieDebugLoggingEnabled() ? 'true' : 'false' }}">
+
+                {# Method choice: pay by card inline, or continue to Mollie for the other methods. #}
+                <div class="mollie-flow mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="mollie_flow" id="mollieFlowCard"
+                               value="card" checked
+                               data-action="change->mollie-components#flowChanged">
+                        <label class="form-check-label" for="mollieFlowCard">
+                            {{ translate({ ident: "MOLLIE_PAY_CARD_INLINE" }) }}
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="mollie_flow" id="mollieFlowRedirect"
+                               value="redirect"
+                               data-action="change->mollie-components#flowChanged">
+                        <label class="form-check-label" for="mollieFlowRedirect">
+                            {{ translate({ ident: "MOLLIE_PAY_OTHER_METHODS" }) }}
+                        </label>
+                    </div>
+                </div>
+
+                <div data-mollie-components-target="fields" class="mollie-card-fields mb-3">
+                    <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_NUMBER" }) }}</label>
+                    <div data-mollie-components-target="cardNumber" class="mollie-field form-control mb-2"></div>
+
+                    <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_HOLDER" }) }}</label>
+                    <div data-mollie-components-target="cardHolder" class="mollie-field form-control mb-2"></div>
+
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_EXPIRY" }) }}</label>
+                            <div data-mollie-components-target="expiryDate" class="mollie-field form-control"></div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_CVC" }) }}</label>
+                            <div data-mollie-components-target="verificationCode" class="mollie-field form-control"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-danger" role="alert" style="display: none;"
+                     data-mollie-components-target="error"></div>
+
+                {# Submitted with the core order form via the `form` attribute association. #}
+                <input type="hidden" name="mollieCardToken" form="orderConfirmAgbBottom"
+                       data-mollie-components-target="token">
+
+                <button type="button" class="btn btn-highlight btn-lg w-100"
+                        data-action="click->mollie-components#placeOrder"
+                        {% if oView.isLowOrderPrice() and displayBasketOrderButton == 'disabled' %}
+                            disabled="disabled"
+                        {% endif %}>
+                    {{ translate({ ident: "SUBMIT_ORDER" }) }}
+                </button>
+            </div>
+
+            <style>
+                .mollie-field { min-height: 2.6rem; padding-top: .55rem; }
+            </style>
+        {% endif %}
+    {% endif %}
+{% endblock %}

@@ -8,10 +8,15 @@
 import { Application } from '@hotwired/stimulus'
 
 import MollieCheckoutController from './controllers/mollie_checkout_controller.js'
+import MollieComponentsController from './controllers/mollie_components_controller.js'
 import { createDebugLogger } from './debug.js'
 
-window.Stimulus = Application.start()
+// Reuse an already-started Stimulus application if another payment module's bundle started one
+// on this page (e.g. Stripe's frontend also loads on the shared order page). Registering onto the
+// live app connects our controllers immediately; starting a second app would clobber the first.
+window.Stimulus = window.Stimulus || Application.start()
 window.Stimulus.register('mollie-checkout', MollieCheckoutController)
+window.Stimulus.register('mollie-components', MollieComponentsController)
 
 const mollieDebugEnabled = () => window.oMollie?.debug === true
 const debug = createDebugLogger(mollieDebugEnabled)

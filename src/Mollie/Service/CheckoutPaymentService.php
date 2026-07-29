@@ -33,15 +33,21 @@ final class CheckoutPaymentService implements CheckoutPaymentServiceInterface
         PaymentContractInterface $contract,
         ?string $method,
         string $redirectUrl,
+        ?string $cardToken = null,
     ): CreatePaymentRequest {
+        $hasCardToken = $cardToken !== null && $cardToken !== '';
+
         return new CreatePaymentRequest(
             amount: MollieAmountDto::fromComponents($contract->getCurrency(), $contract->getAmount()),
             description: $this->buildDescription($contract),
             redirectUrl: $redirectUrl,
             webhookUrl: $this->config->getWebhookUrl(),
-            method: $method,
+            // IFRAME-04: a card token pins the method to creditcard (inline card entry);
+            // otherwise the caller's method (usually null → Mollie decides) is passed through.
+            method: $hasCardToken ? 'creditcard' : $method,
             metadata: ['contract_id' => (string) ($contract->getId() ?? '')],
             captureMode: $this->config->getCaptureMode(),
+            cardToken: $hasCardToken ? $cardToken : null,
         );
     }
 

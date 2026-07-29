@@ -25,6 +25,11 @@ final readonly class CreatePaymentRequest
         public ?string $method = null,
         public array $metadata = [],
         public ?string $captureMode = null,
+        // IFRAME-04: single-use card token minted by Mollie Components in the browser
+        // (mollie.createToken()). When set, the adapter forces method=creditcard and
+        // includes it so Mollie charges the tokenized card instead of showing its
+        // hosted method-selection page.
+        public ?string $cardToken = null,
     ) {
     }
 }

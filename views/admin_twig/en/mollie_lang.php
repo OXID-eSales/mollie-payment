@@ -80,6 +80,7 @@ $aLang = [
     'SHOP_MODULE_sMollieCaptureMode_automatic' => 'Automatic',
     'SHOP_MODULE_sMollieCaptureMode_manual' => 'Manual',
     'SHOP_MODULE_sMollieTestKey' => 'Test API key',
+    'SHOP_MODULE_sMollieProfileId' => 'Website profile ID (pfl_…) — required for inline card (Mollie Components)',
     'SHOP_MODULE_sMollieLiveKey' => 'Live API key',
     'SHOP_MODULE_sMollieWebhookUrl' => 'Webhook URL override',
     'SHOP_MODULE_sMollieLogLevel' => 'Log level',

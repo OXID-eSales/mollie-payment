@@ -82,6 +82,48 @@ final class MollieAdapterTest extends TestCase
         self::assertSame(['order_number' => '4711'], $captured['metadata']);
     }
 
+    public function testCreatePayment_WithCardToken_ForcesCreditcardMethodAndSendsToken(): void
+    {
+        $captured = [];
+        $this->payments->method('create')->willReturnCallback(
+            function (array $data) use (&$captured): Payment {
+                $captured = $data;
+                return $this->payment(['id' => 'tr_cc', 'status' => 'open']);
+            },
+        );
+
+        (new MollieAdapter($this->client))->createPayment(new CreatePaymentRequest(
+            amount: new MollieAmountDto('EUR', 24.0),
+            description: 'Order 4711',
+            redirectUrl: 'https://shop.test/return',
+            method: null,
+            cardToken: 'tkn_abc123',
+        ));
+
+        // IFRAME-04: a card token pins the method to creditcard and attaches the token.
+        self::assertSame('creditcard', $captured['method']);
+        self::assertSame('tkn_abc123', $captured['cardToken']);
+    }
+
+    public function testCreatePayment_WithoutCardToken_OmitsCardTokenKey(): void
+    {
+        $captured = [];
+        $this->payments->method('create')->willReturnCallback(
+            function (array $data) use (&$captured): Payment {
+                $captured = $data;
+                return $this->payment(['id' => 'tr_1', 'status' => 'open']);
+            },
+        );
+
+        (new MollieAdapter($this->client))->createPayment(new CreatePaymentRequest(
+            amount: new MollieAmountDto('EUR', 10.0),
+            description: 'Order',
+            redirectUrl: 'https://shop.test/return',
+        ));
+
+        self::assertArrayNotHasKey('cardToken', $captured);
+    }
+
     public function testCreatePayment_ReturnsDtoWithCheckoutUrl(): void
     {
         $this->payments->method('create')->willReturn($this->payment([

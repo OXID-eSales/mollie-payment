@@ -11,6 +11,7 @@ namespace OxidEsales\Payments\Mollie\EventSystem\Handler;
 
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
+use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\Handler\HandlerInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Service\TokenServiceInterface;
@@ -74,10 +75,16 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
 
         $redirectUrl = $this->buildRedirectUrl($contract);
 
-        // No storefront method selector (Mollie's own hosted checkout page offers the
-        // individual methods enabled in the merchant's Mollie dashboard) — method is always
-        // null so Mollie decides which methods to present.
-        $request = $this->checkoutPaymentService->buildCreatePaymentRequest($contract, null, $redirectUrl);
+        // IFRAME-04: an inline-card token (Mollie Components) pins the payment to a card charge.
+        // Without it the method stays null and Mollie presents its hosted method-selection page
+        // (the classic redirect flow, unchanged).
+        $cardToken = $this->readCardToken($context);
+        $request = $this->checkoutPaymentService->buildCreatePaymentRequest(
+            $contract,
+            $cardToken !== null ? 'creditcard' : null,
+            $redirectUrl,
+            $cardToken,
+        );
 
         try {
             $payment = $this->paymentsAdapter->createPayment($request);
@@ -87,20 +94,53 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
         }
 
         // F14 (open redirect) parity: never redirect a shopper to a checkoutUrl host we haven't
-        // verified belongs to Mollie — see MollieRedirectUrlValidator's docblock for the threat
-        // model. Treated the same as a create-payment failure: fail the contract, leave
-        // `checkoutUrl` unset on the context.
-        if ($payment->checkoutUrl === null || !$this->redirectUrlValidator->isAllowed($payment->checkoutUrl)) {
+        // verified belongs to Mollie — see MollieRedirectUrlValidator's docblock. A null/blank or
+        // untrusted destination is treated as a create-payment failure (checkoutUrl left unset).
+        $destination = $this->resolveDestination($payment->checkoutUrl, $cardToken, $redirectUrl);
+        if ($destination === null) {
             $this->failUntrustedRedirectHost($contract, $payment->id);
             return;
         }
 
-        $contract->setProvider(MollieDefinitions::PROVIDER_NAME, $payment->id, $payment->checkoutUrl);
+        $contract->setProvider(MollieDefinitions::PROVIDER_NAME, $payment->id, $payment->checkoutUrl ?? $redirectUrl);
         $contract->setMetadata(self::METADATA_MOLLIE_PAYMENT_ID, $payment->id);
-        $contract->setMetadata(self::METADATA_MOLLIE_CHECKOUT_URL, $payment->checkoutUrl);
+        $contract->setMetadata(self::METADATA_MOLLIE_CHECKOUT_URL, $payment->checkoutUrl ?? $redirectUrl);
         $this->contractRepository->save($contract);
 
-        $context->set('checkoutUrl', $payment->checkoutUrl);
+        $context->set('checkoutUrl', $destination);
+    }
+
+    /**
+     * Resolve where to send the shopper after create-payment:
+     *  - Mollie returned a checkout URL (hosted method page, or a 3DS/SCA authentication page for
+     *    an inline card) → that URL, but only if it is a verified Mollie host (open-redirect guard).
+     *  - No checkout URL but this was an inline card charge → the card cleared without 3DS, so send
+     *    the shopper to our own return leg (checkoutReturn) to finalize the order.
+     *  - No checkout URL on the classic redirect flow → genuine failure.
+     * Returns null when no trustworthy destination is available (caller fails the contract).
+     */
+    private function resolveDestination(?string $mollieCheckoutUrl, ?string $cardToken, string $returnUrl): ?string
+    {
+        if ($mollieCheckoutUrl !== null && $mollieCheckoutUrl !== '') {
+            return $this->redirectUrlValidator->isAllowed($mollieCheckoutUrl) ? $mollieCheckoutUrl : null;
+        }
+
+        return $cardToken !== null ? $returnUrl : null;
+    }
+
+    /**
+     * Read the Mollie Components card token off the event context (set from the storefront
+     * request). Returns null for a missing/blank value (classic redirect flow).
+     */
+    private function readCardToken(EventContext $context): ?string
+    {
+        $token = $context->get('cardToken');
+        if (!is_string($token)) {
+            return null;
+        }
+        $token = trim($token);
+
+        return $token === '' ? null : $token;
     }
 
     private function buildRedirectUrl(PaymentContractInterface $contract): string

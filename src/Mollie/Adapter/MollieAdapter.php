@@ -185,6 +185,12 @@ final class MollieAdapter implements
         if ($request->method !== null && $request->method !== '') {
             $body['method'] = $request->method;
         }
+        // IFRAME-04: a card token implies a card payment — force the method and attach the
+        // token so Mollie charges the tokenized card inline (no hosted method-selection page).
+        if ($request->cardToken !== null && $request->cardToken !== '') {
+            $body['method'] = 'creditcard';
+            $body['cardToken'] = $request->cardToken;
+        }
         if ($request->metadata !== []) {
             $body['metadata'] = $request->metadata;
         }

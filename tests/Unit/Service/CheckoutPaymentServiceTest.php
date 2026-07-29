@@ -82,6 +82,40 @@ final class CheckoutPaymentServiceTest extends TestCase
         self::assertSame('contract-999', $request->metadata['contract_id'] ?? null);
     }
 
+    public function testBuildCreatePaymentRequestPinsCardTokenToCreditcard(): void
+    {
+        $contract = $this->contractStub();
+        $service = $this->service();
+
+        // Even if the caller passes a different method, a card token forces creditcard.
+        $request = $service->buildCreatePaymentRequest($contract, 'ideal', 'https://shop.test/return', 'tkn_abc123');
+
+        self::assertSame('creditcard', $request->method);
+        self::assertSame('tkn_abc123', $request->cardToken);
+    }
+
+    public function testBuildCreatePaymentRequestLeavesCardTokenNullForRedirectFlow(): void
+    {
+        $contract = $this->contractStub();
+        $service = $this->service();
+
+        $request = $service->buildCreatePaymentRequest($contract, null, 'https://shop.test/return');
+
+        self::assertNull($request->cardToken);
+        self::assertNull($request->method);
+    }
+
+    public function testBuildCreatePaymentRequestTreatsBlankCardTokenAsRedirectFlow(): void
+    {
+        $contract = $this->contractStub();
+        $service = $this->service();
+
+        $request = $service->buildCreatePaymentRequest($contract, 'ideal', 'https://shop.test/return', '');
+
+        self::assertNull($request->cardToken);
+        self::assertSame('ideal', $request->method);
+    }
+
     private function service(
         string $webhookUrl = 'https://shop.test/webhook',
         string $captureMode = MollieDefinitions::CAPTURE_MODE_AUTOMATIC,

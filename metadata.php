@@ -79,6 +79,9 @@ $aModule = [
             'constraints' => MollieDefinitions::CAPTURE_MODE_AUTOMATIC . '|' . MollieDefinitions::CAPTURE_MODE_MANUAL,
         ],
         ['group' => 'MOLLIE_TEST_CONFIG', 'name' => 'sMollieTestKey', 'type' => 'str', 'value' => '', 'position' => 30],
+        // IFRAME-04: Mollie website profile id (pfl_…), required by Mollie Components' JS
+        // (`new Mollie(profileId, …)`) for inline card entry. Same id for test + live modes.
+        ['group' => 'MOLLIE_GENERAL', 'name' => 'sMollieProfileId', 'type' => 'str', 'value' => '', 'position' => 25],
         ['group' => 'MOLLIE_LIVE_CONFIG', 'name' => 'sMollieLiveKey', 'type' => 'str', 'value' => '', 'position' => 40],
         ['group' => 'MOLLIE_WEBHOOKS', 'name' => 'sMollieWebhookUrl', 'type' => 'str', 'value' => '', 'position' => 50],
         [

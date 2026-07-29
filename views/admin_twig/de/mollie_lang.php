@@ -75,6 +75,7 @@ $aLang = [
     'SHOP_MODULE_sMollieCaptureMode_automatic' => 'Automatisch',
     'SHOP_MODULE_sMollieCaptureMode_manual' => 'Manuell',
     'SHOP_MODULE_sMollieTestKey' => 'Test-API-Schlüssel',
+    'SHOP_MODULE_sMollieProfileId' => 'Website-Profil-ID (pfl_…) — erforderlich für Inline-Karte (Mollie Components)',
     'SHOP_MODULE_sMollieLiveKey' => 'Live-API-Schlüssel',
     'SHOP_MODULE_sMollieWebhookUrl' => 'Webhook-URL (überschreiben)',
     'SHOP_MODULE_sMollieLogLevel' => 'Protokollstufe',

@@ -19,9 +19,14 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\CreatePaymentRequest;
  */
 interface CheckoutPaymentServiceInterface
 {
+    /**
+     * @param string|null $cardToken IFRAME-04: Mollie Components card token; when present the
+     *                                request is built as an inline card payment (method=creditcard).
+     */
     public function buildCreatePaymentRequest(
         PaymentContractInterface $contract,
         ?string $method,
         string $redirectUrl,
+        ?string $cardToken = null,
     ): CreatePaymentRequest;
 }

@@ -25,6 +25,12 @@ interface ModuleConfigurationServiceInterface
      */
     public function getApiKey(): string;
 
+    /**
+     * The Mollie website profile id (pfl_…). Required by Mollie Components for inline card
+     * entry (IFRAME-04); empty string when not configured.
+     */
+    public function getProfileId(): string;
+
     public function getCaptureMode(): string;
 
     public function isManualCapture(): bool;

@@ -168,6 +168,9 @@ class MollieOrderController extends MollieOrderController_parent
             'user' => is_object($user) ? $user : null,
             'sessionId' => (string) $session->getId(),
             'conditionTypes' => ['payment_authorized'],
+            // IFRAME-04: Mollie Components card token posted by the inline card form (hidden
+            // field), if any. Null for the classic redirect flow — the handler branches on it.
+            'cardToken' => $this->readRequestParameter('mollieCardToken'),
         ]);
     }
 

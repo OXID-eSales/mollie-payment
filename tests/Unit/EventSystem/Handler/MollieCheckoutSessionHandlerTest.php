@@ -202,6 +202,104 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
         self::assertNull($context->get('checkoutUrl'));
     }
 
+    public function testHandleWithCardTokenPassesCreditcardMethodAndTokenToService(): void
+    {
+        $contract = $this->contractStub();
+        ['handler' => $handler, 'checkoutPaymentService' => $checkoutPaymentService, 'adapter' => $adapter]
+            = $this->handler();
+
+        $checkoutPaymentService->expects(self::once())
+            ->method('buildCreatePaymentRequest')
+            ->with($contract, 'creditcard', self::anything(), 'tkn_live_123')
+            ->willReturn(new CreatePaymentRequest(
+                amount: MollieAmountDto::fromComponents('EUR', 10.0),
+                description: 'x',
+                redirectUrl: 'https://shop.test/return',
+                method: 'creditcard',
+                cardToken: 'tkn_live_123',
+            ));
+        $adapter->method('createPayment')->willReturn($this->paymentDto());
+
+        $context = new EventContext();
+        $context->setContract($contract);
+        $context->set('cardToken', 'tkn_live_123');
+
+        $handler->handle(new MollieCheckoutSessionRequestEvent($context));
+    }
+
+    /**
+     * IFRAME-04: an inline card that clears WITHOUT 3-D Secure yields no Mollie checkout URL.
+     * The handler must then send the shopper to our own return leg (checkoutReturn) to finalize —
+     * not treat the missing URL as a failure.
+     */
+    public function testHandleWithCardTokenAndNoThreeDsRedirectsToOwnReturnLeg(): void
+    {
+        $contract = $this->contractStub();
+        ['handler' => $handler, 'checkoutPaymentService' => $checkoutPaymentService, 'adapter' => $adapter, 'repository' => $repository]
+            = $this->handler();
+
+        $checkoutPaymentService->method('buildCreatePaymentRequest')->willReturn(new CreatePaymentRequest(
+            amount: MollieAmountDto::fromComponents('EUR', 10.0),
+            description: 'x',
+            redirectUrl: 'https://shop.test/return',
+            method: 'creditcard',
+            cardToken: 'tkn_live_123',
+        ));
+        $adapter->method('createPayment')->willReturn(new MolliePaymentDto(
+            id: 'tr_card1',
+            status: 'paid',
+            amount: MollieAmountDto::fromComponents('EUR', 10.0),
+            checkoutUrl: null,
+        ));
+        $repository->expects(self::once())->method('save')->with($contract);
+
+        $context = new EventContext();
+        $context->setContract($contract);
+        $context->set('cardToken', 'tkn_live_123');
+
+        $handler->handle(new MollieCheckoutSessionRequestEvent($context));
+
+        $destination = $context->get('checkoutUrl');
+        self::assertIsString($destination);
+        self::assertStringContainsString(
+            'cl=' . MollieDefinitions::ORDER_CONTROLLER_ID . '&fnc=checkoutReturn',
+            $destination,
+        );
+    }
+
+    /**
+     * The classic redirect flow (no card token) with a payment that has no checkout URL is a
+     * genuine failure — the shopper must not be sent anywhere.
+     */
+    public function testHandleWithoutCardTokenAndNoCheckoutUrlFailsContract(): void
+    {
+        $contract = $this->contractStub();
+        $contract->expects(self::once())->method('fail');
+        $contract->expects(self::never())->method('setProvider');
+
+        ['handler' => $handler, 'checkoutPaymentService' => $checkoutPaymentService, 'adapter' => $adapter]
+            = $this->handler();
+
+        $checkoutPaymentService->method('buildCreatePaymentRequest')->willReturn(new CreatePaymentRequest(
+            amount: MollieAmountDto::fromComponents('EUR', 10.0),
+            description: 'x',
+            redirectUrl: 'https://shop.test/return',
+        ));
+        $adapter->method('createPayment')->willReturn(new MolliePaymentDto(
+            id: 'tr_nourl',
+            status: 'open',
+            amount: MollieAmountDto::fromComponents('EUR', 10.0),
+            checkoutUrl: null,
+        ));
+
+        $context = new EventContext();
+        $context->setContract($contract);
+
+        $handler->handle(new MollieCheckoutSessionRequestEvent($context));
+
+        self::assertNull($context->get('checkoutUrl'));
+    }
+
     public function testHandleThrowsWhenNoContractInContext(): void
     {
         ['handler' => $handler] = $this->handler();

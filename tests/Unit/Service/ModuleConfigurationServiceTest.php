@@ -42,6 +42,18 @@ final class ModuleConfigurationServiceTest extends TestCase
         self::assertSame('live_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', $config->getApiKey());
     }
 
+    public function testGetProfileId_ReturnsTrimmedConfiguredValue(): void
+    {
+        $config = new TestableModuleConfigurationService(['sMollieProfileId' => '  pfl_cVf8bSWdQV  ']);
+        self::assertSame('pfl_cVf8bSWdQV', $config->getProfileId());
+    }
+
+    public function testGetProfileId_EmptyWhenUnset(): void
+    {
+        $config = new TestableModuleConfigurationService([]);
+        self::assertSame('', $config->getProfileId());
+    }
+
     public function testGetCaptureMode_DefaultsToAutomatic(): void
     {
         $config = new TestableModuleConfigurationService([]);
