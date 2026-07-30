@@ -48,7 +48,8 @@ final class MollieLinesBuilder
             $lines[] = self::shippingLine($currency, $shippingGross, $shippingVatRate);
         }
         if (self::round($discountGross) > 0.0) {
-            $lines[] = self::flatLine($currency, 'Discount', -self::round($discountGross), MollieLineDto::TYPE_DISCOUNT);
+            $discount = -self::round($discountGross);
+            $lines[] = self::flatLine($currency, 'Discount', $discount, MollieLineDto::TYPE_DISCOUNT);
         }
 
         $delta = self::round($expectedTotal - self::sumTotals($lines));
