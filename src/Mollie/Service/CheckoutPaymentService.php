@@ -47,7 +47,8 @@ final class CheckoutPaymentService implements CheckoutPaymentServiceInterface
         // Safety: a pay-later method without the required order data would 422. Rather than fail the
         // shopper, drop the forced method so Mollie presents its hosted page (which collects the
         // address itself). Normal logged-in checkouts always have a complete address, so this is rare.
-        if ($effectiveMethod !== null && MollieDefinitions::requiresOrderData($effectiveMethod) && $billingAddress === null) {
+        $needsOrderData = $effectiveMethod !== null && MollieDefinitions::requiresOrderData($effectiveMethod);
+        if ($needsOrderData && $billingAddress === null) {
             $effectiveMethod = null;
         }
 
