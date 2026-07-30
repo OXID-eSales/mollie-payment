@@ -50,21 +50,25 @@ final class PaymentMethodListServiceTest extends TestCase
         $result = $service->listActiveMethods('EUR');
         $ids = array_map(static fn (MollieMethodDto $m): string => $m->id, $result);
 
-        // Card + Klarna support manual capture; iDEAL (instant) and PayPal (onboarding-gated) do not.
-        self::assertSame(['creditcard', 'klarna'], $ids);
+        // Klarna is BNPL (dropped as inline-unsupported); iDEAL is instant (no capture); PayPal is
+        // onboarding-gated (not in the manual-capture allowlist). Only Card survives.
+        self::assertSame(['creditcard'], $ids);
     }
 
-    public function testList_AutomaticCapture_KeepsAllMethods(): void
+    public function testList_DropsInlineUnsupportedBnplMethodsEvenUnderAutomaticCapture(): void
     {
         $this->methodsAdapter->method('listActiveMethods')->willReturn([
             new MollieMethodDto('creditcard', 'Card'),
             new MollieMethodDto('ideal', 'iDEAL'),
             new MollieMethodDto('paypal', 'PayPal'),
+            new MollieMethodDto('klarna', 'Klarna'),
         ]);
 
         $result = $this->service->listActiveMethods('EUR');
+        $ids = array_map(static fn (MollieMethodDto $m): string => $m->id, $result);
 
-        self::assertCount(3, $result);
+        // Klarna needs an upfront billing address the module doesn't send → always excluded.
+        self::assertSame(['creditcard', 'ideal', 'paypal'], $ids);
     }
 
     public function testList_ReturnsEnabledMethodsForCurrencyAndCountry(): void

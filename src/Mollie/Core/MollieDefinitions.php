@@ -91,6 +91,25 @@ final class MollieDefinitions
         'in3',
     ];
 
+    /**
+     * Mollie methods that CANNOT be offered on the inline selector because they require order data
+     * (a billing address + order lines) that this module's Payments-API create-payment flow does not
+     * send — Mollie rejects them with 422 "A billing address is required". These are the Buy-Now-
+     * Pay-Later / voucher methods; offering them inline yields MOLLIE_CHECKOUT_UNAVAILABLE. Filtered
+     * out of the selector in every capture mode until the module adopts Mollie's Orders API.
+     */
+    public const INLINE_UNSUPPORTED_METHODS = [
+        'klarna',
+        'klarnapaylater',
+        'klarnasliceit',
+        'klarnapaynow',
+        'riverty',
+        'billie',
+        'in3',
+        'voucher',
+        'mealvoucher',
+    ];
+
     // Payment-method constraints (narrow default; EUR-first like Mollie's core markets).
     private const PAYMENT_CONSTRAINTS_DEFAULT = [
         'oxfromamount' => 0.01,
@@ -163,6 +182,16 @@ final class MollieDefinitions
     public static function supportsManualCapture(string $methodId): bool
     {
         return in_array(strtolower($methodId), self::MANUAL_CAPTURE_METHODS, true);
+    }
+
+    /**
+     * True when the Mollie method can be offered on the inline selector with the data the module's
+     * create-payment flow sends (i.e. it is NOT a Buy-Now-Pay-Later/voucher method that needs an
+     * upfront billing address + order lines). See {@see self::INLINE_UNSUPPORTED_METHODS}.
+     */
+    public static function isOfferableInline(string $methodId): bool
+    {
+        return !in_array(strtolower($methodId), self::INLINE_UNSUPPORTED_METHODS, true);
     }
 
     public static function supportsCountry(string $paymentId, string $country): bool

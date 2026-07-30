@@ -110,9 +110,16 @@ test.describe('IFRAME-04 — Mollie inline method selection (non-card redirect)'
 
             await expect(page, 'PayPal selection redirects straight to Mollie')
                 .toHaveURL(/mollie\.com\/checkout/i, { timeout: 45000 });
+            // No method-detour: the payment is created with method=paypal, so Mollie hands off to the
+            // PayPal flow (live: PayPal auth; test: its paypal simulator) — NOT the generic
+            // "select-method" picker.
+            expect(page.url(), 'must be the PayPal-specific checkout, not the method picker')
+                .toMatch(/method=paypal/i);
+            expect(page.url(), 'must not land on Mollie\'s generic method-selection page')
+                .not.toMatch(/select-method/i);
             await page.waitForLoadState('domcontentloaded').catch(() => {});
             await page.waitForTimeout(1200);
-            await shot(page, testInfo, '02 — redirected to Mollie for the selected method');
+            await shot(page, testInfo, '02 — redirected to the PayPal flow (method=paypal, no picker)');
         });
     });
 });

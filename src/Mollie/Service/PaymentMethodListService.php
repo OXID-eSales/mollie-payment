@@ -49,6 +49,13 @@ final class PaymentMethodListService implements PaymentMethodListServiceInterfac
             billingCountry: $country !== null && $country !== '' ? strtoupper($country) : null,
         ));
 
+        // Always drop methods the inline create-payment flow cannot complete (BNPL/voucher need an
+        // upfront billing address + order lines → 422 → MOLLIE_CHECKOUT_UNAVAILABLE).
+        $methods = array_values(array_filter(
+            $methods,
+            static fn (MollieMethodDto $m): bool => MollieDefinitions::isOfferableInline($m->id),
+        ));
+
         // Manual-capture shops may only offer capture-capable methods — otherwise Mollie rejects the
         // create-payment (422). Hide the incompatible ones from the inline selector.
         if ($this->config->isManualCapture()) {

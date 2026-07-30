@@ -53,6 +53,16 @@ final class MollieDefinitionsTest extends TestCase
         self::assertFalse(MollieDefinitions::supportsManualCapture('paypal'));
     }
 
+    public function testIsOfferableInline_ExcludesBnplAndVoucherMethods(): void
+    {
+        self::assertTrue(MollieDefinitions::isOfferableInline('creditcard'));
+        self::assertTrue(MollieDefinitions::isOfferableInline('paypal'));
+        self::assertTrue(MollieDefinitions::isOfferableInline('ideal'));
+        self::assertFalse(MollieDefinitions::isOfferableInline('klarna'));
+        self::assertFalse(MollieDefinitions::isOfferableInline('RIVERTY')); // case-insensitive
+        self::assertFalse(MollieDefinitions::isOfferableInline('voucher'));
+    }
+
     public function testSupportsCountry_EmptyListMeansAll(): void
     {
         self::assertTrue(MollieDefinitions::supportsCountry(MollieDefinitions::PAYMENT_ID, 'DE'));
