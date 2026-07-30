@@ -12,10 +12,10 @@ import {
  * preselected (mollieMethod radio is form-associated) and the server redirects straight to Mollie's
  * hosted page for it — no method-selection detour. This spec proves that path for PayPal.
  *
- * Capture-mode note: PayPal only supports AUTOMATIC capture. On a shop configured for MANUAL
- * capture Mollie rejects a forced `method=paypal` (422), so the redirect step here soft-passes with
- * an annotation rather than failing — the deterministic proof (PayPal offered + card fields hidden)
- * still holds. Default/CI shops use automatic capture, where the redirect is asserted outright.
+ * Capture-mode gating: PayPal only supports AUTOMATIC capture, so on a MANUAL-capture shop it is
+ * filtered OUT of the inline selector (MollieDefinitions::supportsManualCapture). This spec adapts:
+ *   - PayPal offered (automatic capture) → select it → assert redirect to Mollie.
+ *   - PayPal absent (manual capture)      → assert it is hidden while Card remains — the gating proof.
  *
  * Run:
  *   MOLLIE_E2E_SHOP_URL=https://daniil.oxiddev.de \
@@ -71,15 +71,33 @@ test.describe('IFRAME-04 — Mollie inline method selection (non-card redirect)'
         await expect(page, 'must be on the standard order page').toHaveURL(/cl=order/);
 
         const paypal = page.locator('input[name="mollieMethod"][value="paypal"]');
+        const card = page.locator('input[name="mollieMethod"][value="creditcard"]');
 
-        await test.step('01 — order page shows the Mollie method list incl. a non-card method', async () => {
+        // Capture-mode gating: PayPal only supports automatic capture, so on a manual-capture shop
+        // it is filtered OUT of the selector. Adapt to whichever mode this shop is in.
+        const paypalOffered = (await paypal.count()) > 0;
+
+        await test.step('01 — order page shows the Mollie method list', async () => {
             await expect(page.locator('input[name="mollieMethod"]').first(), 'method radios present')
                 .toBeVisible();
-            await expect(paypal, 'PayPal must be offered as a method').toHaveCount(1);
-            await shot(page, testInfo, '01 — Mollie method selector (Card / PayPal / …)');
+            await expect(card, 'Card is always a capture-capable method').toHaveCount(1);
+            await shot(page, testInfo, `01 — Mollie method selector (paypalOffered=${paypalOffered})`);
         });
 
-        await test.step('02 — pick PayPal: no card fields shown, submit redirects to Mollie', async () => {
+        if (!paypalOffered) {
+            await test.step('02 — manual-capture shop: PayPal is hidden (capture-incompatible)', async () => {
+                // The core proof of the gating feature: a capture-incompatible method is not offered.
+                await expect(paypal, 'PayPal must be hidden under manual capture').toHaveCount(0);
+                testInfo.annotations.push({
+                    type: 'note',
+                    description: 'Manual-capture shop: PayPal filtered out of the inline selector (capture-incompatible).',
+                });
+                await shot(page, testInfo, '02 — PayPal hidden under manual capture');
+            });
+            return;
+        }
+
+        await test.step('02 — automatic capture: pick PayPal → no card fields, redirects to Mollie', async () => {
             await paypal.check();
             await page.waitForTimeout(500);
             await expect(
@@ -90,22 +108,8 @@ test.describe('IFRAME-04 — Mollie inline method selection (non-card redirect)'
             await page.getByRole('button', { name: /order now|zahlungspflichtig bestellen|place order/i })
                 .first().click();
 
-            const redirected = await page.waitForURL(/mollie\.com\/checkout/i, { timeout: 45000 })
-                .then(() => true)
-                .catch(() => false);
-
-            if (!redirected) {
-                // Shop likely in MANUAL capture mode → Mollie rejects a forced method=paypal (422).
-                // The inline selection + card-fields-hidden proof already stands.
-                testInfo.annotations.push({
-                    type: 'note',
-                    description: 'No redirect — PayPal needs automatic capture; this shop appears to use manual capture.',
-                });
-                await shot(page, testInfo, '02 — PayPal selected (redirect gated by manual capture)');
-                return;
-            }
-
-            expect(page.url(), 'landed on Mollie hosted checkout').toMatch(/mollie\.com\/checkout/i);
+            await expect(page, 'PayPal selection redirects straight to Mollie')
+                .toHaveURL(/mollie\.com\/checkout/i, { timeout: 45000 });
             await page.waitForLoadState('domcontentloaded').catch(() => {});
             await page.waitForTimeout(1200);
             await shot(page, testInfo, '02 — redirected to Mollie for the selected method');

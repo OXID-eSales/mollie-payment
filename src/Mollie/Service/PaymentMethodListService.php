@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Service;
 
 use OxidEsales\Payments\Mollie\Adapter\Dto\MethodsListRequest;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieMethodDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieMethodsAdapterInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 
@@ -27,8 +28,10 @@ final class PaymentMethodListService implements PaymentMethodListServiceInterfac
     /** @var array<string, list<\OxidEsales\Payments\Mollie\Adapter\Dto\MollieMethodDto>> */
     private array $cache = [];
 
-    public function __construct(private readonly MollieMethodsAdapterInterface $methodsAdapter)
-    {
+    public function __construct(
+        private readonly MollieMethodsAdapterInterface $methodsAdapter,
+        private readonly ModuleConfigurationServiceInterface $config,
+    ) {
     }
 
     public function listActiveMethods(string $currency, ?string $country = null): array
@@ -45,6 +48,15 @@ final class PaymentMethodListService implements PaymentMethodListServiceInterfac
         $methods = $this->methodsAdapter->listActiveMethods(new MethodsListRequest(
             billingCountry: $country !== null && $country !== '' ? strtoupper($country) : null,
         ));
+
+        // Manual-capture shops may only offer capture-capable methods — otherwise Mollie rejects the
+        // create-payment (422). Hide the incompatible ones from the inline selector.
+        if ($this->config->isManualCapture()) {
+            $methods = array_values(array_filter(
+                $methods,
+                static fn (MollieMethodDto $m): bool => MollieDefinitions::supportsManualCapture($m->id),
+            ));
+        }
 
         return $this->cache[$cacheKey] = $methods;
     }

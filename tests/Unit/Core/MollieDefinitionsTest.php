@@ -43,6 +43,16 @@ final class MollieDefinitionsTest extends TestCase
         self::assertFalse(MollieDefinitions::supportsCurrency(MollieDefinitions::PAYMENT_ID, 'JPY'));
     }
 
+    public function testSupportsManualCapture_CardAndBnpl_YesInstantAndPaypal_No(): void
+    {
+        self::assertTrue(MollieDefinitions::supportsManualCapture('creditcard'));
+        self::assertTrue(MollieDefinitions::supportsManualCapture('KLARNA')); // case-insensitive
+        self::assertTrue(MollieDefinitions::supportsManualCapture('riverty'));
+        self::assertFalse(MollieDefinitions::supportsManualCapture('ideal'));
+        self::assertFalse(MollieDefinitions::supportsManualCapture('bancontact'));
+        self::assertFalse(MollieDefinitions::supportsManualCapture('paypal'));
+    }
+
     public function testSupportsCountry_EmptyListMeansAll(): void
     {
         self::assertTrue(MollieDefinitions::supportsCountry(MollieDefinitions::PAYMENT_ID, 'DE'));

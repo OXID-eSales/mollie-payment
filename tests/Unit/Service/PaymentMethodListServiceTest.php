@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MethodsListRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieMethodDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieMethodsAdapterInterface;
+use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use OxidEsales\Payments\Mollie\Service\PaymentMethodListService;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -21,12 +22,49 @@ use PHPUnit\Framework\TestCase;
 final class PaymentMethodListServiceTest extends TestCase
 {
     private MollieMethodsAdapterInterface&MockObject $methodsAdapter;
+    private ModuleConfigurationServiceInterface&MockObject $config;
     private PaymentMethodListService $service;
 
     protected function setUp(): void
     {
         $this->methodsAdapter = $this->createMock(MollieMethodsAdapterInterface::class);
-        $this->service = new PaymentMethodListService($this->methodsAdapter);
+        $this->config = $this->createMock(ModuleConfigurationServiceInterface::class);
+        // Default: automatic capture (no capture filtering).
+        $this->config->method('isManualCapture')->willReturn(false);
+        $this->service = new PaymentMethodListService($this->methodsAdapter, $this->config);
+    }
+
+    public function testList_ManualCapture_FiltersOutCaptureIncompatibleMethods(): void
+    {
+        $config = $this->createMock(ModuleConfigurationServiceInterface::class);
+        $config->method('isManualCapture')->willReturn(true);
+        $service = new PaymentMethodListService($this->methodsAdapter, $config);
+
+        $this->methodsAdapter->method('listActiveMethods')->willReturn([
+            new MollieMethodDto('creditcard', 'Card'),
+            new MollieMethodDto('ideal', 'iDEAL'),
+            new MollieMethodDto('paypal', 'PayPal'),
+            new MollieMethodDto('klarna', 'Klarna'),
+        ]);
+
+        $result = $service->listActiveMethods('EUR');
+        $ids = array_map(static fn (MollieMethodDto $m): string => $m->id, $result);
+
+        // Card + Klarna support manual capture; iDEAL (instant) and PayPal (onboarding-gated) do not.
+        self::assertSame(['creditcard', 'klarna'], $ids);
+    }
+
+    public function testList_AutomaticCapture_KeepsAllMethods(): void
+    {
+        $this->methodsAdapter->method('listActiveMethods')->willReturn([
+            new MollieMethodDto('creditcard', 'Card'),
+            new MollieMethodDto('ideal', 'iDEAL'),
+            new MollieMethodDto('paypal', 'PayPal'),
+        ]);
+
+        $result = $this->service->listActiveMethods('EUR');
+
+        self::assertCount(3, $result);
     }
 
     public function testList_ReturnsEnabledMethodsForCurrencyAndCountry(): void

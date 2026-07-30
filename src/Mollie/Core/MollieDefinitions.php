@@ -69,6 +69,28 @@ final class MollieDefinitions
     public const EVENT_REFUND_REQUEST = 'oe_payments.mollie.refund_request';
     public const EVENT_CANCEL_AUTHORIZATION = 'oe_payments.mollie.cancel_authorization';
 
+    /**
+     * Mollie method ids that support MANUAL capture (the authorize-then-capture / two-step flow).
+     * When the shop runs in manual-capture mode, only these may be offered inline — otherwise Mollie
+     * rejects the create-payment with 422 "At least one of the provided payment methods must support
+     * captures". This is the reliably-capture-capable set (cards + Buy-Now-Pay-Later); instant methods
+     * (iDEAL, Bancontact, bank transfer, …) never support captures and are filtered out.
+     *
+     * PayPal is intentionally EXCLUDED: although Mollie documents PayPal as capture-capable, manual
+     * capture requires extra PayPal onboarding and is rejected on accounts without it (verified on the
+     * test profile), so it is not offered under manual capture by default.
+     */
+    public const MANUAL_CAPTURE_METHODS = [
+        'creditcard',
+        'klarna',
+        'klarnapaylater',
+        'klarnasliceit',
+        'klarnapaynow',
+        'riverty',
+        'billie',
+        'in3',
+    ];
+
     // Payment-method constraints (narrow default; EUR-first like Mollie's core markets).
     private const PAYMENT_CONSTRAINTS_DEFAULT = [
         'oxfromamount' => 0.01,
@@ -131,6 +153,16 @@ final class MollieDefinitions
     {
         $currencies = self::getSupportedCurrencies($paymentId);
         return $currencies === [] || in_array(strtoupper($currency), $currencies, true);
+    }
+
+    /**
+     * True when the Mollie method id supports manual (two-step) capture — see
+     * {@see self::MANUAL_CAPTURE_METHODS}. Used to hide capture-incompatible methods from the inline
+     * selector on manual-capture shops.
+     */
+    public static function supportsManualCapture(string $methodId): bool
+    {
+        return in_array(strtolower($methodId), self::MANUAL_CAPTURE_METHODS, true);
     }
 
     public static function supportsCountry(string $paymentId, string $country): bool
