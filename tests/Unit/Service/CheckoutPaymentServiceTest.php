@@ -123,14 +123,13 @@ final class CheckoutPaymentServiceTest extends TestCase
     public function testBuildCreatePaymentRequestPopulatesAddressAndLinesForPayLaterMethod(): void
     {
         $contract = $this->contractStub();
-        $contract->method('getOrderId')->willReturn('order-1');
 
         $address = new MollieAddressDto('Marc', 'Muster', 'm@x.test', 'Street 1', '12345', 'City', 'DE');
         $lines = [new MollieLineDto('Item', 1, new MollieAmountDto('EUR', 10.0), new MollieAmountDto('EUR', 10.0), 19.0, new MollieAmountDto('EUR', 1.6))];
 
         $orderData = $this->createMock(MollieOrderDataProviderInterface::class);
-        $orderData->method('billingAddress')->with('order-1')->willReturn($address);
-        $orderData->method('lines')->with('order-1', 'EUR', 10.0)->willReturn($lines);
+        $orderData->method('billingAddress')->willReturn($address);
+        $orderData->method('lines')->with('EUR', 10.0)->willReturn($lines);
 
         $request = $this->service(orderData: $orderData)
             ->buildCreatePaymentRequest($contract, 'klarna', 'https://shop.test/return');
@@ -143,7 +142,6 @@ final class CheckoutPaymentServiceTest extends TestCase
     public function testBuildCreatePaymentRequestOmitsOrderDataForNonPayLaterMethods(): void
     {
         $contract = $this->contractStub();
-        $contract->method('getOrderId')->willReturn('order-1');
 
         $orderData = $this->createMock(MollieOrderDataProviderInterface::class);
         $orderData->expects(self::never())->method('billingAddress');
@@ -158,7 +156,6 @@ final class CheckoutPaymentServiceTest extends TestCase
     public function testBuildCreatePaymentRequestSkipsOrderDataWhenAddressIncomplete(): void
     {
         $contract = $this->contractStub();
-        $contract->method('getOrderId')->willReturn('order-1');
 
         // Missing email/country → incomplete → must not send partial data (avoid a 422).
         $incomplete = new MollieAddressDto('Marc', 'Muster', '', 'Street 1', '12345', 'City', '');

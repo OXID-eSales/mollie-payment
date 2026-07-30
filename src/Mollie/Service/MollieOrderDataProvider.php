@@ -9,86 +9,112 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Service;
 
+use OxidEsales\Eshop\Application\Model\Basket;
+use OxidEsales\Eshop\Application\Model\BasketItem;
 use OxidEsales\Eshop\Application\Model\Country;
-use OxidEsales\Eshop\Application\Model\Order;
+use OxidEsales\Eshop\Application\Model\User;
+use OxidEsales\Eshop\Core\Price;
+use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAddressDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieProductLineInput;
 
 /**
- * OXID implementation of {@see MollieOrderDataProviderInterface}. Reads the order that
- * EarlyOrderCreationHandler already created (NOT_FINISHED) — the authoritative, VAT-resolved source —
- * and hands the raw lines to {@see MollieLinesBuilder}, whose residual-fold absorbs any OXID rounding
- * so the Mollie lines always reconcile to the payment total.
+ * OXID implementation of {@see MollieOrderDataProviderInterface}. Reads the live session basket + user
+ * (the reliable source during the checkout request — the early order is still a bare NOT_FINISHED
+ * shell) and hands the raw lines to {@see MollieLinesBuilder}, whose residual-fold absorbs discounts
+ * and OXID rounding so the Mollie lines always reconcile to the payment total.
  *
- * OXID-model access is isolated in protected seams (loadOrder / orderArticles / field / countryIso) so
+ * OXID access is isolated in protected seams (basket / basketUser / basketContents / countryIso) so
  * the mapping can be exercised without a shop bootstrap.
  */
 class MollieOrderDataProvider implements MollieOrderDataProviderInterface
 {
-    public function billingAddress(string $orderId): ?MollieAddressDto
+    public function billingAddress(): ?MollieAddressDto
     {
-        $order = $this->loadOrder($orderId);
-        if ($order === null) {
+        $user = $this->basketUser();
+        if ($user === null) {
             return null;
         }
 
         return new MollieAddressDto(
-            $this->field($order, 'oxbillfname'),
-            $this->field($order, 'oxbilllname'),
-            $this->field($order, 'oxbillemail'),
-            trim($this->field($order, 'oxbillstreet') . ' ' . $this->field($order, 'oxbillstreetnr')),
-            $this->field($order, 'oxbillzip'),
-            $this->field($order, 'oxbillcity'),
-            $this->countryIso($this->field($order, 'oxbillcountryid')),
+            $this->field($user, 'oxfname'),
+            $this->field($user, 'oxlname'),
+            $this->field($user, 'oxusername'),
+            trim($this->field($user, 'oxstreet') . ' ' . $this->field($user, 'oxstreetnr')),
+            $this->field($user, 'oxzip'),
+            $this->field($user, 'oxcity'),
+            $this->countryIso($this->field($user, 'oxcountryid')),
         );
     }
 
-    public function lines(string $orderId, string $currency, float $expectedTotal): array
+    public function lines(string $currency, float $expectedTotal): array
     {
-        $order = $this->loadOrder($orderId);
-        if ($order === null) {
+        $basket = $this->basket();
+        if ($basket === null) {
             return [];
         }
 
         $products = [];
-        foreach ($this->orderArticles($order) as $article) {
-            if (!is_object($article)) {
-                continue;
+        foreach ($this->basketContents($basket) as $item) {
+            if ($item instanceof BasketItem) {
+                $products[] = $this->productInput($item);
             }
-            $products[] = new MollieProductLineInput(
-                $this->field($article, 'oxtitle'),
-                max(1, (int) round((float) $this->field($article, 'oxamount'))),
-                (float) $this->field($article, 'oxbprice'),
-                (float) $this->field($article, 'oxvat'),
-            );
         }
 
-        $shipping = (float) $this->field($order, 'oxdelcost');
-        $shippingVat = (float) $this->field($order, 'oxdelvat');
-        $discount = (float) $this->field($order, 'oxdiscount') + (float) $this->field($order, 'oxvoucherdiscount');
+        [$shipping, $shippingVat] = $this->shipping($basket);
 
-        return MollieLinesBuilder::build($currency, $expectedTotal, $products, $shipping, $shippingVat, $discount);
+        // Discounts/vouchers are absorbed by MollieLinesBuilder's residual fold (products+shipping
+        // exceed the discounted total), so no explicit discount line is read here.
+        return MollieLinesBuilder::build($currency, $expectedTotal, $products, $shipping, $shippingVat, 0.0);
     }
 
-    protected function loadOrder(string $orderId): ?Order
+    private function productInput(BasketItem $item): MollieProductLineInput
     {
-        if ($orderId === '') {
-            return null;
-        }
-        /** @var Order $order — oxNew model factory */
-        $order = oxNew(Order::class);
+        $unitPrice = $item->getUnitPrice();
+        $title = (string) $item->getTitle();
 
-        return $order->load($orderId) ? $order : null;
+        return new MollieProductLineInput(
+            $title !== '' ? $title : 'Item',
+            max(1, (int) round($item->getAmount())),
+            (float) $unitPrice->getBruttoPrice(),
+            (float) $unitPrice->getVat(),
+        );
+    }
+
+    /**
+     * @return array{0: float, 1: float} shipping gross + VAT rate
+     */
+    private function shipping(Basket $basket): array
+    {
+        $cost = $basket->getCosts('oxdelivery');
+        if (!$cost instanceof Price) {
+            return [0.0, 0.0];
+        }
+
+        return [(float) $cost->getBruttoPrice(), (float) $cost->getVat()];
+    }
+
+    protected function basket(): ?Basket
+    {
+        $basket = Registry::getSession()->getBasket();
+
+        return $basket instanceof Basket ? $basket : null;
+    }
+
+    protected function basketUser(): ?User
+    {
+        $basket = $this->basket();
+        $user = $basket?->getBasketUser();
+
+        return $user instanceof User && $user->getId() ? $user : null;
     }
 
     /**
      * @return iterable<mixed>
      */
-    protected function orderArticles(Order $order): iterable
+    protected function basketContents(Basket $basket): iterable
     {
-        $articles = $order->getOrderArticles();
-
-        return is_iterable($articles) ? $articles : [];
+        return $basket->getContents();
     }
 
     protected function countryIso(string $countryId): string

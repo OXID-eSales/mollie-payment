@@ -44,6 +44,13 @@ final class CheckoutPaymentService implements CheckoutPaymentServiceInterface
 
         [$billingAddress, $lines] = $this->orderDataFor($effectiveMethod, $contract);
 
+        // Safety: a pay-later method without the required order data would 422. Rather than fail the
+        // shopper, drop the forced method so Mollie presents its hosted page (which collects the
+        // address itself). Normal logged-in checkouts always have a complete address, so this is rare.
+        if ($effectiveMethod !== null && MollieDefinitions::requiresOrderData($effectiveMethod) && $billingAddress === null) {
+            $effectiveMethod = null;
+        }
+
         return new CreatePaymentRequest(
             amount: MollieAmountDto::fromComponents($contract->getCurrency(), $contract->getAmount()),
             description: $this->buildDescription($contract),
@@ -71,19 +78,14 @@ final class CheckoutPaymentService implements CheckoutPaymentServiceInterface
             return [null, []];
         }
 
-        $orderId = (string) ($contract->getOrderId() ?? '');
-        if ($orderId === '') {
-            return [null, []];
-        }
-
-        $address = $this->orderData->billingAddress($orderId);
+        $address = $this->orderData->billingAddress();
         if ($address === null || !$address->isComplete()) {
             return [null, []];
         }
 
         return [
             $address,
-            $this->orderData->lines($orderId, $contract->getCurrency(), $contract->getAmount()),
+            $this->orderData->lines($contract->getCurrency(), $contract->getAmount()),
         ];
     }
 
