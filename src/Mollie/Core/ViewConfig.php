@@ -105,16 +105,20 @@ class ViewConfig extends ViewConfig_parent
     {
         try {
             $user = Registry::getSession()->getUser();
-            $countryId = is_object($user) ? (string) $user->getFieldData('oxcountryid') : '';
+            if (!is_object($user)) {
+                return null;
+            }
+            $countryId = $user->getFieldData('oxcountryid');
+            $countryId = is_scalar($countryId) ? (string) $countryId : '';
             if ($countryId === '') {
                 return null;
             }
-            /** @phpstan-ignore-next-line — oxNew is the OXID model factory */
+            /** @var \OxidEsales\Eshop\Application\Model\Country $country — oxNew model factory */
             $country = oxNew(\OxidEsales\Eshop\Application\Model\Country::class);
             $country->load($countryId);
-            $iso = (string) $country->getFieldData('oxisoalpha2');
+            $iso = $country->getFieldData('oxisoalpha2');
 
-            return $iso !== '' ? $iso : null;
+            return is_scalar($iso) && (string) $iso !== '' ? (string) $iso : null;
         } catch (Throwable) {
             return null;
         }
