@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller;
 
+use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Controller\CheckoutReturnResponder;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
@@ -29,6 +30,7 @@ final class TestableMollieOrderController extends MollieOrderController
     public array $redirectedTo = [];
     public bool $delegatedToParent = false;
     public bool $unavailableErrorShown = false;
+    public bool $pendingReturn = false;
 
     /**
      * @param array<string, string> $requestParams
@@ -95,5 +97,10 @@ final class TestableMollieOrderController extends MollieOrderController
         $this->delegatedToParent = true;
 
         return null;
+    }
+
+    protected function returnIsPending(PaymentContractInterface $contract): bool
+    {
+        return $this->pendingReturn;
     }
 }

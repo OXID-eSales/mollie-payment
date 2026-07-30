@@ -153,8 +153,10 @@ services:
   # MollieStatusMapper lives under Adapter/ (not swept by any resource glob — that tree also
   # holds Mollie-SDK-coupled classes that must not be autowired) but is itself a plain,
   # dependency-free mapper, so it is registered directly for MollieReturnResolver to consume.
+  # Public so MollieOrderController::returnIsPending() can resolve it via ContainerFacade to tell a
+  # still-pending return apart from a hard failure (a dependency-free, safe-to-expose mapper).
   OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper:
-    public: false
+    public: true
 
   # MollieReturnResolver is excluded from the Service/* resource sweep above (it lives in the
   # Return/ subdirectory, mirroring Stripe's own split) and registered explicitly here.

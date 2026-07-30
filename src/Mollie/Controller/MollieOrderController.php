@@ -17,8 +17,12 @@ use OxidEsales\PaymentBase\Controller\HandlesCheckoutReturn;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\PaymentBase\Controller\SessionWriterInterface;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\PaymentBase\Service\TokenServiceInterface;
+use OxidEsales\Payments\Mollie\Adapter\MollieOutcome;
+use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
+use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
 use OxidEsales\Payments\Mollie\Service\ContractTokenService;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
@@ -113,9 +117,13 @@ class MollieOrderController extends MollieOrderController_parent
         );
 
         if ($orderId === null) {
-            // Covers both a hard failure and a still-open payment (idempotently left for the
-            // webhook, Sprint 5) — dispatchCheckoutReturn() intentionally does not distinguish
-            // the two at this layer; either way there is nothing to commit to yet.
+            // A null order id covers TWO cases the responder can't distinguish here: a hard failure,
+            // and a still-open/pending payment left for the webhook (common for PayPal / bank-style
+            // methods). Query Mollie once to tell them apart — a pending payment is NOT an error: the
+            // order was placed and the webhook will finalize it, so land on thank-you with a notice.
+            if ($this->returnIsPending($contract)) {
+                return $this->onReturnPending($contract);
+            }
             return $this->onReturnError('return_not_finalised');
         }
 
@@ -236,6 +244,51 @@ class MollieOrderController extends MollieOrderController_parent
         Registry::getUtilsView()->addErrorToDisplay('MOLLIE_RETURN_' . strtoupper($code));
 
         return 'payment';
+    }
+
+    /**
+     * True when the Mollie payment is still open/pending on return (not paid/authorized yet, but not
+     * failed) — the webhook will finalize it. Overridable seam; production queries Mollie once.
+     */
+    protected function returnIsPending(PaymentContractInterface $contract): bool
+    {
+        $paymentId = $contract->getProviderOrderId();
+        if ($paymentId === null || $paymentId === '') {
+            return false;
+        }
+
+        $adapter = $this->resolveService(MolliePaymentsAdapterInterface::class);
+        $mapper = $this->resolveService(MollieStatusMapper::class);
+        if (!$adapter instanceof MolliePaymentsAdapterInterface || !$mapper instanceof MollieStatusMapper) {
+            return false;
+        }
+
+        try {
+            return $mapper->map($adapter->getPayment($paymentId)->status) === MollieOutcome::PENDING;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Pending payment on return: the order is placed (NOT_FINISHED) and the webhook will confirm it.
+     * Show the thank-you page with a "payment is being processed" notice — never the error screen.
+     */
+    private function onReturnPending(PaymentContractInterface $contract): string
+    {
+        Registry::getLogger()->info(
+            'MollieOrderController: payment pending on return — order placed, awaiting webhook confirmation',
+        );
+
+        $orderId = $contract->getOrderId();
+        $writer = $this->resolveService(SessionWriterInterface::class);
+        if (is_string($orderId) && $orderId !== '' && $writer instanceof SessionWriterInterface) {
+            $writer->writeSessChallenge($orderId);
+        }
+
+        Registry::getUtilsView()->addErrorToDisplay('MOLLIE_RETURN_PENDING');
+
+        return 'thankyou';
     }
 
     /**

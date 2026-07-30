@@ -209,6 +209,28 @@ final class MollieOrderControllerTest extends TestCase
         self::assertSame('payment', $controller->checkoutReturn());
     }
 
+    public function testCheckoutReturnWhenPaymentIsPendingLandsOnThankYouNotError(): void
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getOrderId')->willReturn('order-42');
+        $resolver = $this->createMock(ReturnResolverInterface::class);
+
+        // Responder returns null (no committed order) — but the payment is still pending, not failed.
+        $responder = $this->createMock(CheckoutReturnResponder::class);
+        $responder->method('respond')->willReturn(null);
+
+        $controller = $this->controller(
+            requestParams: ['contract_id' => 'contract-1', 'contract_token' => 'good-token'],
+            tokenValid: true,
+            contract: $contract,
+            resolver: $resolver,
+            responder: $responder,
+        );
+        $controller->pendingReturn = true;
+
+        self::assertSame('thankyou', $controller->checkoutReturn());
+    }
+
     /**
      * @param array<string, string> $requestParams
      */
