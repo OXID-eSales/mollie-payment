@@ -39,6 +39,9 @@ services:
       - 'src/Mollie/Service/UserDataValidatorInterface.php'
       - 'src/Mollie/Service/LanguageTranslatorInterface.php'
       - 'src/Mollie/Service/CheckoutPaymentServiceInterface.php'
+      - 'src/Mollie/Service/MollieOrderDataProviderInterface.php'
+      # Pure static utility (no service) — Mollie order-line reconciliation.
+      - 'src/Mollie/Service/MollieLinesBuilder.php'
     public: true
 
   # Interface aliases (DIP) — config foundation.
@@ -47,6 +50,9 @@ services:
     public: true
   OxidEsales\Payments\Mollie\Service\ConfigurationValidatorInterface:
     alias: OxidEsales\Payments\Mollie\Service\ConfigurationValidator
+    public: true
+  OxidEsales\Payments\Mollie\Service\MollieOrderDataProviderInterface:
+    alias: OxidEsales\Payments\Mollie\Service\MollieOrderDataProvider
     public: true
 
   # ===========================================================================

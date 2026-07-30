@@ -25,7 +25,9 @@ use Mollie\Api\Resources\RefundCollection;
 use OxidEsales\Payments\Mollie\Adapter\Dto\CaptureRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\CreatePaymentRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MethodsListRequest;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAddressDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieLineDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\RefundRequest;
 use OxidEsales\Payments\Mollie\Adapter\Exception\CaptureNotSupportedException;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
@@ -122,6 +124,57 @@ final class MollieAdapterTest extends TestCase
         ));
 
         self::assertArrayNotHasKey('cardToken', $captured);
+    }
+
+    public function testCreatePayment_WithAddressAndLines_IncludesThemInTheBody(): void
+    {
+        $captured = [];
+        $this->payments->method('create')->willReturnCallback(
+            function (array $data) use (&$captured): Payment {
+                $captured = $data;
+                return $this->payment(['id' => 'tr_k', 'status' => 'open']);
+            },
+        );
+
+        $address = new MollieAddressDto('Marc', 'Muster', 'm@x.test', 'Street 1', '12345', 'City', 'DE');
+        $line = new MollieLineDto('Item', 1, new MollieAmountDto('EUR', 10.0), new MollieAmountDto('EUR', 10.0), 19.0, new MollieAmountDto('EUR', 1.6));
+
+        (new MollieAdapter($this->client))->createPayment(new CreatePaymentRequest(
+            amount: new MollieAmountDto('EUR', 10.0),
+            description: 'Order',
+            redirectUrl: 'https://shop.test/return',
+            method: 'klarna',
+            billingAddress: $address,
+            shippingAddress: $address,
+            lines: [$line],
+        ));
+
+        self::assertSame('DE', $captured['billingAddress']['country']);
+        self::assertSame('m@x.test', $captured['billingAddress']['email']);
+        self::assertSame($captured['billingAddress'], $captured['shippingAddress']);
+        self::assertCount(1, $captured['lines']);
+        self::assertSame('10.00', $captured['lines'][0]['totalAmount']['value']);
+        self::assertSame('19.00', $captured['lines'][0]['vatRate']);
+    }
+
+    public function testCreatePayment_WithoutAddressOrLines_OmitsThoseKeys(): void
+    {
+        $captured = [];
+        $this->payments->method('create')->willReturnCallback(
+            function (array $data) use (&$captured): Payment {
+                $captured = $data;
+                return $this->payment(['id' => 'tr_1', 'status' => 'open']);
+            },
+        );
+
+        (new MollieAdapter($this->client))->createPayment(new CreatePaymentRequest(
+            amount: new MollieAmountDto('EUR', 10.0),
+            description: 'Order',
+            redirectUrl: 'https://shop.test/return',
+        ));
+
+        self::assertArrayNotHasKey('billingAddress', $captured);
+        self::assertArrayNotHasKey('lines', $captured);
     }
 
     public function testCreatePayment_ReturnsDtoWithCheckoutUrl(): void

@@ -92,13 +92,22 @@ final class MollieDefinitions
     ];
 
     /**
-     * Mollie methods that CANNOT be offered on the inline selector because they require order data
-     * (a billing address + order lines) that this module's Payments-API create-payment flow does not
-     * send — Mollie rejects them with 422 "A billing address is required". These are the Buy-Now-
-     * Pay-Later / voucher methods; offering them inline yields MOLLIE_CHECKOUT_UNAVAILABLE. Filtered
-     * out of the selector in every capture mode until the module adopts Mollie's Orders API.
+     * Methods still not offerable inline. Voucher/meal-voucher need per-line `orderLineCategories`
+     * that the order-data provider does not yet emit (deferred — MOLLIE-ORDERS-API scope D2). The
+     * pay-later methods below WERE here too but are now supported: the create-payment sends a billing
+     * address + reconciled lines (see {@see self::METHODS_REQUIRING_ORDER_DATA}).
      */
     public const INLINE_UNSUPPORTED_METHODS = [
+        'voucher',
+        'mealvoucher',
+    ];
+
+    /**
+     * Pay-later methods that require a billing address + order lines on the create-payment (Mollie
+     * 422s "A billing address is required" otherwise). For these the CheckoutPaymentService pulls the
+     * order data via {@see \OxidEsales\Payments\Mollie\Service\MollieOrderDataProviderInterface}.
+     */
+    public const METHODS_REQUIRING_ORDER_DATA = [
         'klarna',
         'klarnapaylater',
         'klarnasliceit',
@@ -106,8 +115,6 @@ final class MollieDefinitions
         'riverty',
         'billie',
         'in3',
-        'voucher',
-        'mealvoucher',
     ];
 
     // Payment-method constraints (narrow default; EUR-first like Mollie's core markets).
@@ -192,6 +199,14 @@ final class MollieDefinitions
     public static function isOfferableInline(string $methodId): bool
     {
         return !in_array(strtolower($methodId), self::INLINE_UNSUPPORTED_METHODS, true);
+    }
+
+    /**
+     * True when the method needs a billing address + order lines on the create-payment (pay-later).
+     */
+    public static function requiresOrderData(string $methodId): bool
+    {
+        return in_array(strtolower($methodId), self::METHODS_REQUIRING_ORDER_DATA, true);
     }
 
     public static function supportsCountry(string $paymentId, string $country): bool

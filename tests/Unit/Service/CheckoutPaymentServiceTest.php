@@ -10,9 +10,13 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAddressDto;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieLineDto;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\CheckoutPaymentService;
 use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
+use OxidEsales\Payments\Mollie\Service\MollieOrderDataProviderInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -116,15 +120,69 @@ final class CheckoutPaymentServiceTest extends TestCase
         self::assertSame('ideal', $request->method);
     }
 
+    public function testBuildCreatePaymentRequestPopulatesAddressAndLinesForPayLaterMethod(): void
+    {
+        $contract = $this->contractStub();
+        $contract->method('getOrderId')->willReturn('order-1');
+
+        $address = new MollieAddressDto('Marc', 'Muster', 'm@x.test', 'Street 1', '12345', 'City', 'DE');
+        $lines = [new MollieLineDto('Item', 1, new MollieAmountDto('EUR', 10.0), new MollieAmountDto('EUR', 10.0), 19.0, new MollieAmountDto('EUR', 1.6))];
+
+        $orderData = $this->createMock(MollieOrderDataProviderInterface::class);
+        $orderData->method('billingAddress')->with('order-1')->willReturn($address);
+        $orderData->method('lines')->with('order-1', 'EUR', 10.0)->willReturn($lines);
+
+        $request = $this->service(orderData: $orderData)
+            ->buildCreatePaymentRequest($contract, 'klarna', 'https://shop.test/return');
+
+        self::assertSame($address, $request->billingAddress);
+        self::assertSame($address, $request->shippingAddress);
+        self::assertSame($lines, $request->lines);
+    }
+
+    public function testBuildCreatePaymentRequestOmitsOrderDataForNonPayLaterMethods(): void
+    {
+        $contract = $this->contractStub();
+        $contract->method('getOrderId')->willReturn('order-1');
+
+        $orderData = $this->createMock(MollieOrderDataProviderInterface::class);
+        $orderData->expects(self::never())->method('billingAddress');
+
+        $request = $this->service(orderData: $orderData)
+            ->buildCreatePaymentRequest($contract, 'ideal', 'https://shop.test/return');
+
+        self::assertNull($request->billingAddress);
+        self::assertSame([], $request->lines);
+    }
+
+    public function testBuildCreatePaymentRequestSkipsOrderDataWhenAddressIncomplete(): void
+    {
+        $contract = $this->contractStub();
+        $contract->method('getOrderId')->willReturn('order-1');
+
+        // Missing email/country → incomplete → must not send partial data (avoid a 422).
+        $incomplete = new MollieAddressDto('Marc', 'Muster', '', 'Street 1', '12345', 'City', '');
+        $orderData = $this->createMock(MollieOrderDataProviderInterface::class);
+        $orderData->method('billingAddress')->willReturn($incomplete);
+        $orderData->expects(self::never())->method('lines');
+
+        $request = $this->service(orderData: $orderData)
+            ->buildCreatePaymentRequest($contract, 'klarna', 'https://shop.test/return');
+
+        self::assertNull($request->billingAddress);
+        self::assertSame([], $request->lines);
+    }
+
     private function service(
         string $webhookUrl = 'https://shop.test/webhook',
         string $captureMode = MollieDefinitions::CAPTURE_MODE_AUTOMATIC,
+        ?MollieOrderDataProviderInterface $orderData = null,
     ): CheckoutPaymentService {
         $config = $this->createMock(ModuleConfigurationServiceInterface::class);
         $config->method('getWebhookUrl')->willReturn($webhookUrl);
         $config->method('getCaptureMode')->willReturn($captureMode);
 
-        return new CheckoutPaymentService($config);
+        return new CheckoutPaymentService($config, $orderData ?? $this->createMock(MollieOrderDataProviderInterface::class));
     }
 
     private function contractStub(

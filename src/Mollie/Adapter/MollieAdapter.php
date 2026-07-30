@@ -18,6 +18,7 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\CaptureRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\CreatePaymentRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MethodsListRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieCaptureDto;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieLineDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieRefundDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\RefundRequest;
@@ -174,31 +175,75 @@ final class MollieAdapter implements
      */
     private function buildCreateBody(CreatePaymentRequest $request): array
     {
-        $body = [
+        return [
             'amount' => $request->amount->toMollieArray(),
             'description' => $request->description,
             'redirectUrl' => $request->redirectUrl,
-        ];
-        if ($request->webhookUrl !== null && $request->webhookUrl !== '') {
-            $body['webhookUrl'] = $request->webhookUrl;
+        ]
+            + $this->createBodyMethodFields($request)
+            + $this->createBodyExtraFields($request)
+            + $this->createBodyOrderData($request);
+    }
+
+    /**
+     * Method + card-token. A card token implies a card payment — force the method and attach the
+     * token so Mollie charges the tokenized card inline (no hosted method-selection page).
+     *
+     * @return array<string, mixed>
+     */
+    private function createBodyMethodFields(CreatePaymentRequest $request): array
+    {
+        if ($request->cardToken !== null && $request->cardToken !== '') {
+            return ['method' => 'creditcard', 'cardToken' => $request->cardToken];
         }
         if ($request->method !== null && $request->method !== '') {
-            $body['method'] = $request->method;
-        }
-        // IFRAME-04: a card token implies a card payment — force the method and attach the
-        // token so Mollie charges the tokenized card inline (no hosted method-selection page).
-        if ($request->cardToken !== null && $request->cardToken !== '') {
-            $body['method'] = 'creditcard';
-            $body['cardToken'] = $request->cardToken;
-        }
-        if ($request->metadata !== []) {
-            $body['metadata'] = $request->metadata;
-        }
-        if ($request->captureMode === 'manual') {
-            $body['captureMode'] = 'manual';
+            return ['method' => $request->method];
         }
 
-        return $body;
+        return [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function createBodyExtraFields(CreatePaymentRequest $request): array
+    {
+        $fields = [];
+        if ($request->webhookUrl !== null && $request->webhookUrl !== '') {
+            $fields['webhookUrl'] = $request->webhookUrl;
+        }
+        if ($request->metadata !== []) {
+            $fields['metadata'] = $request->metadata;
+        }
+        if ($request->captureMode === 'manual') {
+            $fields['captureMode'] = 'manual';
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Orders-API data for pay-later methods (Klarna, Riverty, …). Only present when populated.
+     *
+     * @return array<string, mixed>
+     */
+    private function createBodyOrderData(CreatePaymentRequest $request): array
+    {
+        $data = [];
+        if ($request->billingAddress !== null) {
+            $data['billingAddress'] = $request->billingAddress->toMollieArray();
+        }
+        if ($request->shippingAddress !== null) {
+            $data['shippingAddress'] = $request->shippingAddress->toMollieArray();
+        }
+        if ($request->lines !== []) {
+            $data['lines'] = array_map(
+                static fn (MollieLineDto $line): array => $line->toMollieArray(),
+                $request->lines,
+            );
+        }
+
+        return $data;
     }
 
     /**

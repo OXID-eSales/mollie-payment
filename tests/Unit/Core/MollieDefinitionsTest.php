@@ -53,14 +53,27 @@ final class MollieDefinitionsTest extends TestCase
         self::assertFalse(MollieDefinitions::supportsManualCapture('paypal'));
     }
 
-    public function testIsOfferableInline_ExcludesBnplAndVoucherMethods(): void
+    public function testIsOfferableInline_OnlyVoucherMethodsExcluded(): void
     {
         self::assertTrue(MollieDefinitions::isOfferableInline('creditcard'));
         self::assertTrue(MollieDefinitions::isOfferableInline('paypal'));
         self::assertTrue(MollieDefinitions::isOfferableInline('ideal'));
-        self::assertFalse(MollieDefinitions::isOfferableInline('klarna'));
-        self::assertFalse(MollieDefinitions::isOfferableInline('RIVERTY')); // case-insensitive
+        // Pay-later methods are now offerable (we send a billing address + lines).
+        self::assertTrue(MollieDefinitions::isOfferableInline('klarna'));
+        self::assertTrue(MollieDefinitions::isOfferableInline('RIVERTY'));
+        // Voucher still needs per-line categories we don't emit yet.
         self::assertFalse(MollieDefinitions::isOfferableInline('voucher'));
+        self::assertFalse(MollieDefinitions::isOfferableInline('mealvoucher'));
+    }
+
+    public function testRequiresOrderData_TrueForPayLaterMethodsOnly(): void
+    {
+        self::assertTrue(MollieDefinitions::requiresOrderData('klarna'));
+        self::assertTrue(MollieDefinitions::requiresOrderData('IN3')); // case-insensitive
+        self::assertTrue(MollieDefinitions::requiresOrderData('riverty'));
+        self::assertFalse(MollieDefinitions::requiresOrderData('creditcard'));
+        self::assertFalse(MollieDefinitions::requiresOrderData('paypal'));
+        self::assertFalse(MollieDefinitions::requiresOrderData('ideal'));
     }
 
     public function testSupportsCountry_EmptyListMeansAll(): void

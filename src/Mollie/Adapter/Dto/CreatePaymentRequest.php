@@ -16,6 +16,7 @@ final readonly class CreatePaymentRequest
 {
     /**
      * @param array<string, mixed> $metadata
+     * @param list<MollieLineDto> $lines
      */
     public function __construct(
         public MollieAmountDto $amount,
@@ -30,6 +31,11 @@ final readonly class CreatePaymentRequest
         // includes it so Mollie charges the tokenized card instead of showing its
         // hosted method-selection page.
         public ?string $cardToken = null,
+        // Orders-API data (billing/shipping address + reconciled lines) required by pay-later
+        // methods (Klarna, Riverty, Billie, in3). Null/empty for methods that don't need them.
+        public ?MollieAddressDto $billingAddress = null,
+        public ?MollieAddressDto $shippingAddress = null,
+        public array $lines = [],
     ) {
     }
 }
