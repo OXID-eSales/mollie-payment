@@ -75,13 +75,14 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
 
         $redirectUrl = $this->buildRedirectUrl($contract);
 
-        // IFRAME-04: an inline-card token (Mollie Components) pins the payment to a card charge.
-        // Without it the method stays null and Mollie presents its hosted method-selection page
-        // (the classic redirect flow, unchanged).
+        // IFRAME-04: the shopper picked a specific Mollie method inline (mollieMethod) and, for
+        // "creditcard", Mollie Components minted a cardToken. A cardToken pins the charge to a card
+        // (CheckoutPaymentService forces creditcard); other methods are passed straight through so
+        // Mollie's hosted page opens directly on that method. Both null = classic redirect flow.
         $cardToken = $this->readCardToken($context);
         $request = $this->checkoutPaymentService->buildCreatePaymentRequest(
             $contract,
-            $cardToken !== null ? 'creditcard' : null,
+            $this->readSelectedMethod($context),
             $redirectUrl,
             $cardToken,
         );
@@ -141,6 +142,21 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
         $token = trim($token);
 
         return $token === '' ? null : $token;
+    }
+
+    /**
+     * The Mollie method id the shopper selected inline (ideal, paypal, creditcard, …), set from the
+     * storefront request. Null for a missing/blank value (Mollie then presents all methods).
+     */
+    private function readSelectedMethod(EventContext $context): ?string
+    {
+        $method = $context->get('selectedMethod');
+        if (!is_string($method)) {
+            return null;
+        }
+        $method = trim($method);
+
+        return $method === '' ? null : $method;
     }
 
     private function buildRedirectUrl(PaymentContractInterface $contract): string

@@ -220,9 +220,40 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
             ));
         $adapter->method('createPayment')->willReturn($this->paymentDto());
 
+        // Card selected inline: the mollieMethod radio value is "creditcard" and Components minted
+        // the token.
         $context = new EventContext();
         $context->setContract($contract);
+        $context->set('selectedMethod', 'creditcard');
         $context->set('cardToken', 'tkn_live_123');
+
+        $handler->handle(new MollieCheckoutSessionRequestEvent($context));
+    }
+
+    /**
+     * IFRAME-04: a non-card method selected inline (e.g. iDEAL) is passed straight through to the
+     * create-payment request so Mollie's hosted page opens directly on that method.
+     */
+    public function testHandlePassesSelectedMethodToService(): void
+    {
+        $contract = $this->contractStub();
+        ['handler' => $handler, 'checkoutPaymentService' => $checkoutPaymentService, 'adapter' => $adapter]
+            = $this->handler();
+
+        $checkoutPaymentService->expects(self::once())
+            ->method('buildCreatePaymentRequest')
+            ->with($contract, 'ideal', self::anything(), null)
+            ->willReturn(new CreatePaymentRequest(
+                amount: MollieAmountDto::fromComponents('EUR', 10.0),
+                description: 'x',
+                redirectUrl: 'https://shop.test/return',
+                method: 'ideal',
+            ));
+        $adapter->method('createPayment')->willReturn($this->paymentDto());
+
+        $context = new EventContext();
+        $context->setContract($contract);
+        $context->set('selectedMethod', 'ideal');
 
         $handler->handle(new MollieCheckoutSessionRequestEvent($context));
     }

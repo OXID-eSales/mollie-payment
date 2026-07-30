@@ -10,9 +10,8 @@ $sLangName = "English";
 $aLang = [
     'charset' => 'UTF-8',
 
-    // IFRAME-04: inline card entry (Mollie Components) on the order page.
-    'MOLLIE_PAY_CARD_INLINE' => 'Pay by card',
-    'MOLLIE_PAY_OTHER_METHODS' => 'Other payment methods (continue to Mollie)',
+    // IFRAME-04: inline method selection + card entry (Mollie Components) on the order page.
+    'MOLLIE_CHOOSE_METHOD' => 'Choose your payment method',
     'MOLLIE_CARD_NUMBER' => 'Card number',
     'MOLLIE_CARD_HOLDER' => 'Cardholder name',
     'MOLLIE_CARD_EXPIRY' => 'Expiry date',

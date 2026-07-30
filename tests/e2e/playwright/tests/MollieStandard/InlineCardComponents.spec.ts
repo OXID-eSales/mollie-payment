@@ -40,12 +40,12 @@ async function shot(page: Page, testInfo: TestInfo, name: string): Promise<void>
  * `<field>-input`; prefer its inner <input>, fall back to focusing the frame body and typing.
  */
 /**
- * Robust walk to the cl=order page with Mollie selected + the inline card UI shown. Re-selects the
- * Mollie radio at each step (session state can leak across the serial suite, so a single rigid
- * select→continue is flaky). Returns once the mollie_flow radios are present, or throws.
+ * Robust walk to the cl=order page with Mollie selected + the inline method selector shown.
+ * Re-selects the Mollie radio at each step (session state can leak across the serial suite, so a
+ * single rigid select→continue is flaky). Returns once the mollieMethod radios are present.
  */
 async function reachOrderWithInlineCard(page: Page): Promise<void> {
-    const radios = () => page.locator('input[name="mollie_flow"]');
+    const radios = () => page.locator('input[name="mollieMethod"]');
     await page.goto('/index.php?cl=user&lang=1');
     await page.waitForLoadState('domcontentloaded');
 
@@ -83,9 +83,9 @@ async function reachOrderWithInlineCard(page: Page): Promise<void> {
         }
     }
     await expect(
-        radios(),
-        'inline card UI must be reached (Mollie selected + flag on + profile id set)',
-    ).toHaveCount(2, { timeout: 3000 });
+        radios().first(),
+        'inline method selector must be reached (Mollie selected + flag on + profile id set)',
+    ).toBeVisible({ timeout: 3000 });
 }
 
 async function fillComponentsField(page: Page, field: string, value: string): Promise<void> {
@@ -109,9 +109,11 @@ test.describe('IFRAME-04 — Mollie Components inline card (end to end)', () => 
         await reachOrderWithInlineCard(page);
         await expect(page, 'must be on the standard order page').toHaveURL(/cl=order/);
 
-        await test.step('01 — Mollie Components card fields mount INLINE (no redirect for entry)', async () => {
-            await expect(page.locator('input[name="mollie_flow"]'), 'the card/redirect method radio')
-                .toHaveCount(2);
+        await test.step('01 — pick "Card" from the Mollie method list → fields mount INLINE', async () => {
+            // The inline selector lists the real Mollie methods (Card, PayPal, …). Choose Card.
+            const card = page.locator('input[name="mollieMethod"][value="creditcard"]');
+            await expect(card, 'the Card method must be offered').toHaveCount(1);
+            await card.check();
             // The four card fields are Mollie-hosted iframes served from js.mollie.com.
             for (const field of Object.keys(FIELD_FRAMES)) {
                 await expect(

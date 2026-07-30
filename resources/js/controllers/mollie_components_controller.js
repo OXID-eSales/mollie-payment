@@ -11,15 +11,16 @@ import { createDebugLogger } from '../debug.js'
  * (`mollieCardToken`); the server then creates a `creditcard` payment with that token. Card data
  * never touches the shop DOM — it lives inside Mollie's iframes.
  *
- * The customer may instead choose "other Mollie methods" (radio `mollie_flow`=redirect), in which
- * case this controller stays out of the way and the classic redirect flow runs unchanged.
+ * The customer picks a specific Mollie method from a radio list (name="mollieMethod"). When the
+ * chosen method is "creditcard" this controller mounts the inline card fields and tokenizes on
+ * submit; for any other method it stays out of the way and the order form submits with the chosen
+ * method (mollieMethod radio is form-associated), redirecting to Mollie's hosted page for it.
  *
  * Usage (see page/checkout/order.html.twig Mollie branch):
- *   <div data-controller="mollie-components"
- *        data-mollie-components-profile-id-value="pfl_…"
- *        data-mollie-components-testmode-value="true"
- *        data-mollie-components-locale-value="en_US">
- *     <div data-mollie-components-target="fields"> … field mount points … </div>
+ *   <div data-controller="mollie-components" data-mollie-components-profile-id-value="pfl_…" …>
+ *     <input type="radio" name="mollieMethod" value="creditcard" form="orderConfirmAgbBottom"
+ *            data-action="change->mollie-components#flowChanged">
+ *     <div data-mollie-components-target="fields"> … card field mount points … </div>
  *     <input type="hidden" name="mollieCardToken" data-mollie-components-target="token">
  *   </div>
  */
@@ -49,14 +50,13 @@ export default class extends Controller {
   /** data-action: change->mollie-components#flowChanged on the method radios. */
   flowChanged() {
     this._cardMode = this._readCardMode()
-    this._tokenized = false
     this._syncMode()
   }
 
+  /** Card mode = the selected Mollie method is "creditcard" (inline Components). */
   _readCardMode() {
-    const checked = document.querySelector('input[name="mollie_flow"]:checked')
-    // No radio rendered (card-only) → default to card mode.
-    return !checked || checked.value === 'card'
+    const checked = document.querySelector('input[name="mollieMethod"]:checked')
+    return !!checked && checked.value === 'creditcard'
   }
 
   _syncMode() {
