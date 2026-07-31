@@ -143,6 +143,66 @@ final class MolliePaymentHandlerTest extends TestCase
     }
 
     /**
+     * With the iframe flag ON, Mollie now advertises its OWN OPC footer widget (inline method
+     * selector + Components card) so OPC loads it instead of the generic redirect button.
+     */
+    public function testAdvertisesMollieFooterWidgetWhenIframeFlagOn(): void
+    {
+        $iframe = $this->createMock(IframeCheckoutSettingsInterface::class);
+        $iframe->method('isEnabled')->willReturn(true);
+
+        $handler = new TestableMolliePaymentHandler(
+            $this->dispatcherThatMutates(static fn () => null),
+            $this->createMock(LoggerInterface::class),
+            $iframe,
+        );
+
+        self::assertSame('molliecheckoutfooter', $handler->getFrontendConfig()['footerWidget'] ?? null);
+    }
+
+    public function testOmitsFooterWidgetWhenIframeFlagOff(): void
+    {
+        $iframe = $this->createMock(IframeCheckoutSettingsInterface::class);
+        $iframe->method('isEnabled')->willReturn(false);
+
+        $handler = new TestableMolliePaymentHandler(
+            $this->dispatcherThatMutates(static fn () => null),
+            $this->createMock(LoggerInterface::class),
+            $iframe,
+        );
+
+        self::assertArrayNotHasKey('footerWidget', $handler->getFrontendConfig());
+    }
+
+    public function testReadsSelectedMethodAndCardTokenFromContextMetadata(): void
+    {
+        $context = $this->createMock(PaymentContextInterface::class);
+        $context->method('getMetadataValue')->willReturnCallback(
+            static fn (string $key): mixed => ['mollieMethod' => 'klarna', 'mollieCardToken' => 'tkn_x'][$key] ?? null
+        );
+
+        $handler = new TestableMolliePaymentHandler($this->dispatcherThatMutates(static fn () => null));
+
+        self::assertSame(
+            ['selectedMethod' => 'klarna', 'cardToken' => 'tkn_x'],
+            $handler->exposeMollieParams($context),
+        );
+    }
+
+    public function testNormalizesMissingOrEmptyMetadataParamsToNull(): void
+    {
+        $context = $this->createMock(PaymentContextInterface::class);
+        // mollieMethod empty string, mollieCardToken absent (null) → both normalise to null.
+        $context->method('getMetadataValue')->willReturnCallback(
+            static fn (string $key): mixed => $key === 'mollieMethod' ? '' : null
+        );
+
+        $handler = new TestableMolliePaymentHandler($this->dispatcherThatMutates(static fn () => null));
+
+        self::assertSame(['selectedMethod' => null, 'cardToken' => null], $handler->exposeMollieParams($context));
+    }
+
+    /**
      * A dispatcher mock whose dispatch() lets the test mutate the checkout EventContext (as the
      * real handler chain would) and returns the event, matching EventDispatcherInterface.
      */

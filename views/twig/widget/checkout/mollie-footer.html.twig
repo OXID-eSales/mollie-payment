@@ -1,0 +1,311 @@
+{#
+ # Mollie Checkout Footer Widget — one-page-checkout (OPC).
+ #
+ # Renders the same inline experience as the standard order page (IFRAME-04): a Mollie method
+ # selector plus inline Mollie Components card fields. Self-registers a Stimulus controller with
+ # OPC's exported app; on submit it posts the chosen method + card token to OPC's processCheckout
+ # (which forwards them via the agnostic PaymentContext metadata bag) and follows the Mollie redirect
+ # URL the handler returns. Mollie's hosted page cannot be framed (IFRAME-03) — only the method/card
+ # entry is inline; the payment itself still completes via redirect.
+ #}
+<div class="checkout-footer-mollie"
+     data-controller="mollie-checkout-footer"
+     data-mollie-checkout-footer-payment-method-value="{{ checkoutData.paymentMethodId }}"
+     data-mollie-checkout-footer-csrf-token-value="{{ checkoutData.csrfToken }}"
+     data-mollie-checkout-footer-profile-id-value="{{ mollieConfig.profileId }}"
+     data-mollie-checkout-footer-testmode-value="{{ mollieConfig.testmode ? 'true' : 'false' }}"
+     data-mollie-checkout-footer-locale-value="{{ mollieConfig.locale }}"
+     data-mollie-checkout-footer-inline-card-value="{{ mollieConfig.inlineCardEnabled ? 'true' : 'false' }}"
+     data-mollie-checkout-footer-debug-value="{{ mollieConfig.debug ? 'true' : 'false' }}">
+
+    {% if mollieConfig.methods is not empty %}
+        <p class="mb-2 fw-bold">{{ translate({ ident: "MOLLIE_CHOOSE_METHOD" }) }}</p>
+        <div class="mollie-methods mb-3">
+            {% for m in mollieConfig.methods %}
+                <div class="form-check d-flex align-items-center py-1">
+                    <input class="form-check-input me-2" type="radio" name="mollieMethod"
+                           id="mollieFooterMethod_{{ m.id }}" value="{{ m.id }}"
+                           {% if loop.first %}checked{% endif %}
+                           data-mollie-checkout-footer-target="methodRadio"
+                           data-action="change->mollie-checkout-footer#methodChanged">
+                    <label class="form-check-label d-flex align-items-center" for="mollieFooterMethod_{{ m.id }}">
+                        {% if m.image %}
+                            <img src="{{ m.image }}" alt="" width="28" height="28" class="mollie-method-icon me-2">
+                        {% endif %}
+                        {{ m.name }}
+                    </label>
+                </div>
+            {% endfor %}
+        </div>
+
+        {# Inline card fields — shown by the controller only when "creditcard" is selected. #}
+        <div data-mollie-checkout-footer-target="cardFields" class="mollie-card-fields mb-3" style="display: none;">
+            <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_NUMBER" }) }}</label>
+            <div data-mollie-checkout-footer-target="cardNumber" class="mollie-field form-control mb-2"></div>
+
+            <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_HOLDER" }) }}</label>
+            <div data-mollie-checkout-footer-target="cardHolder" class="mollie-field form-control mb-2"></div>
+
+            <div class="row">
+                <div class="col">
+                    <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_EXPIRY" }) }}</label>
+                    <div data-mollie-checkout-footer-target="expiryDate" class="mollie-field form-control"></div>
+                </div>
+                <div class="col">
+                    <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_CVC" }) }}</label>
+                    <div data-mollie-checkout-footer-target="verificationCode" class="mollie-field form-control"></div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="alert alert-danger mt-2" data-mollie-checkout-footer-target="error"
+         style="display: none;" role="alert">
+        <span data-mollie-checkout-footer-target="errorMessage"></span>
+    </div>
+
+    <div class="d-flex justify-content-end align-items-center mt-3">
+        <button type="button" class="btn btn-primary btn-lg"
+                data-mollie-checkout-footer-target="submitButton"
+                data-action="click->mollie-checkout-footer#submitPayment"
+                disabled>
+            {{ translate({ ident: "SUBMIT_ORDER" }) }}
+        </button>
+    </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var opc = window.OnepageCheckout;
+  if (!opc || !opc.stimulus || !opc.Controller) {
+    console.error('[MollieCheckoutFooter] OnepageCheckout not found - stimulus:', !!opc?.stimulus, 'Controller:', !!opc?.Controller);
+    return;
+  }
+
+  var MOLLIE_JS = 'https://js.mollie.com/v1/mollie.js';
+  var FIELDS = ['cardNumber', 'cardHolder', 'expiryDate', 'verificationCode'];
+  var BaseController = opc.Controller;
+
+  class MollieCheckoutFooterController extends BaseController {
+    static values = {
+      paymentMethod: String,
+      csrfToken: String,
+      profileId: String,
+      testmode: Boolean,
+      locale: String,
+      inlineCard: Boolean,
+      debug: Boolean
+    }
+
+    static targets = [
+      'submitButton', 'error', 'errorMessage', 'methodRadio', 'cardFields',
+      'cardNumber', 'cardHolder', 'expiryDate', 'verificationCode'
+    ]
+
+    connect() {
+      this._components = {};
+      this._mdbg('[MollieCheckoutFooter] Connected');
+      if (this.hasSubmitButtonTarget) {
+        this.submitButtonTarget.disabled = false;
+      }
+      this._syncCardMode();
+    }
+
+    disconnect() {
+      // Mollie Components live inside js.mollie.com iframes; nothing shop-side to tear down.
+      this._components = {};
+      this._mollie = null;
+    }
+
+    _mdbg() {
+      if (this.debugValue === true) {
+        console.log.apply(console, arguments);
+      }
+    }
+
+    /** data-action: change->mollie-checkout-footer#methodChanged on the method radios. */
+    methodChanged() {
+      this._syncCardMode();
+    }
+
+    _selectedMethod() {
+      var checked = this.hasMethodRadioTarget
+        ? this.methodRadioTargets.find(function(r) { return r.checked; })
+        : null;
+      return checked ? checked.value : '';
+    }
+
+    _isCardMode() {
+      return this.inlineCardValue === true && this._selectedMethod() === 'creditcard';
+    }
+
+    _syncCardMode() {
+      var card = this._isCardMode();
+      if (this.hasCardFieldsTarget) {
+        this.cardFieldsTarget.style.display = card ? '' : 'none';
+      }
+      if (card) {
+        this._ensureComponents();
+      }
+    }
+
+    async submitPayment(event) {
+      if (event) event.preventDefault();
+      this._hideError();
+      this._setLoading(true);
+
+      try {
+        var cardToken = null;
+        if (this._isCardMode()) {
+          cardToken = await this._tokenize();
+          if (!cardToken) {
+            this._setLoading(false);
+            return; // tokenization error already shown
+          }
+        }
+
+        var result = await this._processCheckout(this._selectedMethod(), cardToken);
+        if (!result.success) {
+          throw new Error(result.errorMessage || result.error || 'Payment could not be started.');
+        }
+
+        var meta = result.metadata || {};
+        var redirectUrl = meta.redirectUrl || result.redirectUrl;
+        if (!redirectUrl) {
+          throw new Error('Mollie did not return a redirect URL.');
+        }
+        this._mdbg('[MollieCheckoutFooter] Redirecting to Mollie:', redirectUrl);
+        window.location.href = redirectUrl;
+      } catch (err) {
+        console.error('[MollieCheckoutFooter] Payment failed:', err);
+        this._showError(err.message);
+        this._setLoading(false);
+      }
+    }
+
+    async _processCheckout(method, cardToken) {
+      // The OPC CheckoutService rejects processCheckout unless both consent flags are true; forward
+      // the live checkbox state (missing checkbox → true, mirroring the Stripe footer).
+      var termsEl = document.getElementById('confirmTermsCheckout');
+      var privacyEl = document.getElementById('confirmPrivacyCheckout');
+
+      var body = {
+        paymentMethodId: this.paymentMethodValue,
+        confirmTermsAndConditions: termsEl ? !!termsEl.checked : true,
+        confirmPrivacyPolicy: privacyEl ? !!privacyEl.checked : true
+      };
+      // Provider-specific fields — OPC forwards them into the PaymentContext metadata bag.
+      if (method) { body.mollieMethod = method; }
+      if (cardToken) { body.mollieCardToken = cardToken; }
+
+      var resp = await fetch('/index.php?cl=OeCheckoutApi&fnc=processCheckout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': this.csrfTokenValue },
+        credentials: 'same-origin',
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) throw new Error('HTTP error: ' + resp.status);
+      var text = await resp.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        console.error('[MollieCheckoutFooter] Invalid JSON response:', text.substring(0, 200));
+        throw new Error('Server returned an invalid response. Please try again.');
+      }
+    }
+
+    async _tokenize() {
+      await this._ensureComponents();
+      if (!this._mollie) {
+        this._showError('Card form is not ready. Please try again.');
+        return null;
+      }
+      try {
+        var res = await this._mollie.createToken();
+        if (res.error) {
+          this._showError(res.error.message || 'Please check your card details.');
+          return null;
+        }
+        return res.token;
+      } catch (e) {
+        this._mdbg('[MollieCheckoutFooter] createToken failed', e);
+        this._showError('Could not process the card. Please try again.');
+        return null;
+      }
+    }
+
+    async _ensureComponents() {
+      if (this._mollie) return;
+      if (!this.profileIdValue) {
+        this._mdbg('[MollieCheckoutFooter] no profile id — cannot mount Components');
+        return;
+      }
+      await this._loadMollieJs();
+      if (!window.Mollie) {
+        this._showError('Mollie.js is unavailable.');
+        return;
+      }
+      this._mollie = window.Mollie(this.profileIdValue, {
+        locale: this.localeValue || 'en_US',
+        testmode: this.testmodeValue === true
+      });
+      for (var i = 0; i < FIELDS.length; i++) {
+        var name = FIELDS[i];
+        var mount = this[name + 'Target'] ? this[name + 'Target'] : null;
+        if (!mount) continue;
+        var component = this._mollie.createComponent(name);
+        component.mount(mount);
+        this._components[name] = component;
+      }
+      this._mdbg('[MollieCheckoutFooter] Components mounted', Object.keys(this._components));
+    }
+
+    _loadMollieJs() {
+      return new Promise(function(resolve, reject) {
+        if (window.Mollie) { resolve(); return; }
+        var existing = document.querySelector('script[src="' + MOLLIE_JS + '"]');
+        if (existing) {
+          existing.addEventListener('load', function() { resolve(); });
+          existing.addEventListener('error', function() { reject(new Error('Failed to load Mollie.js')); });
+          return;
+        }
+        var s = document.createElement('script');
+        s.src = MOLLIE_JS;
+        s.async = true;
+        s.onload = function() { resolve(); };
+        s.onerror = function() { reject(new Error('Failed to load Mollie.js')); };
+        document.head.appendChild(s);
+      });
+    }
+
+    _setLoading(on) {
+      if (this.hasSubmitButtonTarget) {
+        this.submitButtonTarget.disabled = on;
+        this.submitButtonTarget.classList.toggle('processing', on);
+      }
+    }
+
+    _showError(msg) {
+      if (this.hasErrorTarget && this.hasErrorMessageTarget) {
+        this.errorMessageTarget.textContent = msg;
+        this.errorTarget.style.display = 'block';
+      }
+    }
+
+    _hideError() {
+      if (this.hasErrorTarget) this.errorTarget.style.display = 'none';
+    }
+  }
+
+  opc.stimulus.register('mollie-checkout-footer', MollieCheckoutFooterController);
+})();
+</script>
+
+<style>
+  .checkout-footer-mollie .mollie-field { min-height: 2.6rem; padding-top: .55rem; }
+  .checkout-footer-mollie .mollie-method-icon { object-fit: contain; }
+  .checkout-footer-mollie button[disabled] { opacity: 0.6; cursor: not-allowed; }
+  .checkout-footer-mollie button.processing { opacity: 0.8; }
+</style>

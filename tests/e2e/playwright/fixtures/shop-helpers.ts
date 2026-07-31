@@ -1,4 +1,4 @@
-import { Page, expect } from '@playwright/test';
+import { Page, Locator, expect } from '@playwright/test';
 
 const EMAIL = process.env.TEST_USER_EMAIL || 'playwright.user@oxid-esales.dev';
 const PW = process.env.TEST_USER_PASSWORD || 'useruser';
@@ -77,14 +77,55 @@ export async function continueToOrderReview(page: Page): Promise<void> {
 export async function completeMollieTestPayment(page: Page, outcome: 'paid' | 'failed' = 'paid'): Promise<void> {
     await expect(page).toHaveURL(/mollie\.com\/checkout/i, { timeout: 30_000 });
 
-    // Method-selection page -> PayPal.
-    await page.getByRole('button', { name: /^paypal$/i }).first().click();
-    await page.waitForURL(/mollie\.com\/checkout\/test-mode/i, { timeout: 30_000 });
+    // Method-selection page -> PayPal. When a specific method was already forced (the OPC inline
+    // widget sends method=paypal), Mollie skips its method-selection page and lands directly on the
+    // test-mode status screen, so the PayPal button is absent — click it only if it is shown.
+    const paypalBtn = page.getByRole('button', { name: /^paypal$/i }).first();
+    if (await paypalBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await paypalBtn.click();
+    }
+    await page.waitForURL(/mollie\.com\/checkout\/test-mode/i, { timeout: 30_000 }).catch(() => {});
 
     // Test-mode status page -> pick the outcome, then continue.
     const status = outcome === 'paid' ? 'Paid' : 'Failed';
     await page.getByText(status, { exact: true }).click();
     await page.getByRole('button', { name: /continue/i }).click();
+}
+
+/**
+ * Submit the OPC modal for Mollie, whichever footer is active — robust to the payment-base
+ * "Use iframe instead of checkout button" flag:
+ *  - flag ON  → the Mollie inline footer widget (pick a redirect method, click its own submit;
+ *               the method rides through OPC's processCheckout into Mollie's create-payment)
+ *  - flag OFF → the generic default-checkout-footer redirect button
+ * Consent checkboxes are ticked either way. Both paths hand off to Mollie's hosted checkout.
+ */
+export async function submitOpcMollieFooter(modal: Locator): Promise<void> {
+    for (const id of ['#confirmTermsCheckout', '#confirmPrivacyCheckout']) {
+        const cb = modal.locator(id);
+        if (await cb.count()) {
+            await cb.check({ force: true }).catch(() => {});
+        }
+    }
+
+    const inlineFooter = modal.locator('[data-controller~="mollie-checkout-footer"]');
+    if (await inlineFooter.count()) {
+        // Prefer PayPal (its Mollie test flow is the simple status page completeMollieTestPayment
+        // drives); fall back to any non-card method, then any. Never card (needs a live token).
+        const paypal = modal.locator('input[name="mollieMethod"][value="paypal"]').first();
+        const nonCard = modal.locator('input[name="mollieMethod"]:not([value="creditcard"])').first();
+        const method = (await paypal.count())
+            ? paypal
+            : ((await nonCard.count()) ? nonCard : modal.locator('input[name="mollieMethod"]').first());
+        await method.check({ force: true }).catch(() => {});
+        await modal.locator('[data-mollie-checkout-footer-target="submitButton"]').first().click();
+        return;
+    }
+
+    await modal
+        .locator('[data-action*="default-checkout-footer#processPayment"], [data-default-checkout-footer-target="submitButton"]')
+        .first()
+        .click();
 }
 
 export async function loginShopAdmin(page: Page, adminUser: string, adminPassword: string): Promise<void> {

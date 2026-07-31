@@ -29,4 +29,15 @@ final class TestableMolliePaymentHandler extends MolliePaymentHandler
     {
         return new EventContext(['paymentId' => MollieDefinitions::PAYMENT_ID]);
     }
+
+    /**
+     * Expose the pure metadata reader so it can be unit-tested without a shop bootstrap
+     * (buildEventContext itself is stubbed above to avoid the OXID Registry).
+     *
+     * @return array{selectedMethod: ?string, cardToken: ?string}
+     */
+    public function exposeMollieParams(PaymentContextInterface $context): array
+    {
+        return $this->mollieParamsFromContext($context);
+    }
 }

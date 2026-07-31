@@ -139,11 +139,21 @@ class MolliePaymentHandler implements PaymentHandlerInterface
         // would produce a blank/broken embed for the customer.
         $this->logIframeFallbackIfRequested();
 
-        return [
+        $config = [
             'type' => 'mollie',
             'renderMode' => 'redirect',
             'requiresRedirect' => true,
         ];
+
+        // When the merchant enabled inline checkout, OPC loads Mollie's OWN footer widget (inline
+        // method selector + Mollie Components card) instead of the generic redirect button. The
+        // payment itself still resolves via a redirect (hosted method page / 3-D Secure), so
+        // renderMode stays 'redirect' — only the footer UI changes.
+        if ($this->iframeSettings?->isEnabled() ?? false) {
+            $config['footerWidget'] = 'molliecheckoutfooter';
+        }
+
+        return $config;
     }
 
     /**
@@ -206,6 +216,7 @@ class MolliePaymentHandler implements PaymentHandlerInterface
         $session = Registry::getSession();
         $user = $context->getUser();
         $userId = $user instanceof User ? (string) $user->getId() : '';
+        $params = $this->mollieParamsFromContext($context);
 
         return new EventContext([
             'paymentId' => MollieDefinitions::PAYMENT_ID,
@@ -214,6 +225,29 @@ class MolliePaymentHandler implements PaymentHandlerInterface
             'user' => $user,
             'sessionId' => (string) $session->getId(),
             'conditionTypes' => ['payment_authorized'],
+            // Same keys the standard cl=order flow sets (MollieOrderController::buildCheckoutContext):
+            // MollieCheckoutSessionHandler consumes them to pin the chosen method / tokenize a card.
+            'selectedMethod' => $params['selectedMethod'],
+            'cardToken' => $params['cardToken'],
         ]);
+    }
+
+    /**
+     * Read the provider-specific fields carried through OPC's agnostic PaymentContext metadata bag
+     * (the Mollie OPC footer widget posts `mollieMethod` / `mollieCardToken`). Pure — no Registry.
+     *
+     * @return array{selectedMethod: ?string, cardToken: ?string}
+     */
+    protected function mollieParamsFromContext(PaymentContextInterface $context): array
+    {
+        return [
+            'selectedMethod' => $this->normalizeParam($context->getMetadataValue('mollieMethod')),
+            'cardToken' => $this->normalizeParam($context->getMetadataValue('mollieCardToken')),
+        ];
+    }
+
+    private function normalizeParam(mixed $value): ?string
+    {
+        return is_string($value) && $value !== '' ? $value : null;
     }
 }

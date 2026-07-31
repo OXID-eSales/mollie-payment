@@ -13,6 +13,7 @@ use OxidEsales\Eshop\Core\ViewConfig;
 use OxidEsales\Payments\Mollie\Controller\MollieOrderController;
 use OxidEsales\Payments\Mollie\Controller\PaymentController as MolliePaymentController;
 use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookController as MollieWebhookController;
+use OxidEsales\Payments\Mollie\Component\Widget\MollieCheckoutFooter;
 use OxidEsales\Payments\Mollie\Core\Events;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Core\ViewConfig as MollieViewConfig;
@@ -49,6 +50,9 @@ $aModule = [
     ],
     'controllers' => [
         MollieDefinitions::WEBHOOK_CONTROLLER_ID => MollieWebhookController::class,
+        // OPC footer widget (inline method selector + Mollie Components card). Loaded by
+        // one-page-checkout when MolliePaymentHandler advertises footerWidget=molliecheckoutfooter.
+        'molliecheckoutfooter' => MollieCheckoutFooter::class,
     ],
     'events' => [
         'onActivate' => Events::class . '::onActivate',

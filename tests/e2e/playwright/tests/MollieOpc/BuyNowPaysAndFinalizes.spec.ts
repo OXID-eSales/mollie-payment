@@ -3,6 +3,7 @@ import {
     loginStorefront,
     addFirstFeaturedProductToBasket,
     completeMollieTestPayment,
+    submitOpcMollieFooter,
 } from '../../fixtures/shop-helpers';
 
 /**
@@ -34,19 +35,23 @@ test.describe('OPC buy-now — Mollie happy path', () => {
         await select.dispatchEvent('change');
         await page.waitForTimeout(1500);
 
-        for (const id of ['#confirmTermsCheckout', '#confirmPrivacyCheckout']) {
-            const cb = modal.locator(id);
-            if (await cb.count()) {
-                await cb.check({ force: true }).catch(() => {});
-            }
-        }
+        // Capture the footer type BEFORE submitting (the page navigates away on submit).
+        const inlineWidget = (await modal.locator('[data-controller~="mollie-checkout-footer"]').count()) > 0;
 
-        // Default-footer submit (click->default-checkout-footer#processPayment) → redirect to Mollie.
-        const submit = modal.locator(
-            '[data-action*="default-checkout-footer#processPayment"], [data-default-checkout-footer-target="submitButton"]',
-        ).first();
-        await expect(submit).toBeEnabled({ timeout: 15_000 });
-        await submit.click();
+        // Footer-agnostic submit: default redirect footer (iframe flag off) or the Mollie inline
+        // widget (flag on). Both hand the browser off to Mollie's hosted checkout.
+        await submitOpcMollieFooter(modal);
+
+        // The inline widget forces a specific Mollie method, so the hosted page lands on THAT
+        // method's flow (PayPal — the method completeMollieTestPayment can drive — is not in the
+        // inline list on this profile). Assert the redirect handoff and stop: the full pay+finalize
+        // leg is covered by the default-footer path (iframe flag off, as in CI) and by the
+        // MollieStandard specs. With the default footer, complete the whole flow here.
+        if (inlineWidget) {
+            await expect(page, 'inline widget hands off to Mollie hosted checkout')
+                .toHaveURL(/mollie\.com\/checkout/i, { timeout: 45_000 });
+            return;
+        }
 
         // Hand-off to Mollie's hosted checkout, then pay in test mode (PayPal → status "Paid").
         await completeMollieTestPayment(page, 'paid');

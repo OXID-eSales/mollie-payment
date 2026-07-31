@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { loginStorefront, addFirstFeaturedProductToBasket } from '../../fixtures/shop-helpers';
+import {
+    loginStorefront,
+    addFirstFeaturedProductToBasket,
+    submitOpcMollieFooter,
+} from '../../fixtures/shop-helpers';
 
 /**
  * OPC buy-now modal + Mollie must REDIRECT to Mollie's hosted checkout (redirect return + webhook
@@ -27,19 +31,9 @@ test.describe('OPC buy-now modal — Mollie must redirect to hosted checkout', (
         await select.dispatchEvent('change');
         await page.waitForTimeout(1500);
 
-        for (const id of ['#confirmTermsCheckout', '#confirmPrivacyCheckout']) {
-            const cb = modal.locator(id);
-            if (await cb.count()) {
-                await cb.check({ force: true }).catch(() => {});
-            }
-        }
-
-        // The DEFAULT footer (used by Mollie) submit button — action click->default-checkout-footer#processPayment.
-        const submit = modal.locator(
-            '[data-action*="default-checkout-footer#processPayment"], [data-default-checkout-footer-target="submitButton"]',
-        ).first();
-        await expect(submit).toBeEnabled({ timeout: 15_000 });
-        await submit.click();
+        // Footer-agnostic submit: works with the default redirect footer (iframe flag off) and the
+        // Mollie inline widget (flag on). Either way Mollie must hand off to its hosted checkout.
+        await submitOpcMollieFooter(modal);
 
         await page.waitForURL(/mollie\.com|cl=thankyou|fnc=checkoutReturn/i, { timeout: 45_000 }).catch(() => {});
         const url = page.url();
