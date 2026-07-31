@@ -11,7 +11,7 @@ env:
   TEMPLATE_ENGINE: 'twig'
   # Branch of OXID-eSales/payment-base to test against. Change in sync with
   # the mollie branch when the two repos co-evolve.
-  PAYMENT_BASE_BRANCH: 'b-7.4.x-iframe-checkout'
+  PAYMENT_BASE_BRANCH: 'b-7.4.x'
 
 jobs:
   install_shop_with_module:
