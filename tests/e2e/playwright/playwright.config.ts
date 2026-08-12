@@ -38,6 +38,11 @@ export default defineConfig({
             use: { ...devices['Desktop Chrome'] },
         },
         {
+            name: 'mollie-admin-key-mask',
+            testMatch: 'tests/admin/mollie-api-key-mask.spec.ts',
+            use: { ...devices['Desktop Chrome'] },
+        },
+        {
             name: 'mollie-all',
             testMatch: ['tests/checkout/*.spec.ts', 'tests/admin/*.spec.ts'],
             use: { ...devices['Desktop Chrome'] },
