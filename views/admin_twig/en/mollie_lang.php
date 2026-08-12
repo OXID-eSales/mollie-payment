@@ -85,8 +85,10 @@ $aLang = [
     'SHOP_MODULE_sMollieWebhookUrl' => 'Webhook URL override',
     'SHOP_MODULE_sMollieLogLevel' => 'Log level',
 
-    // Sprint 10 — the API-key reveal/hide toggle. Both strings are the button's aria-label, swapped
-    // as it flips, so they are read by a screen reader rather than shown on screen.
-    'MOLLIE_REVEAL_API_KEY' => 'Reveal API key',
-    'MOLLIE_HIDE_API_KEY' => 'Hide API key',
+    // Sprint 10 — the reveal/hide toggle on masked settings. Both strings are the button's
+    // aria-label, swapped as it flips, so they are read by a screen reader rather than shown on
+    // screen. Deliberately generic: the toggle sits beside the API keys AND the website profile id,
+    // so "Reveal API key" would be wrong on one of them.
+    'MOLLIE_REVEAL_VALUE' => 'Reveal value',
+    'MOLLIE_HIDE_VALUE' => 'Hide value',
 ];

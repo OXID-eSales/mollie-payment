@@ -66,16 +66,23 @@ final class MollieDefinitions
      * `metadata.php` in both directions, so a new credential setting cannot ship unmasked and a typo
      * here cannot mask nothing.
      *
-     * Two entries today because Mollie has no webhook signing secret (verification is an API
-     * re-fetch, not an HMAC) and no OAuth client secret (Mollie Connect is deferred). Deliberately
-     * absent: `sMollieProfileId` — the `pfl_…` id is shipped to the browser by the OPC footer widget
-     * for Mollie Components, so masking it would imply a confidentiality it does not have.
+     * The two API keys are secret in the full sense: they carry API authority and must not be read off
+     * a screen. Mollie has no webhook signing secret (verification is an API re-fetch, not an HMAC) and
+     * no OAuth client secret (Mollie Connect is deferred), so there are no others of that kind.
+     *
+     * `sMollieProfileId` is masked too, for a different and weaker reason. The `pfl_…` id is shipped to
+     * the browser by the OPC footer widget for Mollie Components, so it is NOT confidential and masking
+     * it here buys no protection against anyone who can read the storefront. What it does buy is screen
+     * hygiene: an account identifier that no longer sits in plain view during a screen share, and one
+     * fewer field an operator has to reason about. Do not read its presence in this list as a claim that
+     * the profile id is a secret.
      *
      * @var list<string>
      */
     public const SECRET_MODULE_SETTINGS = [
         'sMollieTestKey',
         'sMollieLiveKey',
+        'sMollieProfileId',
     ];
 
     // Logging levels (metadata setting values). Mirrors Stripe's harmonised logging design.

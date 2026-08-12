@@ -43,10 +43,10 @@ final class ModuleConfigSecretMaskingTest extends TestCase
 {
     private const TEMPLATE = 'views/twig/extensions/themes/admin_twig/module_config.html.twig';
 
-    public function testSecretSettingsListIsTheExpectedTwoKeys(): void
+    public function testMaskedSettingsListIsTheExpectedThree(): void
     {
         self::assertSame(
-            ['sMollieTestKey', 'sMollieLiveKey'],
+            ['sMollieTestKey', 'sMollieLiveKey', 'sMollieProfileId'],
             MollieDefinitions::SECRET_MODULE_SETTINGS,
             'Mollie has no webhook signing secret and no OAuth client secret today. If one appears '
             . '(Mollie Connect), add it here and the rest of this test will force it to be masked.',
@@ -152,32 +152,61 @@ final class ModuleConfigSecretMaskingTest extends TestCase
 
     /**
      * The direction that actually catches drift: a new credential-looking setting added to
-     * metadata.php without being added to the secret list.
+     * metadata.php without being added to the masked list.
+     *
+     * A subset assertion, not equality — the list is deliberately a SUPERSET of what this name
+     * heuristic can spot. `sMollieProfileId` is masked for screen hygiene despite not reading as a
+     * credential, so requiring the two sets to match exactly would forbid masking anything the
+     * heuristic does not recognise.
      */
-    public function testNoCredentialLookingSettingIsLeftOutOfTheSecretList(): void
+    public function testNoCredentialLookingSettingIsLeftOutOfTheMaskedList(): void
     {
         $suspicious = array_values(array_filter(
             $this->metadataSettingNames(),
             static fn (string $name): bool => (bool) preg_match('/(key|secret|token|password)$/i', $name),
         ));
 
-        self::assertSame(
-            MollieDefinitions::SECRET_MODULE_SETTINGS,
-            $suspicious,
-            'a setting whose name ends in key/secret/token/password is not masked. Either add it to '
-            . 'MollieDefinitions::SECRET_MODULE_SETTINGS, or — if it is genuinely public, like '
-            . 'sMollieProfileId — rename it so it does not read as a credential.',
-        );
+        self::assertNotSame([], $suspicious, 'the heuristic matched nothing — it has gone stale');
+
+        foreach ($suspicious as $name) {
+            self::assertContains(
+                $name,
+                MollieDefinitions::SECRET_MODULE_SETTINGS,
+                sprintf(
+                    '%s reads like a credential but is not masked. Add it to '
+                    . 'MollieDefinitions::SECRET_MODULE_SETTINGS, or rename it if it is genuinely public.',
+                    $name,
+                ),
+            );
+        }
     }
 
     /**
-     * sMollieProfileId is deliberately NOT masked: the pfl_… id is shipped to the browser by the OPC
-     * footer widget for Mollie Components, so masking it in admin would imply a confidentiality it
-     * does not have. Pinned so the decision is revisited rather than drifted into.
+     * `sMollieProfileId` is masked, and the reason is worth pinning because it is NOT the same reason as
+     * the API keys.
+     *
+     * The `pfl_…` id is shipped to the browser by the OPC footer widget for Mollie Components, so it is
+     * not confidential and masking it here protects nothing against anyone who can read the storefront.
+     * It is masked for screen hygiene — an account identifier that no longer sits in plain view during a
+     * screen share. Pinned so nobody later concludes from this list that the profile id is a secret, or
+     * removes the masking on the grounds that it is not one.
      */
-    public function testProfileIdIsDeliberatelyNotSecret(): void
+    public function testProfileIdIsMaskedForScreenHygieneNotConfidentiality(): void
     {
-        self::assertNotContains('sMollieProfileId', MollieDefinitions::SECRET_MODULE_SETTINGS);
+        self::assertContains('sMollieProfileId', MollieDefinitions::SECRET_MODULE_SETTINGS);
+
+        // Collapse comment prefixes and line breaks first: the phrase legitimately wraps across two
+        // docblock lines, and a doc comment should not have to avoid wrapping to satisfy a test.
+        $source = (string) file_get_contents(
+            $this->moduleRoot() . '/src/Mollie/Core/MollieDefinitions.php',
+        );
+        $flattened = (string) preg_replace('/\s*\n\s*\*\s*/', ' ', $source);
+
+        self::assertStringContainsString(
+            'screen hygiene',
+            $flattened,
+            'the constant must keep documenting WHY the profile id is masked — it is not a secret',
+        );
     }
 
     /**

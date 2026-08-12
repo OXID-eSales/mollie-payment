@@ -80,8 +80,9 @@ $aLang = [
     'SHOP_MODULE_sMollieWebhookUrl' => 'Webhook-URL (überschreiben)',
     'SHOP_MODULE_sMollieLogLevel' => 'Protokollstufe',
 
-    // Sprint 10 — Umschalter zum Anzeigen/Verbergen des API-Schlüssels. Beide Texte sind das
-    // aria-label des Buttons und werden beim Umschalten getauscht.
-    'MOLLIE_REVEAL_API_KEY' => 'API-Schlüssel anzeigen',
-    'MOLLIE_HIDE_API_KEY' => 'API-Schlüssel verbergen',
+    // Sprint 10 — Umschalter zum Anzeigen/Verbergen maskierter Einstellungen. Beide Texte sind das
+    // aria-label des Buttons und werden beim Umschalten getauscht. Absichtlich allgemein: der
+    // Umschalter steht neben den API-Schlüsseln UND der Website-Profil-ID.
+    'MOLLIE_REVEAL_VALUE' => 'Wert anzeigen',
+    'MOLLIE_HIDE_VALUE' => 'Wert verbergen',
 ];

@@ -139,11 +139,41 @@ Both need verifying on a throwaway shop before any change. Getting it wrong wipe
 breaks checkout — a strictly worse outcome than the clear-text display this sprint fixed. Filed as the
 top follow-up rather than attempted at the end of a session.
 
-## Deliberately not done
+## Revision: the website profile id is masked too
 
-- **`sMollieProfileId` is not masked.** The `pfl_…` id is shipped to the browser by the OPC footer
-  widget for Mollie Components, so masking it would imply a confidentiality it does not have. Pinned by
-  a test so the decision is revisited rather than drifted into.
+Asked for after the first pass, and done: `sMollieProfileId` joins `SECRET_MODULE_SETTINGS`, so all
+three string settings on the tab arrive as dots with a toggle.
+
+The reason is **not** the same as for the API keys, and the code says so in three places (the constant's
+docblock, the drift guard's `testProfileIdIsMaskedForScreenHygieneNotConfidentiality`, and the sprint's
+D1 table) because blurring it would be the start of a false claim:
+
+- The keys are masked because they are **secret** — they carry API authority.
+- The profile id is masked for **screen hygiene**. The `pfl_…` id is shipped to the browser by the OPC
+  footer widget for `new Mollie(profileId, …)`, so masking it in admin protects nothing against anyone
+  who can read the storefront. What it buys is an account identifier that no longer sits in plain view
+  during a screen share, and one fewer field an operator has to think about.
+
+The original decision was to leave it visible precisely because masking implies protection it does not
+have. That remains a fair point; it is recorded rather than deleted, and the test pins the *reason* so
+nobody later concludes from the list that the profile id is a secret, or strips the masking on the
+grounds that it isn't one.
+
+Two consequential changes fell out of it:
+
+- **The toggle labels are now generic.** `MOLLIE_REVEAL_API_KEY` → `MOLLIE_REVEAL_VALUE` (and the hide
+  pair), because a button beside "Website profile ID" whose screen-reader label says "Reveal API key" is
+  simply wrong.
+- **The drift guard's name heuristic became a subset check.** It asserted that the settings whose names
+  end in `key`/`secret`/`token`/`password` are *exactly* the masked list. With a deliberately-masked
+  non-credential in the list that equality is wrong, so it now asserts every credential-looking setting
+  is *in* the list. The drift-catching direction is unchanged; the list is free to be a superset.
+
+The e2e's delegation test also had to move: it proved `{{ parent() }}` still works by asserting the
+profile id stayed a plain text input. It now stands on `sMollieWebhookUrl`, which is genuinely
+non-masked.
+
+## Deliberately not done
 - **Never-send-the-secret** — see the threat model above.
 - **`SHOP_MODULE_sMollieLogLevel_*` option translations are still missing**, so the Log level select
   renders "ERROR: Translation not found". Real, carried over from the lost run's findings, and still not

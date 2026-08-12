@@ -53,20 +53,28 @@ requires save-side PHP and is **explicitly deferred** — see "Out of scope" bel
 
 ## Key decisions
 
-### D1 — Which settings are secret
+### D1 — Which settings are masked
 
-| Setting | Secret? | Rationale |
+> **Revised after review (2026-08-12):** `sMollieProfileId` is now masked too. The original decision
+> below — leave it visible because it is public by design — was overruled on operator preference, and
+> the reasoning is worth keeping rather than rewriting, because the *reason* the two cases are masked is
+> not the same and the docs must not blur them.
+
+| Setting | Masked? | Rationale |
 |---|---|---|
-| `sMollieTestKey` | **yes** | `test_…` API key — full API authority in test mode |
-| `sMollieLiveKey` | **yes** | `live_…` API key — moves real money |
-| `sMollieProfileId` | **no** | `pfl_…` is shipped to the browser by the OPC footer widget for `new Mollie(profileId, …)`. It is public by design; masking it would imply a confidentiality it does not have |
+| `sMollieTestKey` | **yes — secret** | `test_…` API key — full API authority in test mode |
+| `sMollieLiveKey` | **yes — secret** | `live_…` API key — moves real money |
+| `sMollieProfileId` | **yes — screen hygiene only** | The `pfl_…` id *is* shipped to the browser by the OPC footer widget for `new Mollie(profileId, …)`, so masking it buys **no** confidentiality against anyone who can read the storefront. It is masked so an account identifier does not sit in plain view during a screen share, and so an operator has one fewer field to reason about. Originally left visible on the grounds that masking implies protection it does not have — a fair point, and the reason the constant and its test both spell out that this one is not a secret |
 | `sMollieWebhookUrl` | **no** | A public URL. Mollie sends no signature (verification is an API re-fetch), so there is no webhook secret to protect |
 | `sMollieMode`, `sMollieCaptureMode`, `sMollieLogLevel` | **no** | `select` widgets, non-sensitive |
 
-Mollie has **no** webhook signing secret and **no** OAuth client secret today, so the secret set
-is exactly two entries. If Mollie Connect ever lands (deferred per the 2026-08-11 report), its
-client secret and refresh token join this list — and Story 1's drift guard is what will force
-that to happen.
+Mollie has **no** webhook signing secret and **no** OAuth client secret today, so the genuinely-secret
+set is the two API keys. If Mollie Connect ever lands (deferred per the 2026-08-11 report), its client
+secret and refresh token join this list — and Story 1's drift guard is what will force that to happen.
+
+One consequence of masking a third, non-credential field: the toggle's `aria-label` can no longer say
+"Reveal API key", because on one of the three that is simply wrong. The idents are
+`MOLLIE_REVEAL_VALUE` / `MOLLIE_HIDE_VALUE`.
 
 ### D2 — No `ModuleConfiguration` controller extension
 

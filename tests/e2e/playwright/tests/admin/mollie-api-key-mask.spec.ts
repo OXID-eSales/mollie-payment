@@ -17,12 +17,20 @@ import { AdminLoginPage } from '../pages/admin/AdminLoginPage';
 
 const MODULE_TITLE_RE = /Mollie Payment/;
 
-// The two settings in MollieDefinitions::SECRET_MODULE_SETTINGS. Both are editable (Mollie has no
-// Connect flow, so there are no readonly token fields as in Stripe).
-const SENSITIVE_FIELDS = ['sMollieTestKey', 'sMollieLiveKey'];
+// Every setting in MollieDefinitions::SECRET_MODULE_SETTINGS. All editable (Mollie has no Connect
+// flow, so there are no readonly token fields as in Stripe).
+//
+// sMollieProfileId is masked for a weaker reason than the keys — the pfl_… id is shipped to the browser
+// by the checkout widget, so it is screen hygiene rather than confidentiality — but from this test's
+// point of view it must behave identically.
+const SENSITIVE_FIELDS = ['sMollieTestKey', 'sMollieLiveKey', 'sMollieProfileId'];
 
 // Group headers the fields live under, from the module lang file. Collapsed groups hide their rows.
-const CREDENTIAL_GROUPS = [/Test credentials/i, /Live credentials/i, /Test-Zugangsdaten/i, /Live-Zugangsdaten/i];
+const MASKED_FIELD_GROUPS = [
+    /General/i, /Allgemein/i,
+    /Test credentials/i, /Test-Zugangsdaten/i,
+    /Live credentials/i, /Live-Zugangsdaten/i,
+];
 
 function getMenuFrame(page: Page): Frame {
     const frame = page.frame('adminnav') || page.frame('navigation');
@@ -94,7 +102,7 @@ async function openMollieSettingsForm(page: Page): Promise<Frame> {
     const edit = getEditFrame(page);
 
     // Expand the collapsible groups holding the keys — collapsed rows are not interactable.
-    for (const group of CREDENTIAL_GROUPS) {
+    for (const group of MASKED_FIELD_GROUPS) {
         const header = edit.getByText(group).first();
         if (await header.isVisible({ timeout: 1500 }).catch(() => false)) {
             await header.click();
@@ -142,7 +150,7 @@ test.describe('Sprint 10: Mollie API keys are masked with a reveal toggle', () =
             expect(ariaLabel, `${field}: toggle needs an aria-label`).toBeTruthy();
             expect(ariaLabel!.trim().length, `${field}: aria-label must not be blank`).toBeGreaterThan(0);
             expect(ariaLabel, `${field}: aria-label must be translated, not a raw ident`)
-                .not.toContain('MOLLIE_REVEAL_API_KEY');
+                .not.toContain('MOLLIE_REVEAL_VALUE');
         }
     });
 
@@ -215,9 +223,11 @@ test.describe('Sprint 10: Mollie API keys are masked with a reveal toggle', () =
             ).toBeAttached();
         }
 
-        // And the public profile id must stay visible, not masked (it ships to the browser anyway).
-        const profileId = edit.locator('input[name="confstrs[sMollieProfileId]"]').first();
-        await expect(profileId).toBeAttached();
-        await expect(profileId, 'sMollieProfileId is public by design').toHaveAttribute('type', 'text');
+        // The webhook URL is the non-secret string field the delegation claim now stands on: it must
+        // still render, and still render as a plain text input.
+        const webhookUrl = edit.locator('input[name="confstrs[sMollieWebhookUrl]"]').first();
+        await expect(webhookUrl).toBeAttached();
+        await expect(webhookUrl, 'a non-masked string setting must stay a text input')
+            .toHaveAttribute('type', 'text');
     });
 });

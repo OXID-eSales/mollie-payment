@@ -18,9 +18,13 @@ extension, no migration. The template gates on the stock
 `oView.getEditObjectId() == 'oe_payments_mollie'` like PayPal does, rather than adding a second
 extension beside Stripe's.
 
-`sMollieProfileId` is deliberately **not** masked: the `pfl_…` id is shipped to the browser by the
-OPC footer widget for Mollie Components, so masking it would imply a confidentiality it does not
-have. Mollie has no webhook signing secret (verification is an API re-fetch, not an HMAC).
+`sMollieProfileId` is masked **too**, but for a weaker reason that the code and tests keep distinct:
+the `pfl_…` id is shipped to the browser by the OPC footer widget for Mollie Components, so masking it
+protects nothing against anyone who can read the storefront. It is masked for **screen hygiene** — an
+account identifier that no longer sits in plain view during a screen share. (It was originally left
+visible on the grounds that masking implies protection it does not have; overruled on operator
+preference, with the reasoning kept rather than deleted.) Mollie has no webhook signing secret
+(verification is an API re-fetch, not an HMAC), so the genuinely-secret set is the two API keys.
 
 **Threat model, not to be oversold:** the value still travels to the browser inside `value=""`. This
 stops shoulder-surfing, screen sharing and screenshots — not devtools. Never-send-the-secret needs
