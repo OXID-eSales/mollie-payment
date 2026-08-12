@@ -97,5 +97,27 @@ $aModule = [
             'constraints' => MollieDefinitions::LOG_LEVEL_OFF . '|' . MollieDefinitions::LOG_LEVEL_ERRORS
                 . '|' . MollieDefinitions::LOG_LEVEL_NORMAL . '|' . MollieDefinitions::LOG_LEVEL_DEBUG,
         ],
+        // @since opc-125 rev-56 — declare the OPC UI topology this handler
+        // supports. Mollie can operate in two modes:
+        //   - 'inline-selector': render the sub-method chooser (Cards, iDeal,
+        //     Klarna…) inline in OPC's accordion payment-method section; the
+        //     Place Order button in OPC's footer triggers the redirect to
+        //     Mollie's hosted page for the chosen sub-method.
+        //   - 'redirect': skip the inline chooser entirely; Place Order in
+        //     footer redirects straight to Mollie's hosted method page.
+        // Default is 'inline-selector' (matches the mode enabled by the
+        // legacy blPaymentBaseUseIframe payment-base flag). Admin can flip
+        // to 'redirect' when the inline chooser is unwanted.
+        // The 'iframe' mode is deliberately NOT included in constraints —
+        // Mollie's hosted page sends X-Frame-Options: DENY, so framing is
+        // impossible (see MolliePaymentHandler::logIframeFallbackIfRequested()).
+        [
+            'group' => 'MOLLIE_ADVANCED',
+            'name' => 'sPaymentHandlerUiTopology',
+            'type' => 'select',
+            'value' => 'inline-selector',
+            'constraints' => 'inline-selector|redirect',
+            'position' => 70,
+        ],
     ],
 ];
