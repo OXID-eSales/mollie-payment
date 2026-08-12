@@ -16,9 +16,11 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MollieLineDto;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\CheckoutPaymentService;
 use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
+use OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface;
 use OxidEsales\Payments\Mollie\Service\MollieOrderDataProviderInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 #[CoversClass(CheckoutPaymentService::class)]
 final class CheckoutPaymentServiceTest extends TestCase
@@ -176,10 +178,19 @@ final class CheckoutPaymentServiceTest extends TestCase
         ?MollieOrderDataProviderInterface $orderData = null,
     ): CheckoutPaymentService {
         $config = $this->createMock(ModuleConfigurationServiceInterface::class);
-        $config->method('getWebhookUrl')->willReturn($webhookUrl);
         $config->method('getCaptureMode')->willReturn($captureMode);
 
-        return new CheckoutPaymentService($config, $orderData ?? $this->createMock(MollieOrderDataProviderInterface::class));
+        // Sprint 11 Story 7 (F20): the effective webhook URL now comes from a dedicated provider —
+        // deriving it used to sit in ModuleConfigurationService and reach into Registry::getConfig().
+        $webhookUrlProvider = $this->createMock(MollieWebhookUrlProviderInterface::class);
+        $webhookUrlProvider->method('getWebhookUrl')->willReturn($webhookUrl);
+
+        return new CheckoutPaymentService(
+            $config,
+            $orderData ?? $this->createMock(MollieOrderDataProviderInterface::class),
+            $webhookUrlProvider,
+            new NullLogger(),
+        );
     }
 
     private function contractStub(

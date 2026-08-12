@@ -39,6 +39,7 @@ final class PaymentExpiredHandler extends AbstractMollieWebhookHandler
             $providerOrderId,
             'contract_expired',
             'Contract already in a terminal state',
+            $event,
         );
     }
 }

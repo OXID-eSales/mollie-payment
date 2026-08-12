@@ -104,9 +104,11 @@ final class WebhookEndToEndTest extends TestCase
             $this->connection->executeStatement('DELETE FROM oxorder WHERE OXID = :id', ['id' => $orderId]);
         }
         foreach ($this->eventIdsToClean as $eventId) {
+            // Sprint 11 Story 2 (F1): one payment can now legitimately own several webhook-log rows
+            // ({paymentId}:paid, {paymentId}:refunded:1250, …), so cleanup matches on the prefix.
             $this->connection->executeStatement(
-                'DELETE FROM oe_payments_webhooklogs WHERE OXEVENTID = :id',
-                ['id' => $eventId],
+                'DELETE FROM oe_payments_webhooklogs WHERE OXEVENTID = :id OR OXEVENTID LIKE :prefix',
+                ['id' => $eventId, 'prefix' => $eventId . ':%'],
             );
         }
     }
@@ -203,7 +205,10 @@ final class WebhookEndToEndTest extends TestCase
         self::assertTrue($result->isFailure());
         self::assertSame(500, $this->httpStatusFor($result));
 
-        $log = $this->webhookLogRepository->findByEventId($paymentId);
+        // Sprint 11 Story 2 (F1): the event id identifies the delivery, so the log row for this
+        // delivery is `{paymentId}:paid`. Asserting the bare payment id here would re-encode the very
+        // collision that let a later `paid` webhook be dropped.
+        $log = $this->webhookLogRepository->findByEventId($paymentId . ':paid');
         self::assertNotNull($log);
         self::assertSame('failed', $log->getStatus());
     }

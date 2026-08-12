@@ -45,8 +45,17 @@ class Events
             /** @var QueryBuilderFactoryInterface $qbFactory */
             $qbFactory = $container->get(QueryBuilderFactoryInterface::class);
             (new PaymentMethodInstaller($qbFactory))->ensureMolliePaymentMethods();
-        } catch (Throwable) {
-            // Silent: activation must never fail. Admin can re-run `oe:module:activate`.
+        } catch (Throwable $e) {
+            // Sprint 11 Story 8 (F9): the catch stays — activation must never fail — but it stops
+            // being silent. Without the payment-method row Mollie simply never appears in checkout,
+            // and the old comment's recovery plan ("admin can re-run oe:module:activate") assumed an
+            // admin who knows something went wrong. Nothing told them.
+            Registry::getLogger()->error(
+                '[Mollie] payment-method installation failed during module activation; Mollie will '
+                . 'not be offered in checkout. Re-run `oe:module:activate oe_payments_mollie` after '
+                . 'fixing the cause.',
+                ['error' => $e->getMessage()],
+            );
         }
     }
 

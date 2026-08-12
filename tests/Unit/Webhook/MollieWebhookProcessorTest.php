@@ -59,7 +59,10 @@ final class MollieWebhookProcessorTest extends TestCase
         $event = $this->invokeProtected($this->createProcessor(), 'parseAndValidateRequest', $request);
 
         self::assertInstanceOf(WebhookEvent::class, $event);
-        self::assertSame('tr_WDqYK6vllg', $event->id);
+        // Sprint 11 Story 2 (F1): the event id identifies the delivery, not the payment. It used to
+        // be the bare payment id, which made UNIQUE(OXEVENTID) swallow every subsequent status
+        // change for the same payment. See WebhookEventIdentityTest for the full contract.
+        self::assertSame('tr_WDqYK6vllg:paid', $event->id);
         self::assertSame('paid', $event->type);
     }
 

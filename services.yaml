@@ -54,6 +54,12 @@ services:
   OxidEsales\Payments\Mollie\Service\MollieOrderDataProviderInterface:
     alias: OxidEsales\Payments\Mollie\Service\MollieOrderDataProvider
     public: true
+  # Sprint 11 Story 7 (F20): webhook-URL derivation moved out of ModuleConfigurationService, which
+  # cannot hold a ShopAdapterInterface without closing a dependency cycle (OxidShopAdapter depends
+  # on the config service).
+  OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface:
+    alias: OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProvider
+    public: true
 
   # ===========================================================================
   # Sprint 2: provider adapter layer.
@@ -333,12 +339,16 @@ services:
   OxidEsales\Payments\Mollie\Controller\Webhook\WebhookIpAllowlistGuard:
     public: false
 
+  # Sprint 11 Story 6 (F6): WebhookRateLimitGuard is deliberately NOT in this chain. Its token
+  # buckets live in per-request memory, so it could never reject anything — see the class docblock.
+  # The exposure it was meant to close (an unauthenticated POST buying an outbound Mollie API
+  # round-trip) is handled by WebhookController::extractPaymentId()'s stateless id-shape precheck.
+  # Re-wiring it requires a shared storage backend first, not just this line.
   OxidEsales\Payments\Mollie\Controller\Webhook\WebhookGuardChain:
     arguments:
       $guards:
         - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookPayloadSizeGuard'
         - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookHttpsGuard'
-        - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRateLimitGuard'
     public: true
 
   OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRequestGuardInterface:

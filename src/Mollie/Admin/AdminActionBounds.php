@@ -13,6 +13,7 @@ use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
+use Psr\Log\LoggerInterface;
 use Throwable;
 
 /**
@@ -24,8 +25,10 @@ use Throwable;
  */
 final class AdminActionBounds implements AdminActionBoundsInterface
 {
-    public function __construct(private readonly MolliePaymentsAdapterInterface $paymentsAdapter)
-    {
+    public function __construct(
+        private readonly MolliePaymentsAdapterInterface $paymentsAdapter,
+        private readonly LoggerInterface $logger,
+    ) {
     }
 
     public function captureBound(PaymentContractInterface $contract): float
@@ -52,7 +55,21 @@ final class AdminActionBounds implements AdminActionBoundsInterface
 
         try {
             return $this->paymentsAdapter->getPayment($providerOrderId);
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            // Sprint 11 Story 8 (F12): failing closed to a 0.00 bound is the right direction, but
+            // the admin panel then renders "0.00 refundable" for both "already fully refunded" and
+            // "Mollie is unreachable" — and an operator can reasonably read the first from the
+            // second and stop investigating. At minimum it must be in the log.
+            $this->logger->warning(
+                '[AdminActionBounds] could not load the Mollie payment; capture/refund bounds will '
+                . 'read as 0.00',
+                [
+                    'contractId' => $contract->getId(),
+                    'providerOrderId' => $providerOrderId,
+                    'error' => $e->getMessage(),
+                ],
+            );
+
             return null;
         }
     }

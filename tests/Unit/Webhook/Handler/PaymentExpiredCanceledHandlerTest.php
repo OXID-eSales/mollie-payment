@@ -14,9 +14,11 @@ use OxidEsales\PaymentBase\Webhook\WebhookEvent;
 use OxidEsales\Payments\Mollie\Webhook\Handler\PaymentCanceledHandler;
 use OxidEsales\Payments\Mollie\Webhook\Handler\PaymentExpiredHandler;
 use OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandlerInterface;
+use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 #[CoversClass(PaymentExpiredHandler::class)]
 #[CoversClass(PaymentCanceledHandler::class)]
@@ -34,14 +36,14 @@ final class PaymentExpiredCanceledHandlerTest extends TestCase
 
     public function testExpired_ExpiresContract(): void
     {
-        $handler = new PaymentExpiredHandler($this->fulfillmentHandler, $this->contractRepository);
+        $handler = new PaymentExpiredHandler($this->fulfillmentHandler, $this->contractRepository, new NullLogger());
 
         self::assertSame(['expired'], $handler->handledStatuses());
 
         $this->fulfillmentHandler->expects(self::once())
             ->method('handlePaymentExpired')
             ->with('tr_expired')
-            ->willReturn(true);
+            ->willReturn(FulfillmentOutcome::Acted);
 
         $outcome = $handler->handle($this->event('tr_expired', 'expired'));
 
@@ -51,8 +53,8 @@ final class PaymentExpiredCanceledHandlerTest extends TestCase
 
     public function testExpired_WhenAlreadyTerminal_IsSkipped(): void
     {
-        $handler = new PaymentExpiredHandler($this->fulfillmentHandler, $this->contractRepository);
-        $this->fulfillmentHandler->method('handlePaymentExpired')->willReturn(false);
+        $handler = new PaymentExpiredHandler($this->fulfillmentHandler, $this->contractRepository, new NullLogger());
+        $this->fulfillmentHandler->method('handlePaymentExpired')->willReturn(FulfillmentOutcome::NoOp);
 
         $outcome = $handler->handle($this->event('tr_expired', 'expired'));
 
@@ -61,14 +63,14 @@ final class PaymentExpiredCanceledHandlerTest extends TestCase
 
     public function testCanceled_CancelsContract(): void
     {
-        $handler = new PaymentCanceledHandler($this->fulfillmentHandler, $this->contractRepository);
+        $handler = new PaymentCanceledHandler($this->fulfillmentHandler, $this->contractRepository, new NullLogger());
 
         self::assertSame(['canceled'], $handler->handledStatuses());
 
         $this->fulfillmentHandler->expects(self::once())
             ->method('handlePaymentCanceled')
             ->with('tr_canceled', self::isType('string'))
-            ->willReturn(true);
+            ->willReturn(FulfillmentOutcome::Acted);
 
         $outcome = $handler->handle($this->event('tr_canceled', 'canceled'));
 
@@ -78,8 +80,8 @@ final class PaymentExpiredCanceledHandlerTest extends TestCase
 
     public function testCanceled_WhenAlreadyTerminal_IsSkipped(): void
     {
-        $handler = new PaymentCanceledHandler($this->fulfillmentHandler, $this->contractRepository);
-        $this->fulfillmentHandler->method('handlePaymentCanceled')->willReturn(false);
+        $handler = new PaymentCanceledHandler($this->fulfillmentHandler, $this->contractRepository, new NullLogger());
+        $this->fulfillmentHandler->method('handlePaymentCanceled')->willReturn(FulfillmentOutcome::NoOp);
 
         $outcome = $handler->handle($this->event('tr_canceled', 'canceled'));
 

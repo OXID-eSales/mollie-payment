@@ -40,6 +40,7 @@ final class PaymentCanceledHandler extends AbstractMollieWebhookHandler
             $providerOrderId,
             'contract_canceled',
             'Contract already in a terminal state',
+            $event,
         );
     }
 }

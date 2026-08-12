@@ -35,7 +35,11 @@ interface ModuleConfigurationServiceInterface
 
     public function isManualCapture(): bool;
 
-    public function getWebhookUrl(): string;
+    /**
+     * The merchant's explicit webhook-URL override, or '' when unset. Deriving the effective URL
+     * is {@see MollieWebhookUrlProviderInterface}'s job (Sprint 11 Story 7 / F20).
+     */
+    public function getWebhookUrlOverride(): string;
 
     public function getLogLevel(): string;
 

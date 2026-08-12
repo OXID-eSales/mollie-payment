@@ -18,6 +18,7 @@ use OxidEsales\Payments\Mollie\Webhook\Handler\PaymentRefundedHandler;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 #[CoversClass(PaymentRefundedHandler::class)]
 final class PaymentRefundedHandlerTest extends TestCase
@@ -30,7 +31,7 @@ final class PaymentRefundedHandlerTest extends TestCase
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
         $this->handler = new PaymentRefundedHandler(
             $this->contractRepository,
-            new ContractRefundRecorder($this->contractRepository),
+            new ContractRefundRecorder($this->contractRepository, new NullLogger()),
         );
     }
 
@@ -62,7 +63,7 @@ final class PaymentRefundedHandlerTest extends TestCase
         $firstRepository->method('findByProviderOrderId')->willReturn($contractBeforeAnyRefund);
         $contractBeforeAnyRefund->expects(self::once())->method('addRefundedAmount')->with(30.0);
 
-        $firstHandler = new PaymentRefundedHandler($firstRepository, new ContractRefundRecorder($firstRepository));
+        $firstHandler = new PaymentRefundedHandler($firstRepository, new ContractRefundRecorder($firstRepository, new NullLogger()));
         $firstHandler->handle($this->event('tr_refund', 30.0));
 
         // Second delivery: contract now reflects the first recording (refundedAmount=30),
@@ -72,7 +73,7 @@ final class PaymentRefundedHandlerTest extends TestCase
         $secondRepository->method('findByProviderOrderId')->willReturn($contractAfterPartialRefund);
         $contractAfterPartialRefund->expects(self::once())->method('addRefundedAmount')->with(20.0);
 
-        $secondHandler = new PaymentRefundedHandler($secondRepository, new ContractRefundRecorder($secondRepository));
+        $secondHandler = new PaymentRefundedHandler($secondRepository, new ContractRefundRecorder($secondRepository, new NullLogger()));
         $outcome = $secondHandler->handle($this->event('tr_refund', 50.0));
 
         self::assertSame('refund_recorded', $outcome->result->action);

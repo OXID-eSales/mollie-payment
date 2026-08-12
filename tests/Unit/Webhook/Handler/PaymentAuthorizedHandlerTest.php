@@ -14,9 +14,11 @@ use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Webhook\WebhookEvent;
 use OxidEsales\Payments\Mollie\Webhook\Handler\PaymentAuthorizedHandler;
 use OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandlerInterface;
+use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 #[CoversClass(PaymentAuthorizedHandler::class)]
 final class PaymentAuthorizedHandlerTest extends TestCase
@@ -29,7 +31,7 @@ final class PaymentAuthorizedHandlerTest extends TestCase
     {
         $this->fulfillmentHandler = $this->createMock(WebhookContractFulfillmentHandlerInterface::class);
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
-        $this->handler = new PaymentAuthorizedHandler($this->fulfillmentHandler, $this->contractRepository);
+        $this->handler = new PaymentAuthorizedHandler($this->fulfillmentHandler, $this->contractRepository, new NullLogger());
     }
 
     public function testHandledStatuses_ReturnsAuthorized(): void
@@ -42,7 +44,7 @@ final class PaymentAuthorizedHandlerTest extends TestCase
         $this->fulfillmentHandler->expects(self::once())
             ->method('handlePaymentAuthorized')
             ->with('tr_authorized')
-            ->willReturn(true);
+            ->willReturn(FulfillmentOutcome::Acted);
 
         $contract = $this->createMock(PaymentContractInterface::class);
         $contract->method('getId')->willReturn('contract-1');
@@ -57,7 +59,7 @@ final class PaymentAuthorizedHandlerTest extends TestCase
 
     public function testAuthorized_WhenAlreadyAuthorizedOrPastIt_IsNoOp(): void
     {
-        $this->fulfillmentHandler->method('handlePaymentAuthorized')->with('tr_authorized')->willReturn(false);
+        $this->fulfillmentHandler->method('handlePaymentAuthorized')->with('tr_authorized')->willReturn(FulfillmentOutcome::NoOp);
 
         $contract = $this->createMock(PaymentContractInterface::class);
         $contract->method('getId')->willReturn('contract-1');
@@ -72,7 +74,7 @@ final class PaymentAuthorizedHandlerTest extends TestCase
 
     public function testHandle_WhenContractNotFound_ReturnsSkipped(): void
     {
-        $this->fulfillmentHandler->method('handlePaymentAuthorized')->willReturn(null);
+        $this->fulfillmentHandler->method('handlePaymentAuthorized')->willReturn(FulfillmentOutcome::ContractNotFound);
         $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
 
         $outcome = $this->handler->handle($this->event('tr_missing'));

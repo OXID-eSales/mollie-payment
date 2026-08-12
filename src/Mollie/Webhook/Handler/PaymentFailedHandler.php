@@ -40,6 +40,7 @@ final class PaymentFailedHandler extends AbstractMollieWebhookHandler
             $providerOrderId,
             'contract_failed',
             'Contract already in a terminal state',
+            $event,
         );
     }
 }

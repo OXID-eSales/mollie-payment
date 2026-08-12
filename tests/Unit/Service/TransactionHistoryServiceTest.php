@@ -23,6 +23,7 @@ use OxidEsales\Payments\Mollie\Service\TransactionHistoryService;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 #[CoversClass(TransactionHistoryService::class)]
 final class TransactionHistoryServiceTest extends TestCase
@@ -42,6 +43,7 @@ final class TransactionHistoryServiceTest extends TestCase
             $this->refundAdapter,
             $this->captureAdapter,
             new MollieStatusMapper(),
+            new NullLogger(),
         );
     }
 

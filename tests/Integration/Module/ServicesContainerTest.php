@@ -50,4 +50,45 @@ final class ServicesContainerTest extends TestCase
 
         $activation->deactivate(Module::MODULE_ID, self::SHOP_ID);
     }
+
+    /**
+     * Sprint 11 Story 9 (F19) — the loggers are really injected, not defaulted.
+     *
+     * Three services carried `= new NullLogger()` / `?? new NullLogger()` defaults. They were dormant
+     * (the shop container registers `Psr\Log\LoggerInterface`), but a dormant default is still a
+     * promise contingent on wiring nobody re-checks: `ContractRefundRecorder`'s docblock says a skipped
+     * refund is "logged as a warning for operator visibility". Making the parameter required moves that
+     * from hope to a compile error — and this test proves the container can satisfy it.
+     *
+     * Also covers Story 7's new `MollieWebhookUrlProvider`, whose whole reason to exist is that
+     * `ModuleConfigurationService` cannot hold a `ShopAdapterInterface` without closing a dependency
+     * cycle. If that reasoning were wrong, the container would fail to compile it here.
+     */
+    public function testServicesWithRequiredLoggersResolveFromTheContainer(): void
+    {
+        // Deliberately does NOT go through ModuleActivationServiceInterface: that service is not public
+        // in the compiled container here, which is why testContainer_CompilesWithMollieServices() skips.
+        // Resolving the ids directly is what this story actually needs to prove, and it runs.
+        $container = ContainerFactory::getInstance()->getContainer();
+
+        if (!$container->has(\OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface::class)) {
+            self::markTestSkipped('Mollie services are not registered in this container (module inactive).');
+        }
+
+        foreach (
+            [
+                \OxidEsales\Payments\Mollie\Service\RefundServiceInterface::class,
+                \OxidEsales\Payments\Mollie\Service\ContractRefundRecorder::class,
+                \OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface::class,
+                \OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface::class,
+                \OxidEsales\Payments\Mollie\Admin\AdminActionBoundsInterface::class,
+                \OxidEsales\Payments\Mollie\Webhook\Handler\PaymentPaidHandler::class,
+            ] as $serviceId
+        ) {
+            self::assertNotNull(
+                $container->get($serviceId),
+                sprintf('%s must resolve with its required collaborators', $serviceId),
+            );
+        }
+    }
 }

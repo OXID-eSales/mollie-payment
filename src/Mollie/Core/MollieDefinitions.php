@@ -175,10 +175,24 @@ final class MollieDefinitions
         return array_values(array_filter($countries, 'is_string'));
     }
 
+    /**
+     * Sprint 11 Story 11 (F16): an empty currency list means "unknown", and unknown must not mean
+     * "everything is allowed".
+     *
+     * The old form (`$currencies === [] || in_array(...)`) returned true for an unknown payment id or
+     * a typo'd/removed `currencies` key — a gate whose failure mode was to allow every currency. It
+     * was moot only because the definition happens to list EUR; combined with the `'EUR'` fallbacks
+     * removed in the same story, a shop with an unreadable currency could pass this check with a
+     * guess and then fail at create-payment.
+     */
     public static function supportsCurrency(string $paymentId, string $currency): bool
     {
         $currencies = self::getSupportedCurrencies($paymentId);
-        return $currencies === [] || in_array(strtoupper($currency), $currencies, true);
+        if ($currencies === []) {
+            return false;
+        }
+
+        return in_array(strtoupper($currency), $currencies, true);
     }
 
     /**

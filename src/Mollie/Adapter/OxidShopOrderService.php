@@ -164,9 +164,15 @@ class OxidShopOrderService implements ShopOrderServiceInterface
         CreateOrderRequest $request,
     ): OrderResponse {
         $price = $basket->getPrice();
-        $currency = $basket->getBasketCurrency();
-        /** @var string $currencyName */
-        $currencyName = $currency->name ?? 'EUR';
+        // Sprint 11 Story 11 (F17): report what the basket actually says, or nothing.
+        $currencyName = OxidCurrencyReader::codeFrom($basket->getBasketCurrency());
+        if ($currencyName === null) {
+            Registry::getLogger()->warning(
+                '[OxidShopOrderService] basket currency could not be read for the order response',
+                ['orderId' => (string) $order->getId()],
+            );
+            $currencyName = '';
+        }
 
         return new OrderResponse(
             orderId: (string) $order->getId(),
@@ -229,8 +235,14 @@ class OxidShopOrderService implements ShopOrderServiceInterface
         if (is_string($dateStr) && $dateStr !== '') {
             try {
                 return new DateTimeImmutable($dateStr);
-            } catch (Throwable) {
-                // Fallback to current time
+            } catch (Throwable $e) {
+                // Sprint 11 Story 8: substituting "now" for an unparseable order date silently means
+                // the recorded creation time is simply wrong, with nothing to say so. Low impact,
+                // but the rule is the same as everywhere else in this sprint — safe or loud.
+                Registry::getLogger()->warning(
+                    '[OxidShopOrderService] unparseable oxorderdate; substituting the current time',
+                    ['orderId' => (string) $order->getId(), 'value' => $dateStr, 'error' => $e->getMessage()],
+                );
             }
         }
         return new DateTimeImmutable();

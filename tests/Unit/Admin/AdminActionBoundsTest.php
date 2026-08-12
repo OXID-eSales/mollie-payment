@@ -17,6 +17,7 @@ use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 #[CoversClass(AdminActionBounds::class)]
 final class AdminActionBoundsTest extends TestCase
@@ -27,7 +28,7 @@ final class AdminActionBoundsTest extends TestCase
     protected function setUp(): void
     {
         $this->paymentsAdapter = $this->createMock(MolliePaymentsAdapterInterface::class);
-        $this->bounds = new AdminActionBounds($this->paymentsAdapter);
+        $this->bounds = new AdminActionBounds($this->paymentsAdapter, new NullLogger());
     }
 
     public function testRefundBound_IsTheLivePaymentsRefundableAmount(): void

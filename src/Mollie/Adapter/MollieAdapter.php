@@ -258,19 +258,27 @@ final class MollieAdapter implements
         return ['amount' => $request->amount->toMollieArray()];
     }
 
+    /**
+     * Named arguments throughout: this is the module's ONLY production construction site for
+     * {@see MolliePaymentDto}, and a positional list is exactly how `amountChargedBack` came to be
+     * omitted while the DTO's `= 0.0` default made the gap invisible (Sprint 11 Story 4 / F7).
+     * {@see \OxidEsales\Payments\Mollie\Tests\Unit\Adapter\PaymentMoneyMappingRegressionTest} pins
+     * every money field against distinct SDK values.
+     */
     private function mapPayment(Payment $payment): MolliePaymentDto
     {
         return new MolliePaymentDto(
-            (string) $payment->id,
-            (string) $payment->status,
-            MollieValueMapper::toAmount($payment->amount),
-            $payment->getCheckoutUrl(),
-            MollieValueMapper::toNullableString($payment->method),
-            MollieValueMapper::toMetadata($payment->metadata),
-            $payment->getAmountRefunded(),
-            $payment->getAmountRemaining(),
-            MollieValueMapper::toNullableString($payment->redirectUrl),
-            MollieValueMapper::toNullableString($payment->webhookUrl),
+            id: (string) $payment->id,
+            status: (string) $payment->status,
+            amount: MollieValueMapper::toAmount($payment->amount),
+            checkoutUrl: $payment->getCheckoutUrl(),
+            method: MollieValueMapper::toNullableString($payment->method),
+            metadata: MollieValueMapper::toMetadata($payment->metadata),
+            amountRefunded: $payment->getAmountRefunded(),
+            amountRemaining: $payment->getAmountRemaining(),
+            redirectUrl: MollieValueMapper::toNullableString($payment->redirectUrl),
+            webhookUrl: MollieValueMapper::toNullableString($payment->webhookUrl),
+            amountChargedBack: $payment->getAmountChargedBack(),
             createdAt: MollieValueMapper::toNullableString($payment->createdAt),
         );
     }

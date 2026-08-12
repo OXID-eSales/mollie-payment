@@ -14,7 +14,6 @@ use OxidEsales\Eshop\Application\Model\Order;
 use OxidEsales\Eshop\Application\Model\OrderArticle;
 use OxidEsales\PaymentBase\Service\StockRestorationServiceInterface;
 use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 
 /**
  * OXID implementation of StockRestorationServiceInterface.
@@ -33,15 +32,12 @@ use Psr\Log\NullLogger;
  */
 class OxidStockRestorationService implements StockRestorationServiceInterface
 {
-    private LoggerInterface $logger;
-
     public function __construct(
         private readonly Connection $connection,
-        ?LoggerInterface $logger = null,
+        private readonly LoggerInterface $logger,
         private readonly bool $useStock = true,
         private readonly bool $allowNegativeStock = false
     ) {
-        $this->logger = $logger ?? new NullLogger();
     }
 
     public function restoreStockForOrder(string $orderId): int

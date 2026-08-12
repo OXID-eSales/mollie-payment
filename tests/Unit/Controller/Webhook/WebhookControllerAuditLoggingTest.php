@@ -80,7 +80,7 @@ final class WebhookControllerAuditLoggingTest extends TestCase
 
         $controller = new TestableWebhookController(
             processor: $processor,
-            testGuard: null,
+            testGuard: new PassingWebhookGuard(),
             testPaymentId: 'tr_paid',
             testFileLogger: $spy,
         );
@@ -100,7 +100,7 @@ final class WebhookControllerAuditLoggingTest extends TestCase
     {
         $controller = new TestableWebhookController(
             processor: null,
-            testGuard: null,
+            testGuard: new PassingWebhookGuard(),
             testPaymentId: null,
             testFileLogger: null,
         );

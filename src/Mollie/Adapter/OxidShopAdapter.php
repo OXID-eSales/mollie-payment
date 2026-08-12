@@ -70,11 +70,24 @@ class OxidShopAdapter implements ShopAdapterInterface
         return $shop->oxshops__oxname->value ?? 'OXID eShop';
     }
 
+    /**
+     * Sprint 11 Story 11 (F17): one reader, and an explicit failure rather than a fourth `?? 'EUR'`.
+     * An unreadable shop currency is logged; callers of ShopAdapterInterface expect a string, so the
+     * empty string is returned to make the absence visible downstream instead of impersonating EUR.
+     */
     public function getShopCurrency(): string
     {
-        $currency = Registry::getConfig()->getActShopCurrencyObject();
-        $name = $currency->name ?? 'EUR';
-        return is_scalar($name) ? (string) $name : 'EUR';
+        $code = OxidCurrencyReader::codeFrom(Registry::getConfig()->getActShopCurrencyObject());
+        if ($code !== null) {
+            return $code;
+        }
+
+        Registry::getLogger()->warning(
+            '[OxidShopAdapter] active shop currency could not be read; returning an empty code rather '
+            . 'than guessing EUR',
+        );
+
+        return '';
     }
 
     public function isTestMode(): bool

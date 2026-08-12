@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\Core;
 use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
 use OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface;
+use OxidEsales\Payments\Mollie\Adapter\OxidCurrencyReader;
 use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use OxidEsales\Payments\Mollie\Service\PaymentMethodListServiceInterface;
 use Throwable;
@@ -89,12 +90,18 @@ class ViewConfig extends ViewConfig_parent
         }
     }
 
+    /**
+     * Sprint 11 Story 11 (F17): no 'EUR' guess here.
+     *
+     * This feeds the method-list filter, which gates on MollieDefinitions::supportsCurrency() — an
+     * EUR-only check today. Guessing EUR made the guess *pass its own gate*, so a GBP shop with an
+     * unreadable currency object was offered methods the create-payment call could not honour. An
+     * empty code fails the gate, which is the correct outcome: offer nothing rather than something
+     * that cannot work.
+     */
     protected function mollieActiveCurrency(): string
     {
-        $currency = Registry::getConfig()->getActShopCurrencyObject();
-        $name = is_object($currency) && isset($currency->name) ? $currency->name : '';
-
-        return is_string($name) && $name !== '' ? $name : 'EUR';
+        return OxidCurrencyReader::codeFrom(Registry::getConfig()->getActShopCurrencyObject()) ?? '';
     }
 
     /**
@@ -124,9 +131,29 @@ class ViewConfig extends ViewConfig_parent
         }
     }
 
+    /**
+     * Sprint 11 Story 7 (F4): `isTestMode()` now throws when the module configuration cannot be read,
+     * because guessing which Mollie account is active is how a live shop ended up transacting against
+     * its test key. A storefront view must not fatal over it, so the exception is caught HERE — and
+     * logged, which the previous silent `?? true` never was.
+     *
+     * The frontend consequence of the fallback is cosmetic (the test-mode badge in the checkout
+     * footer widget): if the configuration is unreadable, checkout itself will fail at client
+     * creation anyway. `true` stays the fallback because announcing test mode is the conservative
+     * error.
+     */
     public function isMollieTestMode(): bool
     {
-        return $this->mollieConfigService()?->isTestMode() ?? true;
+        try {
+            return $this->mollieConfigService()?->isTestMode() ?? true;
+        } catch (Throwable $e) {
+            Registry::getLogger()->error(
+                '[MollieViewConfig] could not determine Mollie mode; assuming test for display only',
+                ['error' => $e->getMessage()],
+            );
+
+            return true;
+        }
     }
 
     /**

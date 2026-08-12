@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Service;
 
+use LogicException;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieLineDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieProductLineInput;
@@ -25,6 +26,12 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MollieProductLineInput;
 final class MollieLinesBuilder
 {
     private const CENT = 0.01;
+
+    /** Absolute ceiling for the residual fold — a few cents of OXID rounding. */
+    private const MAX_ABSOLUTE_FOLD = 0.05;
+
+    /** Relative ceiling, so large orders may still carry proportionally larger rounding. */
+    private const MAX_RELATIVE_FOLD = 0.01;
 
     /**
      * @param list<MollieProductLineInput> $products
@@ -54,11 +61,42 @@ final class MollieLinesBuilder
 
         $delta = self::round($expectedTotal - self::sumTotals($lines));
         if (abs($delta) >= self::CENT) {
+            self::assertFoldIsPlausible($delta, $expectedTotal);
             $type = $delta < 0 ? MollieLineDto::TYPE_DISCOUNT : MollieLineDto::TYPE_SURCHARGE;
             $lines[] = self::flatLine($currency, 'Rounding adjustment', $delta, $type);
         }
 
         return $lines;
+    }
+
+    /**
+     * The fold exists to absorb a cent or two of OXID rounding, and it must not quietly absorb
+     * anything larger (Sprint 11 Story 10 / F14).
+     *
+     * It had no bound at all, so a basket that read back empty or partial — `MollieOrderDataProvider`
+     * returns `[]` when the session basket is unavailable — produced a single line reading
+     * "Rounding adjustment €249.00". Mollie's cent-exact invariant was satisfied, so nothing rejected
+     * it, and the shopper received a Klarna invoice with no itemisation. On a pay-later invoice that
+     * is a consumer-facing document, and a discrepancy that size is a data-mapping bug rather than
+     * rounding.
+     *
+     * @throws LogicException when the residual is too large to be rounding
+     */
+    private static function assertFoldIsPlausible(float $delta, float $expectedTotal): void
+    {
+        $ceiling = max(self::MAX_ABSOLUTE_FOLD, abs($expectedTotal) * self::MAX_RELATIVE_FOLD);
+        if (abs($delta) <= $ceiling) {
+            return;
+        }
+
+        throw new LogicException(sprintf(
+            'Mollie line reconciliation is off by %.2f against an expected total of %.2f, which is '
+            . 'too large to be rounding (ceiling %.2f). The order lines are incomplete — refusing to '
+            . 'fold the difference into a single "Rounding adjustment" line.',
+            $delta,
+            $expectedTotal,
+            $ceiling,
+        ));
     }
 
     private static function productLine(string $currency, MollieProductLineInput $product): MollieLineDto

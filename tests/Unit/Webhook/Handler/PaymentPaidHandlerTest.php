@@ -14,9 +14,11 @@ use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Webhook\WebhookEvent;
 use OxidEsales\Payments\Mollie\Webhook\Handler\PaymentPaidHandler;
 use OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandlerInterface;
+use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 #[CoversClass(PaymentPaidHandler::class)]
 final class PaymentPaidHandlerTest extends TestCase
@@ -29,7 +31,7 @@ final class PaymentPaidHandlerTest extends TestCase
     {
         $this->fulfillmentHandler = $this->createMock(WebhookContractFulfillmentHandlerInterface::class);
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
-        $this->handler = new PaymentPaidHandler($this->fulfillmentHandler, $this->contractRepository);
+        $this->handler = new PaymentPaidHandler($this->fulfillmentHandler, $this->contractRepository, new NullLogger());
     }
 
     public function testHandledStatuses_ReturnsPaid(): void
@@ -42,7 +44,7 @@ final class PaymentPaidHandlerTest extends TestCase
         $this->fulfillmentHandler->expects(self::once())
             ->method('handlePaymentPaid')
             ->with('tr_paid')
-            ->willReturn(true);
+            ->willReturn(FulfillmentOutcome::Acted);
 
         $contract = $this->createMock(PaymentContractInterface::class);
         $contract->method('getId')->willReturn('contract-1');
@@ -57,7 +59,7 @@ final class PaymentPaidHandlerTest extends TestCase
 
     public function testPaid_WhenAlreadyFulfilled_IsNoOp(): void
     {
-        $this->fulfillmentHandler->method('handlePaymentPaid')->with('tr_paid')->willReturn(false);
+        $this->fulfillmentHandler->method('handlePaymentPaid')->with('tr_paid')->willReturn(FulfillmentOutcome::NoOp);
         $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
 
         $outcome = $this->handler->handle($this->event('tr_paid'));
@@ -68,7 +70,7 @@ final class PaymentPaidHandlerTest extends TestCase
 
     public function testHandle_WhenContractNotFound_ReturnsSkipped(): void
     {
-        $this->fulfillmentHandler->method('handlePaymentPaid')->willReturn(null);
+        $this->fulfillmentHandler->method('handlePaymentPaid')->willReturn(FulfillmentOutcome::ContractNotFound);
 
         $outcome = $this->handler->handle($this->event('tr_missing'));
 

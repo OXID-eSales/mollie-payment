@@ -30,6 +30,7 @@ final class TestableWebhookController extends WebhookController
         private readonly ?string $testPaymentId,
         ?WebhookRequest $guardRequest = null,
         private readonly ?FileLoggerInterface $testFileLogger = null,
+        private readonly bool $testTrustProxyHeaders = false,
     ) {
         $this->processor = $processor;
         $this->testGuardRequest = $guardRequest ?? new WebhookRequest('https', '127.0.0.1', 0, 'id=tr_x');
@@ -60,9 +61,28 @@ final class TestableWebhookController extends WebhookController
         return $this->testGuardRequest;
     }
 
-    protected function extractPaymentId(): ?string
+    /**
+     * Only the Registry touch-point is stubbed, so the real `extractPaymentId()` — including
+     * Sprint 11's id-shape precheck (F6) — runs under test.
+     */
+    protected function readRawPaymentId(): ?string
     {
         return $this->testPaymentId;
+    }
+
+    protected function trustProxyHeaders(): bool
+    {
+        return $this->testTrustProxyHeaders;
+    }
+
+    /**
+     * Exposes the pure scheme resolution for the proxy-header trust tests (F5).
+     *
+     * @param array<array-key, mixed> $server
+     */
+    public static function schemeFor(array $server, bool $trustProxyHeaders): string
+    {
+        return self::resolveScheme($server, $trustProxyHeaders);
     }
 
     protected function sendResponse(int $status, string $action): never

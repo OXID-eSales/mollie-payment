@@ -14,13 +14,11 @@ use InvalidArgumentException;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Service\StockRestorationServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
-use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieRefundDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\RefundRequest;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface;
 use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 
 /**
  * Admin-initiated refund orchestrator (full & partial, accumulating).
@@ -46,7 +44,7 @@ final class RefundService implements RefundServiceInterface
         private readonly MollieRefundAdapterInterface $refundAdapter,
         private readonly ContractRefundRecorder $refundRecorder,
         private readonly StockRestorationServiceInterface $stockRestorationService,
-        private readonly LoggerInterface $logger = new NullLogger(),
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -62,7 +60,9 @@ final class RefundService implements RefundServiceInterface
 
 
         $payment = $this->paymentsAdapter->getPayment($providerOrderId);
-        $refundable = $this->refundableAmount($payment);
+        // Single source of truth for the ceiling (Sprint 11 Story 4 / F21): this service used to
+        // carry its own copy of the formula, so a fix to one was not a fix to the other.
+        $refundable = $payment->refundableAmount();
         $effectiveAmount = $this->resolveRefundAmount($amount, $refundable, $contract->getId() ?? 'unknown');
 
         // Story 3 (Sprint 9): Optional admin description for audit trail.
@@ -125,11 +125,6 @@ final class RefundService implements RefundServiceInterface
         }
 
         return $providerOrderId;
-    }
-
-    private function refundableAmount(MolliePaymentDto $payment): float
-    {
-        return max(0.0, $payment->amount->value - $payment->amountRefunded - $payment->amountChargedBack);
     }
 
     private function resolveRefundAmount(?float $amount, float $refundable, string $contractId): float

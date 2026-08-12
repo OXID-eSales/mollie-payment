@@ -13,7 +13,6 @@ use DateTimeImmutable;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 
 /**
  * Records a refund amount on a PaymentContract.
@@ -34,13 +33,10 @@ use Psr\Log\NullLogger;
  */
 final class ContractRefundRecorder
 {
-    private readonly LoggerInterface $logger;
-
     public function __construct(
         private readonly ContractRepositoryInterface $contractRepository,
-        ?LoggerInterface $logger = null,
+        private readonly LoggerInterface $logger,
     ) {
-        $this->logger = $logger ?? new NullLogger();
     }
 
     public function record(PaymentContractInterface $contract, float $amount, ?string $contractId = null): void

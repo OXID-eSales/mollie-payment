@@ -64,7 +64,11 @@ final class WebhookIdempotencyTest extends TestCase
 
     public function testFirstDelivery_ClaimsAndProcesses(): void
     {
-        $this->logRepository->method('claimEvent')->with('tr_dupe', 'mollie', 'paid')->willReturn(true);
+        // Sprint 11 Story 2 (F1): claimed id is `{paymentId}:{type}`, not the bare payment id. This
+        // assertion previously pinned the bug — the bare id let the FIRST delivery for a payment
+        // claim it permanently, so a later `paid` delivery was answered `200 skipped` and Mollie,
+        // which retries only on non-2xx, never came back. Changed deliberately, not incidentally.
+        $this->logRepository->method('claimEvent')->with('tr_dupe:paid', 'mollie', 'paid')->willReturn(true);
         $this->handler->expects(self::once())
             ->method('handle')
             ->willReturn(MollieWebhookOutcome::of(WebhookResult::success('contract_fulfilled'), 'contract-1'));

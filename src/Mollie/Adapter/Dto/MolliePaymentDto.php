@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Adapter\Dto;
 
+use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
+
 /**
  * Immutable snapshot of a Mollie payment as the rest of the module sees it. No Mollie SDK type
  * crosses this boundary — the adapter maps the SDK Payment into this DTO.
@@ -80,11 +82,21 @@ final readonly class MolliePaymentDto
     }
 
     /**
-     * Remaining capturable balance for a two-step (manual capture) payment: `amountRemaining`
-     * once a partial capture has already happened, otherwise the full authorized amount.
+     * Remaining capturable balance for a two-step (manual capture) payment.
+     *
+     * Only an `authorized` payment has funds waiting to be captured. That check is load-bearing, not
+     * decorative: `amountRemaining === 0` means *both* "no partial capture yet" and "fully captured",
+     * and the previous formula (`amountRemaining > 0 ? amountRemaining : amount->value`) resolved the
+     * ambiguity towards the first — so a fully captured payment reported its whole amount as
+     * capturable again and the local bound guard became a no-op in precisely the case it was written
+     * for. See Sprint 11 Story 10 / F11.
      */
     public function capturableAmount(): float
     {
+        if ($this->status !== MollieStatusMapper::STATUS_AUTHORIZED) {
+            return 0.0;
+        }
+
         return $this->amountRemaining > 0.0 ? $this->amountRemaining : $this->amount->value;
     }
 }

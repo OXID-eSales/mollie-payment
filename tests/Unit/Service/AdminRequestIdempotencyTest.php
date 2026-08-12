@@ -25,6 +25,7 @@ use OxidEsales\Payments\Mollie\Service\RefundService;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 /**
  * Verifies the admin-request idempotency chain end to end at the unit level: the translator
@@ -103,7 +104,7 @@ final class AdminRequestIdempotencyTest extends TestCase
 
         $contractRepository = $this->createMock(\OxidEsales\PaymentBase\Repository\ContractRepositoryInterface::class);
         $stockRestorationService = $this->createMock(StockRestorationServiceInterface::class);
-        $service = new RefundService($paymentsAdapter, $refundAdapter, new ContractRefundRecorder($contractRepository), $stockRestorationService);
+        $service = new RefundService($paymentsAdapter, $refundAdapter, new ContractRefundRecorder($contractRepository, new NullLogger()), $stockRestorationService, new NullLogger());
 
         $key = 'contract-99:refund:25.00';
         $first = $service->refund($contract, 25.0, null, $key);

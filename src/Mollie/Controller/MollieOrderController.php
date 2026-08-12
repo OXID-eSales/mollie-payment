@@ -298,7 +298,16 @@ class MollieOrderController extends MollieOrderController_parent
     {
         try {
             return ContainerFacade::get($className);
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            // Sprint 11 Story 8: every caller handles null with an explicit user-facing error path, so
+            // this controller is fail-closed throughout — but five call sites were resolving services
+            // in total silence, which made "why did checkout say MOLLIE_CHECKOUT_UNAVAILABLE" an
+            // unanswerable question.
+            Registry::getLogger()->warning('[MollieOrderController] service unavailable', [
+                'service' => $className,
+                'error' => $e->getMessage(),
+            ]);
+
             return null;
         }
     }

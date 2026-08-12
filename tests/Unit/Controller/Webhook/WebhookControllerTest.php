@@ -32,7 +32,7 @@ final class WebhookControllerTest extends TestCase
     {
         $controller = new TestableWebhookController(
             processor: $this->processor(),
-            testGuard: null,
+            testGuard: new PassingWebhookGuard(),
             testPaymentId: null,
         );
 
@@ -69,7 +69,7 @@ final class WebhookControllerTest extends TestCase
     {
         $controller = new TestableWebhookController(
             processor: null,
-            testGuard: null,
+            testGuard: new PassingWebhookGuard(),
             testPaymentId: 'tr_x',
         );
 
@@ -91,7 +91,7 @@ final class WebhookControllerTest extends TestCase
 
         $controller = new TestableWebhookController(
             processor: $this->processor([$handler]),
-            testGuard: null,
+            testGuard: new PassingWebhookGuard(),
             testPaymentId: 'tr_paid',
         );
 
@@ -121,7 +121,7 @@ final class WebhookControllerTest extends TestCase
 
         $controller = new TestableWebhookController(
             processor: $processor,
-            testGuard: null,
+            testGuard: new PassingWebhookGuard(),
             testPaymentId: 'tr_unknown',
         );
 

@@ -24,6 +24,7 @@ use OxidEsales\Payments\Mollie\Service\RefundService;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 #[CoversClass(RefundService::class)]
 final class RefundServiceTest extends TestCase
@@ -41,13 +42,14 @@ final class RefundServiceTest extends TestCase
         $this->refundAdapter = $this->createMock(MollieRefundAdapterInterface::class);
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
         $this->stockRestorationService = $this->createMock(StockRestorationServiceInterface::class);
-        $this->refundRecorder = new ContractRefundRecorder($this->contractRepository);
+        $this->refundRecorder = new ContractRefundRecorder($this->contractRepository, new NullLogger());
 
         $this->service = new RefundService(
             $this->paymentsAdapter,
             $this->refundAdapter,
             $this->refundRecorder,
             $this->stockRestorationService,
+            new NullLogger(),
         );
     }
 

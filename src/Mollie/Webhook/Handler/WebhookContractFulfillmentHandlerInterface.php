@@ -14,9 +14,12 @@ namespace OxidEsales\Payments\Mollie\Webhook\Handler;
  *
  * Each method looks up the contract by providerOrderId (the Mollie payment id), advances it via
  * named transitions only (never setState()), records an audit transaction, and mirrors terminal
- * transitions onto the linked oxorder. All four methods return the same tri-state contract:
- * `true` = processed, `false` = skipped (idempotent no-op on an already-terminal/fulfilled
- * contract), `null` = no contract indexed by that provider order id yet.
+ * transitions onto the linked oxorder.
+ *
+ * Every method reports what it did as a {@see FulfillmentOutcome}. Sprint 11 Story 1 replaced the
+ * previous tri-state `?bool` because `false` conflated "already done, nothing to do" with "tried and
+ * failed" — and the caller answered Mollie `HTTP 200` for both, so a failed fulfilment was never
+ * retried. See {@see FulfillmentOutcome} for the mapping onto HTTP status codes.
  */
 interface WebhookContractFulfillmentHandlerInterface
 {
@@ -24,22 +27,22 @@ interface WebhookContractFulfillmentHandlerInterface
      * Handle a Mollie `paid` status: climbs the contract ladder (PENDING → READY_TO_COMMIT →
      * COMMITTED) as far as it currently allows, then fulfills it.
      */
-    public function handlePaymentPaid(string $providerOrderId): ?bool;
+    public function handlePaymentPaid(string $providerOrderId): FulfillmentOutcome;
 
     /**
      * Handle a Mollie `failed` status: transitions the contract to FAILED.
      */
-    public function handlePaymentFailed(string $providerOrderId, string $reason): ?bool;
+    public function handlePaymentFailed(string $providerOrderId, string $reason): FulfillmentOutcome;
 
     /**
      * Handle a Mollie `expired` status: transitions the contract to EXPIRED.
      */
-    public function handlePaymentExpired(string $providerOrderId): ?bool;
+    public function handlePaymentExpired(string $providerOrderId): FulfillmentOutcome;
 
     /**
      * Handle a Mollie `canceled` status: transitions the contract to CANCELLED.
      */
-    public function handlePaymentCanceled(string $providerOrderId, string $reason): ?bool;
+    public function handlePaymentCanceled(string $providerOrderId, string $reason): FulfillmentOutcome;
 
     /**
      * Handle a Mollie `authorized` status (two-step/manual capture): transitions the contract
@@ -47,5 +50,5 @@ interface WebhookContractFulfillmentHandlerInterface
      * and {@see \OxidEsales\Payments\Mollie\Service\CancelAuthorizationService} require. Deliberately
      * does not set OXPAID or fulfill the order — funds are not captured yet.
      */
-    public function handlePaymentAuthorized(string $providerOrderId): ?bool;
+    public function handlePaymentAuthorized(string $providerOrderId): FulfillmentOutcome;
 }

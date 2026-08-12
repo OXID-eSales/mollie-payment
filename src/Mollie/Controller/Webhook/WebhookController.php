@@ -34,6 +34,38 @@ use Throwable;
  */
 class WebhookController extends FrontendController
 {
+    /**
+     * Whether `X-Forwarded-Proto: https` may stand in for a TLS connection at the origin.
+     *
+     * Sprint 11 Story 6 (F5) shipped this as `false` — anyone can send that header, so honouring it
+     * lets anyone tell the HTTPS guard a plaintext request was encrypted. Running it against the real
+     * deployment reversed the decision, and the reasoning is worth keeping:
+     *
+     * The dev/staging shop sits behind Cloudflare. TLS terminates at the proxy, so the origin sees
+     * `HTTPS` unset, `SERVER_PORT` 80, and the forwarded header — the normal production topology for
+     * a reverse-proxied shop. With trust off, {@see WebhookHttpsGuard} rejected **every** genuine
+     * Mollie delivery with `400 tls_required`, verified live. Mollie retries a few times and then
+     * gives up, which means no webhooks at all: exactly the silent-order-never-finalizes failure that
+     * F1/F2 were fixed to prevent, reintroduced by a hardening measure.
+     *
+     * The trade is lopsided. What the guard protects is thin: Mollie only ever calls an HTTPS URL, the
+     * body is a bare payment id, and the actual verification is the authenticated API re-fetch — so
+     * spoofing this header buys an attacker nothing it did not already have on an endpoint that is
+     * unauthenticated by design. What breaking it costs is every webhook on every proxied shop.
+     *
+     * So: honoured by default, with the flag kept so a shop that terminates TLS at the origin can
+     * harden it, and a log line whenever the HTTPS verdict rests only on the header — the weak signal
+     * stays visible instead of being quietly trusted.
+     */
+    public const TRUST_PROXY_HEADERS_DEFAULT = true;
+
+    /**
+     * Mollie payment ids are `tr_` + alphanumerics. Rejecting anything else costs nothing and, unlike
+     * the never-firing token bucket it replaces (F6), actually prevents an unauthenticated POST from
+     * buying itself an outbound Mollie API round-trip.
+     */
+    private const PAYMENT_ID_PATTERN = '/^tr_[A-Za-z0-9]{1,64}$/';
+
     protected ?MollieWebhookProcessor $processor = null;
     private ?WebhookRequestGuardInterface $guard = null;
     private ?FileLoggerInterface $fileLogger = null;
@@ -55,7 +87,9 @@ class WebhookController extends FrontendController
             $guard = $container->get(WebhookRequestGuardInterface::class);
             $this->guard = $guard instanceof WebhookRequestGuardInterface ? $guard : null;
         } catch (Throwable $e) {
-            Registry::getLogger()->warning('Mollie webhook guard chain unavailable', ['error' => $e->getMessage()]);
+            // error, not warning (Sprint 11 Story 5 / F3): render() now refuses to serve without a
+            // guard chain, so this is the reason the endpoint is down, not a background nuisance.
+            Registry::getLogger()->error('Mollie webhook guard chain unavailable', ['error' => $e->getMessage()]);
         }
 
         try {
@@ -72,8 +106,21 @@ class WebhookController extends FrontendController
     {
         $this->setResponseContentType();
 
-        $guardResult = $this->getGuard()?->check($this->buildGuardRequest());
-        if ($guardResult !== null && !$guardResult->ok) {
+        // Three distinct cases, explicitly (Sprint 11 Story 5 / F3). This used to be a `?->` plus a
+        // `!== null` test, which quietly made "the guard chain could not be built" mean "the guard
+        // chain passed" — the security control was the one thing in this method that failed open.
+        // 503 rather than 500: retry-worthy, so a transient container problem does not lose the event.
+        $guard = $this->getGuard();
+        if ($guard === null) {
+            $this->getFileLogger()?->log('webhook_rejected', [
+                'reason' => 'guard_unavailable',
+                'status' => 503,
+            ]);
+            $this->sendResponse(503, 'guard_unavailable');
+        }
+
+        $guardResult = $guard->check($this->buildGuardRequest());
+        if (!$guardResult->ok) {
             $this->getFileLogger()?->log('webhook_rejected', [
                 'reason' => $guardResult->reason ?? 'rejected',
                 'status' => $guardResult->httpStatus,
@@ -137,16 +184,13 @@ class WebhookController extends FrontendController
      */
     protected function buildGuardRequest(): WebhookRequest
     {
-        $httpsServerVar = $_SERVER['HTTPS'] ?? '';
-        $forwardedProto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '';
-        $isHttps = (is_string($httpsServerVar) && $httpsServerVar !== '' && $httpsServerVar !== 'off')
-            || $forwardedProto === 'https';
-
         $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
         $contentLength = $_SERVER['CONTENT_LENGTH'] ?? 0;
 
+        $this->warnIfSchemeRestsOnAForwardedHeader();
+
         return new WebhookRequest(
-            scheme: $isHttps ? 'https' : 'http',
+            scheme: self::resolveScheme($_SERVER, $this->trustProxyHeaders()),
             clientIp: is_string($remoteAddr) ? $remoteAddr : '',
             contentLength: is_numeric($contentLength) ? (int) $contentLength : 0,
             rawBody: (string) file_get_contents('php://input'),
@@ -154,9 +198,76 @@ class WebhookController extends FrontendController
     }
 
     /**
-     * Protected for testable subclass override.
+     * Whether `X-Forwarded-Proto` may be believed. Overridable seam so a shop that terminates TLS at
+     * the origin can harden it; see {@see self::TRUST_PROXY_HEADERS_DEFAULT}.
+     */
+    protected function trustProxyHeaders(): bool
+    {
+        return self::TRUST_PROXY_HEADERS_DEFAULT;
+    }
+
+    /**
+     * Record when "this request was TLS" is a claim made by the client rather than a fact about the
+     * connection. Not a rejection — see {@see self::TRUST_PROXY_HEADERS_DEFAULT} for why — but it must
+     * not be an invisible assumption either.
+     */
+    private function warnIfSchemeRestsOnAForwardedHeader(): void
+    {
+        $httpsVar = $_SERVER['HTTPS'] ?? '';
+        $realTls = is_string($httpsVar) && $httpsVar !== '' && $httpsVar !== 'off';
+        if ($realTls || !$this->trustProxyHeaders()) {
+            return;
+        }
+
+        if (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') !== 'https') {
+            return;
+        }
+
+        Registry::getLogger()->debug(
+            '[MollieWebhook] treating request as HTTPS on the strength of X-Forwarded-Proto; the '
+            . 'connection to this origin was not itself TLS',
+            ['remoteIp' => $_SERVER['REMOTE_ADDR'] ?? ''],
+        );
+    }
+
+    /**
+     * Pure so the trust decision is testable without superglobals.
+     *
+     * @param array<array-key, mixed> $server
+     */
+    protected static function resolveScheme(array $server, bool $trustProxyHeaders): string
+    {
+        $httpsServerVar = $server['HTTPS'] ?? '';
+        if (is_string($httpsServerVar) && $httpsServerVar !== '' && $httpsServerVar !== 'off') {
+            return 'https';
+        }
+
+        if ($trustProxyHeaders && ($server['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https') {
+            return 'https';
+        }
+
+        return 'http';
+    }
+
+    /**
+     * The payment id, or null when it is absent or does not look like a Mollie payment id.
+     *
+     * The shape check is deliberately here rather than deeper in the stack: verification of a Mollie
+     * webhook IS an outbound API round-trip, so an implausible id must be refused before it can buy
+     * one (Sprint 11 Story 6 / F6 — this replaces the token-bucket rate limiter that could never
+     * fire because its buckets lived in per-request memory).
      */
     protected function extractPaymentId(): ?string
+    {
+        $value = $this->readRawPaymentId();
+
+        return $value !== null && preg_match(self::PAYMENT_ID_PATTERN, $value) === 1 ? $value : null;
+    }
+
+    /**
+     * Protected for testable subclass override — the Registry touch-point only.
+     */
+    protected function readRawPaymentId(): ?string
     {
         $value = Registry::getRequest()->getRequestParameter('id');
         $value = is_scalar($value) ? (string) $value : '';

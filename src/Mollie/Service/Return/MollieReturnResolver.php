@@ -100,10 +100,17 @@ final class MollieReturnResolver implements ReturnResolverInterface
         };
     }
 
+    /**
+     * Sprint 11 Story 11 (F17): the contract's currency, verbatim.
+     *
+     * This used to substitute 'EUR' for a blank value, and that value flows into PaymentAuthorizedEvent
+     * → TransactionRecordingHandler, i.e. straight into the recorded transaction row. Guessing there
+     * writes a wrong currency into the audit trail; passing the blank through keeps the record honest.
+     * (payment-base's ContractService already defaults the contract currency to EUR upstream, so a
+     * blank here means something further up is genuinely broken and should look broken.)
+     */
     private function currencyOf(PaymentContractInterface $contract): string
     {
-        $currency = $contract->getCurrency();
-
-        return $currency !== '' ? $currency : 'EUR';
+        return $contract->getCurrency();
     }
 }

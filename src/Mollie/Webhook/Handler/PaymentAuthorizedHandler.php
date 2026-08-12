@@ -46,6 +46,7 @@ final class PaymentAuthorizedHandler extends AbstractMollieWebhookHandler
             $providerOrderId,
             'contract_authorized',
             'Contract already authorized or not eligible for authorization',
+            $event,
         );
     }
 }

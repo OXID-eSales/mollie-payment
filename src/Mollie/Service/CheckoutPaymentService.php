@@ -14,6 +14,7 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\CreatePaymentRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAddressDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
+use Psr\Log\LoggerInterface;
 
 /**
  * Assembles the {@see CreatePaymentRequest} sent to Mollie's create-payment API.
@@ -29,6 +30,8 @@ final class CheckoutPaymentService implements CheckoutPaymentServiceInterface
     public function __construct(
         private readonly ModuleConfigurationServiceInterface $config,
         private readonly MollieOrderDataProviderInterface $orderData,
+        private readonly MollieWebhookUrlProviderInterface $webhookUrlProvider,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -47,8 +50,17 @@ final class CheckoutPaymentService implements CheckoutPaymentServiceInterface
         // Safety: a pay-later method without the required order data would 422. Rather than fail the
         // shopper, drop the forced method so Mollie presents its hosted page (which collects the
         // address itself). Normal logged-in checkouts always have a complete address, so this is rare.
+        //
+        // Sprint 11 Story 8 (F15): this silently replaces the method the shopper explicitly chose, so
+        // it is logged. An address-mapping problem affecting every Klarna order would otherwise be
+        // invisible — the checkout would just quietly stop honouring the selection.
         $needsOrderData = $effectiveMethod !== null && MollieDefinitions::requiresOrderData($effectiveMethod);
         if ($needsOrderData && $billingAddress === null) {
+            $this->logger->warning(
+                '[CheckoutPaymentService] dropping the shopper\'s pay-later method: required billing '
+                . 'address is missing or incomplete; Mollie will present its own method page',
+                ['contractId' => (string) ($contract->getId() ?? ''), 'droppedMethod' => $effectiveMethod],
+            );
             $effectiveMethod = null;
         }
 
@@ -56,7 +68,7 @@ final class CheckoutPaymentService implements CheckoutPaymentServiceInterface
             amount: MollieAmountDto::fromComponents($contract->getCurrency(), $contract->getAmount()),
             description: $this->buildDescription($contract),
             redirectUrl: $redirectUrl,
-            webhookUrl: $this->config->getWebhookUrl(),
+            webhookUrl: $this->webhookUrlProvider->getWebhookUrl(),
             method: $effectiveMethod,
             metadata: ['contract_id' => (string) ($contract->getId() ?? '')],
             captureMode: $this->config->getCaptureMode(),

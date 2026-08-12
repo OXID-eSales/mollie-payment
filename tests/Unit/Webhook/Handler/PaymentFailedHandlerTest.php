@@ -13,9 +13,11 @@ use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Webhook\WebhookEvent;
 use OxidEsales\Payments\Mollie\Webhook\Handler\PaymentFailedHandler;
 use OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandlerInterface;
+use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 #[CoversClass(PaymentFailedHandler::class)]
 final class PaymentFailedHandlerTest extends TestCase
@@ -28,7 +30,7 @@ final class PaymentFailedHandlerTest extends TestCase
     {
         $this->fulfillmentHandler = $this->createMock(WebhookContractFulfillmentHandlerInterface::class);
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
-        $this->handler = new PaymentFailedHandler($this->fulfillmentHandler, $this->contractRepository);
+        $this->handler = new PaymentFailedHandler($this->fulfillmentHandler, $this->contractRepository, new NullLogger());
     }
 
     public function testHandledStatuses_ReturnsFailed(): void
@@ -41,7 +43,7 @@ final class PaymentFailedHandlerTest extends TestCase
         $this->fulfillmentHandler->expects(self::once())
             ->method('handlePaymentFailed')
             ->with('tr_failed', self::isType('string'))
-            ->willReturn(true);
+            ->willReturn(FulfillmentOutcome::Acted);
         $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
 
         $outcome = $this->handler->handle($this->event('tr_failed'));
@@ -52,7 +54,7 @@ final class PaymentFailedHandlerTest extends TestCase
 
     public function testHandle_WhenAlreadyTerminal_IsSkipped(): void
     {
-        $this->fulfillmentHandler->method('handlePaymentFailed')->willReturn(false);
+        $this->fulfillmentHandler->method('handlePaymentFailed')->willReturn(FulfillmentOutcome::NoOp);
         $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
 
         $outcome = $this->handler->handle($this->event('tr_failed'));

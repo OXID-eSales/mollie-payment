@@ -18,6 +18,7 @@ use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
 use OxidEsales\Payments\Mollie\Service\Result\TransactionRow;
+use Psr\Log\LoggerInterface;
 use Throwable;
 
 /**
@@ -34,6 +35,7 @@ final class TransactionHistoryService implements TransactionHistoryServiceInterf
         private readonly MollieRefundAdapterInterface $refundAdapter,
         private readonly MollieCaptureAdapterInterface $captureAdapter,
         private readonly MollieStatusMapper $statusMapper,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -103,7 +105,16 @@ final class TransactionHistoryService implements TransactionHistoryServiceInterf
     {
         try {
             return $this->paymentsAdapter->getPayment($providerOrderId);
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            // Sprint 11 Story 8: degrading the captures/refunds lists is deliberate and documented,
+            // but losing the payment itself means a BLANK panel — the operator sees no transactions
+            // at all and nothing distinguishes that from "there are none".
+            $this->logger->warning(
+                '[TransactionHistoryService] could not load the Mollie payment; the admin transaction '
+                . 'panel will render empty',
+                ['providerOrderId' => $providerOrderId, 'error' => $e->getMessage()],
+            );
+
             return null;
         }
     }

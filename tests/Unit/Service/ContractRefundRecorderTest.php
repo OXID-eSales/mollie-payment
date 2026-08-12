@@ -16,6 +16,7 @@ use OxidEsales\Payments\Mollie\Service\ContractRefundRecorder;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 #[CoversClass(ContractRefundRecorder::class)]
 final class ContractRefundRecorderTest extends TestCase
@@ -26,7 +27,7 @@ final class ContractRefundRecorderTest extends TestCase
     protected function setUp(): void
     {
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
-        $this->recorder = new ContractRefundRecorder($this->contractRepository);
+        $this->recorder = new ContractRefundRecorder($this->contractRepository, new NullLogger());
     }
 
     public function testRecord_AccumulatesRefundOnFulfilledContract(): void

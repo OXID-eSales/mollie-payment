@@ -57,7 +57,9 @@ final class CaptureService implements CaptureServiceInterface
         $providerOrderId = $this->requireProviderOrderId($contract);
 
         $payment = $this->paymentsAdapter->getPayment($providerOrderId);
-        $capturable = $this->capturableAmount($payment);
+        // One formula, one place (Sprint 11 Story 10 / F11) — this service used to carry its own
+        // copy, so the status-awareness fix would have had to be made twice.
+        $capturable = $payment->capturableAmount();
         $this->assertWithinCapturable($amount, $capturable, $contract->getId() ?? 'unknown');
 
         $capture = $this->captureAdapter->createCapture(new CaptureRequest(
@@ -94,11 +96,6 @@ final class CaptureService implements CaptureServiceInterface
         }
 
         return $providerOrderId;
-    }
-
-    private function capturableAmount(MolliePaymentDto $payment): float
-    {
-        return $payment->amountRemaining > 0.0 ? $payment->amountRemaining : $payment->amount->value;
     }
 
     private function assertWithinCapturable(?float $amount, float $capturable, string $contractId): void

@@ -37,6 +37,9 @@ use Psr\Log\LoggerInterface;
  */
 final class MollieWebhookProcessor extends AbstractWebhookProcessor
 {
+    private const TYPE_CHARGEDBACK = 'chargedback';
+    private const TYPE_REFUNDED = 'refunded';
+
     private ?string $lastContractId = null;
 
     /**
@@ -77,12 +80,49 @@ final class MollieWebhookProcessor extends AbstractWebhookProcessor
             );
         }
 
+        $type = $this->determineEventType($payment);
+
         return new WebhookEvent(
-            id: $payment->id,
-            type: $this->determineEventType($payment),
+            id: $this->buildEventId($payment, $type),
+            type: $type,
             data: ['object' => $this->toEventObject($payment)],
             created: time(),
         );
+    }
+
+    /**
+     * Identify the DELIVERY, not the payment (Sprint 11 Story 2 / F1).
+     *
+     * Mollie sends only `id=tr_xxx`, and payment-base claims events on `UNIQUE(OXEVENTID)` alone —
+     * `OXEVENTTYPE` is passed to `claimEvent()` but is not part of the constraint. Using the bare
+     * payment id therefore let the first delivery claim it forever, so the decisive `paid` webhook
+     * that followed an `authorized`/`pending` one was answered `200 skipped` and never retried.
+     *
+     * `{paymentId}:{type}` is not sufficient on its own: two successive PARTIAL refunds both map to
+     * type `refunded`. The cumulative amount in integer cents discriminates them — cents rather
+     * than a float so `12.5` and `12.50` cannot become two ids for one refund.
+     *
+     * A true replay (same status, same cumulative amount) still produces the same id and is still
+     * correctly deduplicated, which is the idempotency actually worth having.
+     */
+    private function buildEventId(MolliePaymentDto $payment, string $type): string
+    {
+        $eventId = $payment->id . ':' . $type;
+
+        if ($type === self::TYPE_REFUNDED) {
+            return $eventId . ':' . $this->toCents($payment->amountRefunded);
+        }
+
+        if ($type === self::TYPE_CHARGEDBACK) {
+            return $eventId . ':' . $this->toCents($payment->amountChargedBack);
+        }
+
+        return $eventId;
+    }
+
+    private function toCents(float $amount): int
+    {
+        return (int) round($amount * 100);
     }
 
     protected function processEvent(WebhookEvent $event): WebhookResult
@@ -125,11 +165,11 @@ final class MollieWebhookProcessor extends AbstractWebhookProcessor
     private function determineEventType(MolliePaymentDto $payment): string
     {
         if ($payment->amountChargedBack > 0.0) {
-            return 'chargedback';
+            return self::TYPE_CHARGEDBACK;
         }
 
         if ($payment->amountRefunded > 0.0) {
-            return 'refunded';
+            return self::TYPE_REFUNDED;
         }
 
         return strtolower($this->statusMapper->map($payment->status)->name);
@@ -150,6 +190,9 @@ final class MollieWebhookProcessor extends AbstractWebhookProcessor
             'amountRemaining' => $payment->amountRemaining,
             'method' => $payment->method,
             'metadata' => $payment->metadata,
+            // Sprint 11 Story 3 (D3): the handlers bound how long a missing contract is treated as
+            // "our own commit may still be in flight" by the payment's own age.
+            'createdAt' => $payment->createdAt,
         ];
     }
 }

@@ -103,9 +103,15 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
             return;
         }
 
-        $contract->setProvider(MollieDefinitions::PROVIDER_NAME, $payment->id, $payment->checkoutUrl ?? $redirectUrl);
+        // Persist Mollie's checkout URL, or nothing (Sprint 11 Story 10 / F18). The `?? $redirectUrl`
+        // that used to be here wrote OUR return URL — which carries the contract_token bearer value
+        // built by buildRedirectUrl() — into the provider-redirect column and into OXMETADATA, where
+        // it sat at rest and surfaced in anything that renders contract metadata. It was redundant on
+        // top of that: resolveDestination() has already decided where the shopper goes, setProvider()'s
+        // third parameter is nullable, and nothing in the module reads either value back.
+        $contract->setProvider(MollieDefinitions::PROVIDER_NAME, $payment->id, $payment->checkoutUrl);
         $contract->setMetadata(self::METADATA_MOLLIE_PAYMENT_ID, $payment->id);
-        $contract->setMetadata(self::METADATA_MOLLIE_CHECKOUT_URL, $payment->checkoutUrl ?? $redirectUrl);
+        $contract->setMetadata(self::METADATA_MOLLIE_CHECKOUT_URL, $payment->checkoutUrl);
         $this->contractRepository->save($contract);
 
         $context->set('checkoutUrl', $destination);

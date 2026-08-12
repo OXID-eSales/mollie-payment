@@ -38,7 +38,8 @@ final class PaymentPaidHandler extends AbstractMollieWebhookHandler
             $result,
             $providerOrderId,
             'contract_fulfilled',
-            'Contract already fulfilled or could not be committed',
+            'Contract already fulfilled',
+            $event,
         );
     }
 }

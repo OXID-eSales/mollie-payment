@@ -81,6 +81,17 @@ class PaymentController extends PaymentController_parent
         $validator = $this->resolveUserDataValidator();
         $reader = $this->buildUserFieldReader();
         if ($validator === null || $reader === null) {
+            // Sprint 11 Story 8 (F13): the direction stays fail-open — this is defence-in-depth and
+            // must not be the thing that breaks checkout. What changes is that it is no longer
+            // invisible: CLAUDE.md makes adopting the shared validation subsystem a requirement for
+            // Mollie, so a wiring problem silently retiring it is worse here than in a module where
+            // it is optional.
+            Registry::getLogger()->warning(
+                '[MolliePaymentController] user-data validation unavailable; allowing checkout to '
+                . 'proceed without the shared character-level rules',
+                ['hasValidator' => $validator !== null, 'hasFieldReader' => $reader !== null],
+            );
+
             return true;
         }
 
