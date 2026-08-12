@@ -79,4 +79,9 @@ $aLang = [
     'SHOP_MODULE_sMollieLiveKey' => 'Live-API-Schlüssel',
     'SHOP_MODULE_sMollieWebhookUrl' => 'Webhook-URL (überschreiben)',
     'SHOP_MODULE_sMollieLogLevel' => 'Protokollstufe',
+
+    // Sprint 10 — Umschalter zum Anzeigen/Verbergen des API-Schlüssels. Beide Texte sind das
+    // aria-label des Buttons und werden beim Umschalten getauscht.
+    'MOLLIE_REVEAL_API_KEY' => 'API-Schlüssel anzeigen',
+    'MOLLIE_HIDE_API_KEY' => 'API-Schlüssel verbergen',
 ];

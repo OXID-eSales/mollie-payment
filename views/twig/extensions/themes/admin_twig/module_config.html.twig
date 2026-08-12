@@ -1,0 +1,156 @@
+{% extends "module_config.html.twig" %}
+
+{#
+    Sprint 10 — mask Mollie's API keys on the module Settings tab.
+
+    Both keys used to render through the stock template as plain `<input type="text">`, i.e. readable
+    by anyone looking at the screen. They now render `type="password"` with an eye button that reveals
+    and re-masks them.
+
+    Threat model, stated so it is not oversold: the value still travels to the browser inside
+    `value=""`. This stops shoulder-surfing, screen sharing and screenshots. It does NOT hide the key
+    from devtools — and anyone with access to this form can read the key by other means anyway. A true
+    never-send-the-secret implementation needs save-side PHP and is deferred to its own sprint.
+
+    Two structural rules this file must keep:
+
+    1. WHICH fields are masked comes from MollieDefinitions::SECRET_MODULE_SETTINGS via Twig's
+       `constant()`. No second list here — that is the drift the sprint's unit test exists to prevent.
+    2. Every other `module_var` — including every OTHER MODULE's settings — must fall through to
+       `{{ parent() }}`. Several modules override this same template (Mollie, Stripe, PayPal and
+       one-page-checkout in this shop), so an override that fails to delegate blanks out the forms of
+       whichever modules sit earlier in the resolved chain.
+
+    The gate is the stock base-Admin `getEditObjectId()`, never a module-specific view predicate:
+    `attribute(oView, 'x') is defined` is unreliable against OXID's __call-based controllers
+    (is_callable() always returns true), so calling a sibling module's method is a fatal waiting to
+    happen. PayPal's own override documents the same conclusion.
+#}
+
+{% block admin_module_config_var %}
+    {% set mollie_is_mollie_module = oView.getEditObjectId() == 'oe_payments_mollie' %}
+    {% set mollie_secret_settings = constant('OxidEsales\\Payments\\Mollie\\Core\\MollieDefinitions::SECRET_MODULE_SETTINGS') %}
+
+    {% if mollie_is_mollie_module and module_var in mollie_secret_settings %}
+        <dl>
+            <dt>
+                <span class="mollie-key-field">
+                    <input type="password"
+                           class="txt"
+                           style="width: 300px;"
+                           name="confstrs[{{ module_var }}]"
+                           value="{{ confstrs[module_var] }}"
+                           {{ readonly }}
+                           data-mollie-secret
+                           autocomplete="off">
+                    <button type="button"
+                            class="mollie-key-toggle"
+                            aria-pressed="false"
+                            aria-label="{{ translate({ ident: 'MOLLIE_REVEAL_API_KEY' }) }}"
+                            data-label-reveal="{{ translate({ ident: 'MOLLIE_REVEAL_API_KEY' }) }}"
+                            data-label-hide="{{ translate({ ident: 'MOLLIE_HIDE_API_KEY' }) }}">&#128065;</button>
+                </span>
+                {% include "inputhelp.html.twig" with {'sHelpId': help_id("HELP_SHOP_MODULE_" ~ module_var), 'sHelpText': help_text("HELP_SHOP_MODULE_" ~ module_var)} %}
+            </dt>
+            <dd>
+                <span class="mollie-label">{{ translate({ ident: "SHOP_MODULE_" ~ module_var }) }}</span>
+            </dd>
+            <div class="spacer"></div>
+        </dl>
+    {% else %}
+        {{ parent() }}
+    {% endif %}
+{% endblock %}
+
+{% block admin_module_config_form %}
+    {{ parent() }}
+
+    {% if oView.getEditObjectId() == 'oe_payments_mollie' %}
+        <style type="text/css">
+            /* Scoped to the two classes this feature introduces — no bare-element selectors, no
+               !important, and deliberately no copy of Stripe's page-wide restyle: that is a separate
+               look-and-feel decision and folding it in here would make a security fix
+               indistinguishable from a redesign in review. */
+            .mollie-key-field {
+                display: inline-block;
+                white-space: nowrap;
+            }
+
+            .mollie-key-toggle {
+                background: transparent;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                padding: 0 6px;
+                margin-left: 6px;
+                height: 26px;              /* matches the stock .txt input height */
+                line-height: 24px;
+                font-size: 12px;
+                cursor: pointer;
+                vertical-align: middle;
+                box-sizing: border-box;
+                color: #6b7280;
+                transition: border-color .15s, color .15s, background .15s;
+            }
+
+            .mollie-key-toggle:hover {
+                background: #f9fafb;
+                border-color: #0b7285;
+                color: #0b7285;
+            }
+
+            .mollie-key-toggle:focus {
+                outline: none;
+                border-color: #0b7285;
+                box-shadow: 0 0 0 3px rgba(11, 114, 133, .15);
+            }
+
+            .mollie-key-toggle[aria-pressed="true"] {
+                background: #e6f4f7;
+                border-color: #0b7285;
+                color: #0b5563;
+            }
+
+            .mollie-label {
+                display: inline-block;
+                vertical-align: middle;
+                line-height: 26px;
+            }
+        </style>
+
+        <script>
+        (function () {
+            // One listener per toggle, bound to the marked input in the same wrapper. The value is
+            // never rewritten — only the input's `type` — so revealing a key cannot lose an unsaved
+            // edit. A native <button> already answers Enter and Space, so there is no keydown handling
+            // to hand-roll here.
+            function attach(button) {
+                var wrapper = button.parentElement;
+                var input = wrapper && wrapper.querySelector('input[data-mollie-secret]');
+                if (!input) { return; }
+
+                button.addEventListener('click', function () {
+                    var revealing = input.type === 'password';
+                    input.type = revealing ? 'text' : 'password';
+                    button.setAttribute('aria-pressed', revealing ? 'true' : 'false');
+                    var label = revealing
+                        ? button.getAttribute('data-label-hide')
+                        : button.getAttribute('data-label-reveal');
+                    if (label) { button.setAttribute('aria-label', label); }
+                });
+            }
+
+            function init() {
+                var toggles = document.querySelectorAll('button.mollie-key-toggle');
+                for (var i = 0; i < toggles.length; i++) { attach(toggles[i]); }
+            }
+
+            // The admin edit frame does not guarantee that this script runs after the inputs exist.
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        }());
+        </script>
+    {% endif %}
+{% endblock %}

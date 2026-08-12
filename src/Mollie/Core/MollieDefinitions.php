@@ -56,6 +56,28 @@ final class MollieDefinitions
     public const CAPTURE_MODE_AUTOMATIC = 'automatic';
     public const CAPTURE_MODE_MANUAL = 'manual';
 
+    /**
+     * Module settings that carry a credential and must never render in clear text on the admin
+     * Settings tab (Sprint 10).
+     *
+     * The admin `module_config` template override reads this list through Twig's `constant()` and
+     * masks whatever is in it, so adding an entry here is the whole change — there is no second list
+     * in the template to keep in step. `ModuleConfigSecretMaskingTest` reconciles this against
+     * `metadata.php` in both directions, so a new credential setting cannot ship unmasked and a typo
+     * here cannot mask nothing.
+     *
+     * Two entries today because Mollie has no webhook signing secret (verification is an API
+     * re-fetch, not an HMAC) and no OAuth client secret (Mollie Connect is deferred). Deliberately
+     * absent: `sMollieProfileId` — the `pfl_…` id is shipped to the browser by the OPC footer widget
+     * for Mollie Components, so masking it would imply a confidentiality it does not have.
+     *
+     * @var list<string>
+     */
+    public const SECRET_MODULE_SETTINGS = [
+        'sMollieTestKey',
+        'sMollieLiveKey',
+    ];
+
     // Logging levels (metadata setting values). Mirrors Stripe's harmonised logging design.
     public const LOG_LEVEL_OFF = 'off';
     public const LOG_LEVEL_ERRORS = 'errors';

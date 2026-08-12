@@ -1,12 +1,11 @@
 # Dev log — 2026-08-12 (Mollie module)
 
-> **Note on this file.** `status.md`, `sprints/` and `reports/` for this day were removed from disk
-> at ~14:21 while Sprint 11 was being implemented (not by the implementing session, and not via
-> git — the stash was empty and `20260811/` is untouched). This file has been rewritten from the
-> work that was actually done. The two long documents it used to link — the fallback audit report
-> and the Sprint 11 plan — are **not** reconstructed here; they can be regenerated on request. The
-> Sprint 11 outcome write-up in `done/` survived and is the authoritative record of what shipped.
-> Sprint 10's `done/` write-up and its screenshots were lost in the same event.
+> **Note on this file.** `status.md`, `sprints/` and `reports/` for this day — along with Sprint 10's
+> entire implementation, `done/` write-up and screenshots — were removed from disk at ~14:21 while
+> Sprint 11 was being implemented (not by the implementing session, and not via git: the stash was
+> empty, `20260811/` untouched, `main` unchanged). Everything has since been restored: the audit
+> report and both sprint plans were regenerated, and **Sprint 10 was re-implemented from scratch and
+> re-verified** rather than resurrected from memory. Both sprints are now in `main`.
 
 ## Sprint 10 DONE: module config — mask secret settings behind a reveal toggle
 
@@ -26,6 +25,30 @@ have. Mollie has no webhook signing secret (verification is an API re-fetch, not
 **Threat model, not to be oversold:** the value still travels to the browser inside `value=""`. This
 stops shoulder-surfing, screen sharing and screenshots — not devtools. Never-send-the-secret needs
 save-side PHP and remains deferred.
+
+### Outcome — re-implemented and verified 2026-08-12
+
+Gates green (538 tests; phpcs / phpstan max / phpmd), drift guard 10 tests, admin e2e 6/6 against the
+live shop. **Visual proof with screenshots:**
+[done/10-masking-walkthrough.html](done/10-masking-walkthrough.html) ·
+**write-up:** [done/10-module-config-secret-masking.md](done/10-module-config-secret-masking.md).
+
+Two things the re-implementation established that the plan had not:
+
+- **The template drives off the constant** via Twig's `constant()`, so it never names the keys — adding
+  a future credential setting masks it with no template edit. That is also the one thing the PHP suite
+  could not verify: if OXID's Twig restricted `constant()`, every key would fall through to
+  `{{ parent() }}` and render in clear text with no error anywhere. The e2e is what settled it.
+- **The chain is four overrides deep** (stripe, one-page-checkout, mollie-payment, paypal) on top of the
+  stock template — measured, not assumed. All four tabs verified rendering in full: Mollie 7 rows /
+  2 masked, Stripe 17 / 7, PayPal 14 / 0, OnePage Checkout 27 / 0.
+
+**Top follow-up, found while proving it:** OXID's stock template already supports
+`'type' => 'password'` for module settings, rendering the input with **no `value` attribute at all** —
+i.e. core already implements the never-send-the-secret behaviour this sprint deferred. The shipped
+override is therefore second-best. Switching to it is not a free swap (the value moves from the
+`confstrs` bucket to `confpassword`, and an untouched field appears to submit an empty string over a
+live credential), so it needs verifying on a throwaway shop first. Details in the write-up.
 
 ## Audit: unnecessary and dangerous fallbacks
 
