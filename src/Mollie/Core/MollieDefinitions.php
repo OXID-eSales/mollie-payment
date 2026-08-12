@@ -56,6 +56,23 @@ final class MollieDefinitions
     public const CAPTURE_MODE_AUTOMATIC = 'automatic';
     public const CAPTURE_MODE_MANUAL = 'manual';
 
+    /**
+     * Module settings that carry a credential and must never render in clear text on the admin
+     * settings tab — the single source of truth for the masking in
+     * `views/twig/extensions/themes/admin_twig/module_config.html.twig`.
+     *
+     * Deliberately excluded: `sMollieProfileId` (the pfl_… id is shipped to the browser by the OPC
+     * footer widget and is public by design) and `sMollieWebhookUrl` (a public URL; Mollie signs
+     * nothing, so there is no webhook secret). If Mollie Connect ever lands, its client secret and
+     * refresh token belong here.
+     *
+     * @var list<string>
+     */
+    public const SECRET_MODULE_SETTINGS = [
+        'sMollieTestKey',
+        'sMollieLiveKey',
+    ];
+
     // Logging levels (metadata setting values). Mirrors Stripe's harmonised logging design.
     public const LOG_LEVEL_OFF = 'off';
     public const LOG_LEVEL_ERRORS = 'errors';

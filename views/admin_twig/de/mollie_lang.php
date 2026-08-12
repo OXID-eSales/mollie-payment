@@ -62,6 +62,9 @@ $aLang = [
     'MOLLIE_ADMIN_AMOUNT_EXCEEDS_BOUND' => 'Der Betrag überschreitet den verfügbaren Saldo.',
     'MOLLIE_ADMIN_AMOUNT_INVALID' => 'Der Betrag ist ungültig.',
 
+    'MOLLIE_REVEAL_API_KEY' => 'API-Schlüssel anzeigen',
+    'MOLLIE_HIDE_API_KEY' => 'API-Schlüssel verbergen',
+
     'SHOP_MODULE_GROUP_MOLLIE_GENERAL' => 'Allgemein',
     'SHOP_MODULE_GROUP_MOLLIE_TEST_CONFIG' => 'Test-Zugangsdaten',
     'SHOP_MODULE_GROUP_MOLLIE_LIVE_CONFIG' => 'Live-Zugangsdaten',

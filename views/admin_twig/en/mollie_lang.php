@@ -65,6 +65,10 @@ $aLang = [
     'MOLLIE_ADMIN_AMOUNT_EXCEEDS_BOUND' => 'The amount exceeds the available balance.',
     'MOLLIE_ADMIN_AMOUNT_INVALID' => 'The amount is invalid.',
 
+    // Sprint 10 — eye toggle on the masked API-key settings.
+    'MOLLIE_REVEAL_API_KEY' => 'Reveal API key',
+    'MOLLIE_HIDE_API_KEY' => 'Hide API key',
+
     // Module configuration — group headings
     'SHOP_MODULE_GROUP_MOLLIE_GENERAL' => 'General',
     'SHOP_MODULE_GROUP_MOLLIE_TEST_CONFIG' => 'Test credentials',
