@@ -175,7 +175,62 @@ non-masked.
 
 ## Deliberately not done
 - **Never-send-the-secret** — see the threat model above.
-- **`SHOP_MODULE_sMollieLogLevel_*` option translations are still missing**, so the Log level select
-  renders "ERROR: Translation not found". Real, carried over from the lost run's findings, and still not
-  fixed here: it is a translation bug, and folding it into a security diff would muddy the review. Its
-  own one-line change.
+- ~~**`SHOP_MODULE_sMollieLogLevel_*` option translations are still missing**~~ — **fixed** in a
+  follow-up change (see below), deliberately after this sprint rather than inside it: a translation fix
+  folded into a security diff muddies the review.
+
+## Follow-up: the log-level select translations
+
+The four `SHOP_MODULE_sMollieLogLevel_*` option idents had never been added, so OXID rendered its
+missing-ident text — the literal string `ERROR: Translation not found` — inside every `<option>` of the
+Log level select. Added in `en` and `de`, with the labels saying what each level actually does rather
+than restating the value (`debug` is the only one that also serves the unminified storefront bundle and
+prints to the browser console, so it is labelled as a development setting).
+
+The four strings were the trivial part. What mattered is that **nothing failed**: a `select` setting can
+ship with no option idents and no test notices, which is exactly how this reached production. So the fix
+came with `tests/Unit/Core/SelectSettingTranslationsTest.php`, which derives its expectation from
+`metadata.php` rather than a hardcoded list:
+
+- every `select` setting has a label ident and one ident per constraint value,
+- in **both** shipped languages,
+- and `en`/`de` cover the same set of `SHOP_MODULE_sMollie*` idents, so a value translated in one
+  language and missed in the other cannot slip through either.
+
+A new select setting, or a new option value on an existing one, is covered the moment it is declared.
+Verified in the browser as well as in PHP — the capture run asserts the rendered `<option>` text contains
+no missing-ident marker before it takes the screenshot, and the screenshots in the walkthrough now show
+the real labels.
+
+One incidental lesson worth recording: the first e2e run after adding the idents still showed the error
+text. That was a stale `var/cache/oxeec_langcache_*.txt`, not a missing string. Language changes need the
+lang cache cleared before they can be verified in a browser.
+
+### The guard paid for itself the same day
+
+While this change was being pushed, an unrelated commit landed on `main` —
+`009b7ed feat(opc-125): declare inline-selector UI topology for OPC (rev-56)` — which added a new `select`
+setting `sPaymentHandlerUiTopology` (values `inline-selector|redirect`) in a new `MOLLIE_ADVANCED` group,
+**with no translations for either, in either language**. Exactly the bug just fixed, hours later, from a
+different direction.
+
+The new guard flagged the select immediately on rebase. It did **not** flag the group header, so
+`testEverySettingGroupHasAHeaderIdent` was added — same failure mode (`SHOP_MODULE_GROUP_<group>` is
+rendered by the stock template at line 45), same missing-ident text, and it was only half-covered.
+
+Both are translated now. Two brittle assertions in `MetadataTest` also had to be fixed, because they were
+failing on `main` **before** this change — verified by checking out `009b7ed` and running the Integration
+suite there:
+
+- `testMetadata_DeclaresFiveSettingGroups` hardcoded the group count, so adding a legitimate group was a
+  failure. It now asserts the expected groups are *present*, which still catches a removal or rename —
+  the case that would actually orphan settings — without breaking on an addition.
+- `testMetadata_AllSettingsWellFormed` required every setting name to match `/^(sMollie|blMollie|aMollie)/`.
+  `sPaymentHandlerUiTopology` legitimately cannot: one-page-checkout's `PaymentHandlerRegistry` reads it by
+  exact name across all payment modules, so the name is part of a cross-provider contract. Added as a
+  documented one-entry allowlist rather than dropping the convention check.
+
+Note the new setting does **not** yet appear in the admin form on this shop, so its translations are not
+visible in the screenshots: OXID refreshes module configuration from `metadata.php` only on
+install/activate, and this shop has not been re-activated since that commit. The idents are in place and
+unit-guarded; they will render as soon as it is.

@@ -80,7 +80,16 @@ final class MetadataTest extends TestCase
         self::assertArrayNotHasKey('MollieOrderController', $controllers);
     }
 
-    public function testMetadata_DeclaresFiveSettingGroups(): void
+    /**
+     * The groups the module's own settings live in must all still be there.
+     *
+     * Asserts the expected set is *present* rather than counting groups: the count carried no
+     * information and made adding a legitimate group a test failure, which is what happened when
+     * `MOLLIE_ADVANCED` arrived with opc-125. Removing or renaming a group is still caught, which is the
+     * part that would actually orphan settings in the admin UI. That every group has a translated header
+     * is covered by {@see \OxidEsales\Payments\Mollie\Tests\Unit\Core\SelectSettingTranslationsTest}.
+     */
+    public function testMetadata_DeclaresTheExpectedSettingGroups(): void
     {
         $settings = $this->metadata()['settings'] ?? [];
         self::assertIsArray($settings);
@@ -89,15 +98,45 @@ final class MetadataTest extends TestCase
             self::assertIsArray($setting);
             $groups[(string) $setting['group']] = true;
         }
-        self::assertCount(5, $groups, 'expected exactly 5 setting groups, got: ' . implode(',', array_keys($groups)));
+
+        foreach (
+            [
+                'MOLLIE_GENERAL',
+                'MOLLIE_TEST_CONFIG',
+                'MOLLIE_LIVE_CONFIG',
+                'MOLLIE_WEBHOOKS',
+                'MOLLIE_LOGGING',
+            ] as $expected
+        ) {
+            self::assertArrayHasKey(
+                $expected,
+                $groups,
+                'missing setting group ' . $expected . '; got: ' . implode(',', array_keys($groups)),
+            );
+        }
     }
 
+    /**
+     * Setting names carry a Mollie prefix so they cannot collide with another module's in `oxconfig`.
+     *
+     * One documented exception: cross-provider settings that a *consumer* reads by exact name across all
+     * payment modules. `sPaymentHandlerUiTopology` (opc-125 rev-56) is read by one-page-checkout's
+     * PaymentHandlerRegistry to learn how each provider's checkout UI is shaped, so the name is part of
+     * that contract and cannot be Mollie-namespaced. Add to the allowlist only for names that a shared
+     * consumer defines — not to excuse a forgotten prefix.
+     */
     public function testMetadata_AllSettingsWellFormed(): void
     {
+        $crossProviderContractNames = ['sPaymentHandlerUiTopology'];
+
         foreach ($this->metadata()['settings'] ?? [] as $setting) {
             self::assertIsArray($setting);
             self::assertIsString($setting['name']);
-            self::assertMatchesRegularExpression('/^(sMollie|blMollie|aMollie)/', $setting['name']);
+
+            if (!in_array($setting['name'], $crossProviderContractNames, true)) {
+                self::assertMatchesRegularExpression('/^(sMollie|blMollie|aMollie)/', $setting['name']);
+            }
+
             self::assertIsString($setting['type']);
             self::assertContains($setting['type'], ['str', 'bool', 'select', 'arr', 'num']);
         }

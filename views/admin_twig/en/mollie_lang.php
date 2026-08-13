@@ -71,6 +71,7 @@ $aLang = [
     'SHOP_MODULE_GROUP_MOLLIE_LIVE_CONFIG' => 'Live credentials',
     'SHOP_MODULE_GROUP_MOLLIE_WEBHOOKS' => 'Webhooks',
     'SHOP_MODULE_GROUP_MOLLIE_LOGGING' => 'Logging',
+    'SHOP_MODULE_GROUP_MOLLIE_ADVANCED' => 'Advanced',
 
     // Module configuration — settings
     'SHOP_MODULE_sMollieMode' => 'API mode',
@@ -84,6 +85,20 @@ $aLang = [
     'SHOP_MODULE_sMollieLiveKey' => 'Live API key',
     'SHOP_MODULE_sMollieWebhookUrl' => 'Webhook URL override',
     'SHOP_MODULE_sMollieLogLevel' => 'Log level',
+    // Option labels for the select. Without these OXID renders the literal text
+    // "ERROR: Translation not found" inside each <option> — which is what it did until now.
+    // "debug" is the only level that also serves the unminified storefront bundle and prints to the
+    // browser console, so it is labelled as a development setting rather than just a louder log.
+    'SHOP_MODULE_sMollieLogLevel_off' => 'Off — log nothing',
+    'SHOP_MODULE_sMollieLogLevel_errors' => 'Errors only (recommended)',
+    'SHOP_MODULE_sMollieLogLevel_normal' => 'Normal — errors and payment events',
+    'SHOP_MODULE_sMollieLogLevel_debug' => 'Debug — verbose, includes browser console output',
+
+    // opc-125 rev-56: tells one-page-checkout how Mollie's payment UI is shaped, so OPC knows
+    // whether to render its own redirect button or hand the footer to Mollie's method selector.
+    'SHOP_MODULE_sPaymentHandlerUiTopology' => 'One-page checkout UI',
+    'SHOP_MODULE_sPaymentHandlerUiTopology_inline-selector' => 'Inline method selector (Mollie renders the methods)',
+    'SHOP_MODULE_sPaymentHandlerUiTopology_redirect' => 'Redirect button (methods chosen on Mollie\'s page)',
 
     // Sprint 10 — the reveal/hide toggle on masked settings. Both strings are the button's
     // aria-label, swapped as it flips, so they are read by a screen reader rather than shown on

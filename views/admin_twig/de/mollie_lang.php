@@ -67,6 +67,7 @@ $aLang = [
     'SHOP_MODULE_GROUP_MOLLIE_LIVE_CONFIG' => 'Live-Zugangsdaten',
     'SHOP_MODULE_GROUP_MOLLIE_WEBHOOKS' => 'Webhooks',
     'SHOP_MODULE_GROUP_MOLLIE_LOGGING' => 'Protokollierung',
+    'SHOP_MODULE_GROUP_MOLLIE_ADVANCED' => 'Erweitert',
 
     'SHOP_MODULE_sMollieMode' => 'API-Modus',
     'SHOP_MODULE_sMollieMode_test' => 'Test',
@@ -79,6 +80,20 @@ $aLang = [
     'SHOP_MODULE_sMollieLiveKey' => 'Live-API-Schlüssel',
     'SHOP_MODULE_sMollieWebhookUrl' => 'Webhook-URL (überschreiben)',
     'SHOP_MODULE_sMollieLogLevel' => 'Protokollstufe',
+    // Optionsbezeichnungen für das Auswahlfeld. Ohne diese rendert OXID den Text
+    // "ERROR: Translation not found" in jeder <option> — genau das war bisher der Fall.
+    // "debug" liefert zusätzlich das unminifizierte Storefront-Bundle und schreibt in die
+    // Browser-Konsole, ist also eine Entwicklungseinstellung und nicht nur ausführlicheres Logging.
+    'SHOP_MODULE_sMollieLogLevel_off' => 'Aus — keine Protokollierung',
+    'SHOP_MODULE_sMollieLogLevel_errors' => 'Nur Fehler (empfohlen)',
+    'SHOP_MODULE_sMollieLogLevel_normal' => 'Normal — Fehler und Zahlungsereignisse',
+    'SHOP_MODULE_sMollieLogLevel_debug' => 'Debug — ausführlich, inkl. Browser-Konsole',
+
+    // opc-125 rev-56: teilt dem One-Page-Checkout mit, wie Mollies Zahlungs-UI aufgebaut ist —
+    // eigener Weiterleitungs-Button oder Mollies Methodenauswahl im Footer.
+    'SHOP_MODULE_sPaymentHandlerUiTopology' => 'One-Page-Checkout-Oberfläche',
+    'SHOP_MODULE_sPaymentHandlerUiTopology_inline-selector' => 'Inline-Methodenauswahl (Mollie rendert die Methoden)',
+    'SHOP_MODULE_sPaymentHandlerUiTopology_redirect' => 'Weiterleitungs-Button (Methodenwahl auf Mollies Seite)',
 
     // Sprint 10 — Umschalter zum Anzeigen/Verbergen maskierter Einstellungen. Beide Texte sind das
     // aria-label des Buttons und werden beim Umschalten getauscht. Absichtlich allgemein: der

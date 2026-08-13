@@ -47,6 +47,25 @@ Two things the re-implementation established that the plan had not:
   stock template — measured, not assumed. All four tabs verified rendering in full: Mollie 7 rows /
   2 masked, Stripe 17 / 7, PayPal 14 / 0, OnePage Checkout 27 / 0.
 
+**Follow-up done:** the four `SHOP_MODULE_sMollieLogLevel_*` option idents had never been added, so the
+Log level select rendered OXID's missing-ident text — `ERROR: Translation not found` — inside every
+option. Added in en and de. The four strings were the trivial part; what mattered is that **nothing
+failed**, which is how it reached production, so the fix ships with
+`SelectSettingTranslationsTest`: every `select` setting in `metadata.php` must have a label plus one
+ident per constraint value, in both languages, and en/de must cover the same set. Verified in the browser
+too — the capture asserts the rendered `<option>` text carries no missing-ident marker before taking the
+screenshot. (Language changes need `var/cache/oxeec_langcache_*.txt` cleared before a browser will show
+them; the first run after the fix still showed the old error text for that reason.)
+
+**The guard paid for itself the same day.** An unrelated commit
+(`009b7ed feat(opc-125): declare inline-selector UI topology for OPC`) landed a new `select` setting and a
+new `MOLLIE_ADVANCED` group with no translations in either language — the same bug, hours later. The guard
+flagged the select on rebase but not the group header, so a group-header check was added too, and both are
+now translated. Two `MetadataTest` assertions also had to be fixed: they were failing on `main` *before*
+this change (verified by running the Integration suite at `009b7ed`), because one hardcoded the group count
+and the other required every setting name to carry a Mollie prefix — which `sPaymentHandlerUiTopology`
+legitimately cannot, since OPC reads it by exact name across providers.
+
 **Top follow-up, found while proving it:** OXID's stock template already supports
 `'type' => 'password'` for module settings, rendering the input with **no `value` attribute at all** —
 i.e. core already implements the never-send-the-secret behaviour this sprint deferred. The shipped
