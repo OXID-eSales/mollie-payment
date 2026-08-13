@@ -67,7 +67,6 @@ $aLang = [
     'SHOP_MODULE_GROUP_MOLLIE_LIVE_CONFIG' => 'Live-Zugangsdaten',
     'SHOP_MODULE_GROUP_MOLLIE_WEBHOOKS' => 'Webhooks',
     'SHOP_MODULE_GROUP_MOLLIE_LOGGING' => 'Protokollierung',
-    'SHOP_MODULE_GROUP_MOLLIE_ADVANCED' => 'Erweitert',
 
     'SHOP_MODULE_sMollieMode' => 'API-Modus',
     'SHOP_MODULE_sMollieMode_test' => 'Test',
@@ -88,12 +87,6 @@ $aLang = [
     'SHOP_MODULE_sMollieLogLevel_errors' => 'Nur Fehler (empfohlen)',
     'SHOP_MODULE_sMollieLogLevel_normal' => 'Normal — Fehler und Zahlungsereignisse',
     'SHOP_MODULE_sMollieLogLevel_debug' => 'Debug — ausführlich, inkl. Browser-Konsole',
-
-    // opc-125 rev-56: teilt dem One-Page-Checkout mit, wie Mollies Zahlungs-UI aufgebaut ist —
-    // eigener Weiterleitungs-Button oder Mollies Methodenauswahl im Footer.
-    'SHOP_MODULE_sPaymentHandlerUiTopology' => 'One-Page-Checkout-Oberfläche',
-    'SHOP_MODULE_sPaymentHandlerUiTopology_inline-selector' => 'Inline-Methodenauswahl (Mollie rendert die Methoden)',
-    'SHOP_MODULE_sPaymentHandlerUiTopology_redirect' => 'Weiterleitungs-Button (Methodenwahl auf Mollies Seite)',
 
     // Sprint 10 — Umschalter zum Anzeigen/Verbergen maskierter Einstellungen. Beide Texte sind das
     // aria-label des Buttons und werden beim Umschalten getauscht. Absichtlich allgemein: der

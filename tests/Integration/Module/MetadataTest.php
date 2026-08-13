@@ -119,15 +119,16 @@ final class MetadataTest extends TestCase
     /**
      * Setting names carry a Mollie prefix so they cannot collide with another module's in `oxconfig`.
      *
-     * One documented exception: cross-provider settings that a *consumer* reads by exact name across all
-     * payment modules. `sPaymentHandlerUiTopology` (opc-125 rev-56) is read by one-page-checkout's
-     * PaymentHandlerRegistry to learn how each provider's checkout UI is shaped, so the name is part of
-     * that contract and cannot be Mollie-namespaced. Add to the allowlist only for names that a shared
-     * consumer defines — not to excuse a forgotten prefix.
+     * The allowlist is for cross-provider settings that a shared *consumer* reads by exact name across all
+     * payment modules, where a Mollie prefix would break that contract. It is empty right now:
+     * `sPaymentHandlerUiTopology` needed it when opc-125 rev-56 declared it, and rev-57 dropped the setting
+     * again — kept as the documented seam because that feature is still in flight and the name may return.
+     *
+     * Add an entry only for a name a shared consumer defines. Never to excuse a forgotten prefix.
      */
     public function testMetadata_AllSettingsWellFormed(): void
     {
-        $crossProviderContractNames = ['sPaymentHandlerUiTopology'];
+        $crossProviderContractNames = [];
 
         foreach ($this->metadata()['settings'] ?? [] as $setting) {
             self::assertIsArray($setting);

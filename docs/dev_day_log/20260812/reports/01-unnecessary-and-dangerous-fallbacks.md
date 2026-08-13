@@ -17,6 +17,7 @@ settle.
 > addenda](#post-implementation-addenda) at the end. Read the addenda before acting on any
 > individual recommendation — one of them (F5) turned out to be wrong in a way that matters.
 
+
 ## What counts as a finding here
 
 A *fallback* is any place the module substitutes a guess for a fact: `?? default`, a `catch` that
