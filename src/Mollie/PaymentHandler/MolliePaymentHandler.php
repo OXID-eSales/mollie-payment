@@ -20,7 +20,6 @@ use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
-use OxidEsales\Payments\Mollie\Module;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -60,20 +59,6 @@ class MolliePaymentHandler implements PaymentHandlerInterface
     public function getId(): string
     {
         return 'mollie';
-    }
-
-    /**
-     * OXID module id — read by OPC's `PaymentHandlerRegistry` (rev-56) to
-     * resolve which module's settings to read for the UI-topology declaration
-     * (`sPaymentHandlerUiTopology`). Not part of PaymentHandlerInterface —
-     * that stays untouched. OPC picks this up via `method_exists()` on the
-     * concrete class.
-     *
-     * @since opc-125 rev-56
-     */
-    public function getModuleId(): string
-    {
-        return Module::MODULE_ID;
     }
 
     public function getName(): string
