@@ -105,6 +105,7 @@
     ]
 
     connect() {
+      this._connected = true;
       this._components = {};
       this._mdbg('[MollieCheckoutFooter] Connected');
       if (this.hasSubmitButtonTarget) {
@@ -114,9 +115,24 @@
     }
 
     disconnect() {
-      // Mollie Components live inside js.mollie.com iframes; nothing shop-side to tear down.
+      // OPC injects the footer via innerHTML then re-runs this <script> and calls
+      // forceControllerReconnect(), so connect() fires more than once. Mark this instance
+      // disconnected (checked after the async Mollie.js load) and clear any iframes it mounted,
+      // so exactly ONE set of Components survives instead of a doubled set.
+      this._connected = false;
+      this._clearMountedFields();
       this._components = {};
       this._mollie = null;
+    }
+
+    _clearMountedFields() {
+      var mounts = this.element.querySelectorAll(
+        '[data-mollie-checkout-footer-target="cardNumber"],' +
+        '[data-mollie-checkout-footer-target="cardHolder"],' +
+        '[data-mollie-checkout-footer-target="expiryDate"],' +
+        '[data-mollie-checkout-footer-target="verificationCode"]'
+      );
+      mounts.forEach(function(m) { m.innerHTML = ''; });
     }
 
     _mdbg() {
@@ -237,29 +253,39 @@
     }
 
     async _ensureComponents() {
-      if (this._mollie) return;
+      // Idempotent against OPC's double-connect: bail if already mounted or a mount is in flight.
+      if (this._mollie || this._mountingComponents) return;
       if (!this.profileIdValue) {
         this._mdbg('[MollieCheckoutFooter] no profile id — cannot mount Components');
         return;
       }
-      await this._loadMollieJs();
-      if (!window.Mollie) {
-        this._showError('Mollie.js is unavailable.');
-        return;
+      this._mountingComponents = true;
+      try {
+        await this._loadMollieJs();
+        // If OPC disconnected this instance during the async load (forceControllerReconnect),
+        // do NOT mount — the freshly reconnected instance will. Prevents a second field set.
+        if (!this._connected) return;
+        if (!window.Mollie) {
+          this._showError('Mollie.js is unavailable.');
+          return;
+        }
+        this._mollie = window.Mollie(this.profileIdValue, {
+          locale: this.localeValue || 'en_US',
+          testmode: this.testmodeValue === true
+        });
+        for (var i = 0; i < FIELDS.length; i++) {
+          var name = FIELDS[i];
+          var mount = this[name + 'Target'] ? this[name + 'Target'] : null;
+          if (!mount) continue;
+          mount.innerHTML = ''; // drop any leftover component before mounting (belt-and-suspenders)
+          var component = this._mollie.createComponent(name);
+          component.mount(mount);
+          this._components[name] = component;
+        }
+        this._mdbg('[MollieCheckoutFooter] Components mounted', Object.keys(this._components));
+      } finally {
+        this._mountingComponents = false;
       }
-      this._mollie = window.Mollie(this.profileIdValue, {
-        locale: this.localeValue || 'en_US',
-        testmode: this.testmodeValue === true
-      });
-      for (var i = 0; i < FIELDS.length; i++) {
-        var name = FIELDS[i];
-        var mount = this[name + 'Target'] ? this[name + 'Target'] : null;
-        if (!mount) continue;
-        var component = this._mollie.createComponent(name);
-        component.mount(mount);
-        this._components[name] = component;
-      }
-      this._mdbg('[MollieCheckoutFooter] Components mounted', Object.keys(this._components));
     }
 
     _loadMollieJs() {
