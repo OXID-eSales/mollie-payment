@@ -15,13 +15,21 @@ use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminActionBoundsInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface;
+use OxidEsales\Payments\Mollie\Admin\AdminActionBounds;
 use OxidEsales\Payments\Mollie\Admin\MolliePanelViewDataBuilder;
+use OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider;
+use OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProviderInterface;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
+use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
+use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use OxidEsales\Payments\Mollie\Service\MollieUrlBuilder;
 use OxidEsales\Payments\Mollie\Service\TransactionHistoryServiceInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 #[CoversClass(MolliePanelViewDataBuilder::class)]
 final class MolliePanelViewDataBuilderTest extends TestCase
@@ -31,6 +39,7 @@ final class MolliePanelViewDataBuilderTest extends TestCase
     private AdminActionBoundsInterface&MockObject $bounds;
     private MollieUrlBuilder $urlBuilder;
     private AdminValidationFeedbackInterface&MockObject $validationFeedback;
+    private MolliePaymentSnapshotProviderInterface&MockObject $snapshots;
     private MolliePanelViewDataBuilder $builder;
 
     protected function setUp(): void
@@ -44,12 +53,16 @@ final class MolliePanelViewDataBuilderTest extends TestCase
         $this->validationFeedback = $this->createMock(AdminValidationFeedbackInterface::class);
         $this->validationFeedback->method('consume')->willReturn([]);
 
+        $this->snapshots = $this->createMock(MolliePaymentSnapshotProviderInterface::class);
+
         $this->builder = new MolliePanelViewDataBuilder(
             $this->contracts,
             $this->transactionHistory,
             $this->bounds,
             $this->urlBuilder,
             $this->validationFeedback,
+            $this->snapshots,
+            $this->translatorStub(),
         );
     }
 
@@ -210,5 +223,186 @@ final class MolliePanelViewDataBuilderTest extends TestCase
         $contract->method('getState')->willReturn(ContractState::fulfilled());
 
         return $contract;
+    }
+
+    // -------------------------------------------------------------------------
+    // Sprint 136 Story 4: the method the customer actually paid with
+    // -------------------------------------------------------------------------
+
+    public function testBuild_ProjectsCreditCardWithBrandAndLast4(): void
+    {
+        $order = $this->stubOrder('order-pm-card');
+        $contract = $this->authorizedContract();
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+        $this->snapshots->method('snapshot')->with($contract)->willReturn(
+            $this->payment('creditcard', 'Visa', '4242')
+        );
+
+        $viewData = $this->builder->build($order);
+
+        self::assertTrue($viewData['paymentMethod']['isKnown']);
+        self::assertSame('Credit card', $viewData['paymentMethod']['label']);
+        self::assertSame('Visa •••• 4242', $viewData['paymentMethod']['detail']);
+        self::assertSame('creditcard', $viewData['paymentMethod']['raw']);
+    }
+
+    public function testBuild_ProjectsKlarnaWithoutCardDetail(): void
+    {
+        $order = $this->stubOrder('order-pm-klarna');
+        $contract = $this->authorizedContract();
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+        $this->snapshots->method('snapshot')->willReturn($this->payment('klarnapaylater'));
+
+        $viewData = $this->builder->build($order);
+
+        self::assertSame('Klarna', $viewData['paymentMethod']['label']);
+        self::assertNull($viewData['paymentMethod']['detail']);
+    }
+
+    public function testBuild_ProjectsWalletAsTheLabelWithTheCardDemoted(): void
+    {
+        $order = $this->stubOrder('order-pm-wallet');
+        $contract = $this->authorizedContract();
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+        $this->snapshots->method('snapshot')->willReturn(
+            $this->payment('creditcard', 'Mastercard', '0007', 'applepay')
+        );
+
+        $viewData = $this->builder->build($order);
+
+        self::assertSame('Apple Pay', $viewData['paymentMethod']['label']);
+        self::assertSame('Mastercard •••• 0007', $viewData['paymentMethod']['detail']);
+    }
+
+    public function testBuild_WhenMollieCannotBeRead_MethodIsUnknown(): void
+    {
+        $order = $this->stubOrder('order-pm-down');
+        $contract = $this->authorizedContract();
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+        $this->snapshots->method('snapshot')->willReturn(null);
+
+        $viewData = $this->builder->build($order);
+
+        self::assertFalse($viewData['paymentMethod']['isKnown']);
+        self::assertSame('', $viewData['paymentMethod']['label']);
+        self::assertNull($viewData['paymentMethod']['detail']);
+    }
+
+    public function testBuild_WithNoContract_StillCarriesAnUnknownMethodShape(): void
+    {
+        // The template reads paymentMethod unconditionally; the no-contract
+        // branch must not hand it an undefined key.
+        $this->contracts->method('findByOrderId')->willReturn(null);
+
+        $viewData = $this->builder->build($this->stubOrder('order-none'));
+
+        self::assertFalse($viewData['paymentMethod']['isKnown']);
+        self::assertSame('', $viewData['paymentMethod']['label']);
+    }
+
+    public function testBuild_UnmappedMethodShowsTheRawMollieCode(): void
+    {
+        $order = $this->stubOrder('order-pm-new');
+        $contract = $this->authorizedContract();
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+        $this->snapshots->method('snapshot')->willReturn($this->payment('some_new_method'));
+
+        $viewData = $this->builder->build($order);
+
+        self::assertSame('some_new_method', $viewData['paymentMethod']['label']);
+    }
+
+    public function testBuild_UntranslatedKeyFallsBackToTheRawCode(): void
+    {
+        $order = $this->stubOrder('order-pm-untranslated');
+        $contract = $this->authorizedContract();
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+        $this->snapshots->method('snapshot')->willReturn($this->payment('ideal'));
+
+        $translator = $this->createMock(LanguageTranslatorInterface::class);
+        $translator->method('translateString')->willReturnArgument(0);
+
+        $builder = new MolliePanelViewDataBuilder(
+            $this->contracts,
+            $this->transactionHistory,
+            $this->bounds,
+            $this->urlBuilder,
+            $this->validationFeedback,
+            $this->snapshots,
+            $translator,
+        );
+
+        self::assertSame('ideal', $builder->build($order)['paymentMethod']['label']);
+    }
+
+    /**
+     * Story 3's hard gate, asserted where it actually matters: one full panel
+     * render — capture bound, refund bound, authorized-hold gate and the
+     * payment-method row — costs exactly ONE Mollie API call.
+     */
+    public function testBuild_WholeRenderCostsOneMollieApiCall(): void
+    {
+        $order = $this->stubOrder('order-callcount');
+        $contract = $this->authorizedContract();
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+
+        $adapter = $this->createMock(MolliePaymentsAdapterInterface::class);
+        $adapter->expects(self::once())
+            ->method('getPayment')
+            ->willReturn($this->payment('creditcard', 'Visa', '4242'));
+
+        $snapshots = new MolliePaymentSnapshotProvider($adapter, new NullLogger());
+
+        $builder = new MolliePanelViewDataBuilder(
+            $this->contracts,
+            $this->transactionHistory,
+            new AdminActionBounds($snapshots),
+            $this->urlBuilder,
+            $this->validationFeedback,
+            $snapshots,
+            $this->translatorStub(),
+        );
+
+        $viewData = $builder->build($order);
+
+        self::assertSame('Credit card', $viewData['paymentMethod']['label']);
+        self::assertSame(0.0, $viewData['captureBound'], 'paid payment has nothing capturable');
+    }
+
+    private function translatorStub(): LanguageTranslatorInterface
+    {
+        $translator = $this->createMock(LanguageTranslatorInterface::class);
+        $translator->method('translateString')->willReturnMap([
+            ['MOLLIE_PAYMENT_METHOD_CREDITCARD', 'Credit card'],
+            ['MOLLIE_PAYMENT_METHOD_KLARNA', 'Klarna'],
+            ['MOLLIE_PAYMENT_METHOD_APPLE_PAY', 'Apple Pay'],
+            ['MOLLIE_PAYMENT_METHOD_IDEAL', 'iDEAL'],
+        ]);
+
+        return $translator;
+    }
+
+    private function payment(
+        string $method,
+        ?string $brand = null,
+        ?string $last4 = null,
+        ?string $wallet = null,
+    ): MolliePaymentDto {
+        return new MolliePaymentDto(
+            id: 'tr_1',
+            status: 'paid',
+            amount: MollieAmountDto::fromComponents('EUR', 100.0),
+            method: $method,
+            cardBrand: $brand,
+            cardLast4: $last4,
+            walletType: $wallet,
+        );
     }
 }

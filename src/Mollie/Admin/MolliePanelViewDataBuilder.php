@@ -12,6 +12,8 @@ namespace OxidEsales\Payments\Mollie\Admin;
 use OxidEsales\Eshop\Application\Model\Order;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
+use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use OxidEsales\Payments\Mollie\Service\MollieUrlBuilder;
 use OxidEsales\Payments\Mollie\Service\TransactionHistoryServiceInterface;
 
@@ -29,6 +31,10 @@ class MolliePanelViewDataBuilder
         private readonly AdminActionBoundsInterface $bounds,
         private readonly MollieUrlBuilder $urlBuilder,
         private readonly AdminValidationFeedbackInterface $validationFeedback,
+        // Sprint 136: shared with AdminActionBounds, so the whole render is one
+        // live Mollie read rather than one per question asked.
+        private readonly MolliePaymentSnapshotProviderInterface $snapshots,
+        private readonly LanguageTranslatorInterface $translator,
     ) {
     }
 
@@ -88,6 +94,10 @@ class MolliePanelViewDataBuilder
             'transactions' => $this->transactionHistory->fetch($contract),
             'errorMessage' => null,
             'validationErrors' => $validationErrors,
+            // Sprint 136: what the customer actually paid with. 'paymentType'
+            // above is the shop's method id and reads 'mollie_payment' for every
+            // Mollie order.
+            'paymentMethod' => $this->buildPaymentMethod($this->snapshots->snapshot($contract)),
         ];
     }
 
@@ -127,7 +137,54 @@ class MolliePanelViewDataBuilder
             'transactions' => [],
             'errorMessage' => $message,
             'validationErrors' => $validationErrors,
+            // No contract means no Mollie payment to read — but the template
+            // reads this key unconditionally, so the shape must still be there.
+            'paymentMethod' => $this->buildPaymentMethod(null),
         ];
+    }
+
+    /**
+     * Project the live payment's method facts onto the four values the panel row
+     * needs. An unknown method is a first-class outcome (no payment yet, or the
+     * API read failed) and is signalled by `isKnown: false`, which the template
+     * renders as an em dash.
+     *
+     * @return array{isKnown: bool, label: string, detail: ?string, raw: ?string}
+     */
+    private function buildPaymentMethod(?MolliePaymentDto $payment): array
+    {
+        $descriptor = PaymentMethodDescriptor::fromPayment($payment);
+
+        return [
+            'isKnown' => $descriptor->isKnown(),
+            'label' => $this->paymentMethodLabel($descriptor),
+            'detail' => $descriptor->detail(),
+            'raw' => $descriptor->rawType,
+        ];
+    }
+
+    /**
+     * Translated method name, falling back to the raw Mollie code whenever there
+     * is no key for it or the key has no translation — OXID returns the ident
+     * itself in that case, and "MOLLIE_PAYMENT_METHOD_IDEAL" must never reach an
+     * operator.
+     */
+    private function paymentMethodLabel(PaymentMethodDescriptor $descriptor): string
+    {
+        $fallback = (string) $descriptor->displayType();
+        $key = $descriptor->labelKey();
+
+        if ($key === null) {
+            return $fallback;
+        }
+
+        $translated = $this->translator->translateString($key);
+
+        if ($translated === '' || $translated === $key) {
+            return $fallback;
+        }
+
+        return $translated;
     }
 
     private function money(?float $amount): string

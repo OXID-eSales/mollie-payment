@@ -5,7 +5,7 @@
    wrapper owns all of that.
 
    View-data shape produced by MolliePanelViewDataBuilder::build():
-   - orderId, orderNumber, paymentType, contractId, providerOrderId, contractState, currency
+   - orderId, orderNumber, paymentType, paymentMethod, contractId, providerOrderId, contractState, currency
    - capturedAmount, refundedAmount (formatted strings)
    - captureBound/captureBoundFormatted, refundBound/refundBoundFormatted
    - isCapturable, isRefundable, isCancellable
@@ -68,6 +68,22 @@
         <tr>
             <th class="pc-label">{{ "MOLLIE_PAYMENT_TYPE"|translate }}</th>
             <td class="pc-value" data-testid="payment-type">{{ paymentType|default('—') }}</td>
+        </tr>
+        {# Sprint 136: the method the customer actually paid with, from the live
+           Mollie payment. The row above is the shop's payment-method id and is
+           identical for every Mollie order. #}
+        <tr>
+            <th class="pc-label">{{ "MOLLIE_PAYMENT_METHOD_USED"|translate }}</th>
+            <td class="pc-value" data-testid="payment-method-used">
+                {% if paymentMethod is defined and paymentMethod.isKnown %}
+                    <strong>{{ paymentMethod.label }}</strong>
+                    {%- if paymentMethod.detail %}
+                        <span class="pc-muted">&middot; {{ paymentMethod.detail }}</span>
+                    {%- endif %}
+                {% else %}
+                    &mdash;
+                {% endif %}
+            </td>
         </tr>
         <tr>
             <th class="pc-label">{{ "MOLLIE_CONTRACT_STATE"|translate }}</th>

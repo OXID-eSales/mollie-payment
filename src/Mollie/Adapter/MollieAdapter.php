@@ -280,6 +280,12 @@ final class MollieAdapter implements
             webhookUrl: MollieValueMapper::toNullableString($payment->webhookUrl),
             amountChargedBack: $payment->getAmountChargedBack(),
             createdAt: MollieValueMapper::toNullableString($payment->createdAt),
+            // Sprint 136: the admin panel's "payment method used" row. `details`
+            // is method-dependent — card fields are simply absent for Klarna,
+            // iDEAL and friends, which is why every read is null-tolerant.
+            cardBrand: MollieValueMapper::toDetailString($payment->details, 'cardLabel'),
+            cardLast4: MollieValueMapper::toCardLast4($payment->details),
+            walletType: MollieValueMapper::toDetailString($payment->details, 'wallet'),
         );
     }
 
