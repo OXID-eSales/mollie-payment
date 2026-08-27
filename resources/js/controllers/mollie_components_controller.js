@@ -42,9 +42,36 @@ export default class extends Controller {
   connect() {
     this._debug = createDebugLogger(() => this.debugValue)
     this._components = {}
+    this._mounting = null
     this._cardMode = this._readCardMode()
     this._syncMode()
     this._debug('Mollie Components controller connected', { cardMode: this._cardMode })
+  }
+
+  /**
+   * Take the mounted components down with the controller.
+   *
+   * Without this, a host that is removed or replaced (OPC swaps the checkout
+   * footer's content on every payment-method change) leaves its components
+   * registered inside Mollie's library while their DOM is gone. The library then
+   * dereferences them on the next focus, blur or keystroke —
+   * "Cannot read properties of undefined (reading 'isLoaded' / 'setLabel' /
+   * 'touched' / 'focusInput')" — and the card fields cannot be filled in at all.
+   */
+  disconnect() {
+    for (const [name, component] of Object.entries(this._components || {})) {
+      if (component && typeof component.unmount === 'function') {
+        try {
+          component.unmount()
+        } catch (e) {
+          /* already gone */
+        }
+      }
+      this._debug('Mollie component unmounted', { name })
+    }
+    this._components = {}
+    this._mollie = null
+    this._mounting = null
   }
 
   /** data-action: change->mollie-components#flowChanged on the method radios. */
@@ -68,7 +95,25 @@ export default class extends Controller {
     }
   }
 
-  async _ensureMounted() {
+  _ensureMounted() {
+    // Re-entrancy guard. This method is async and only assigns `_mollie` after
+    // awaiting Mollie.js, so two calls in quick succession — connect() through
+    // _syncMode(), plus any flowChanged() — both used to pass the `_mollie`
+    // check and each mounted a FULL set of components. The extra set is detached
+    // from the DOM, so a per-container iframe count still reads 1, while Mollie's
+    // library keeps it registered and throws on the first interaction.
+    if (this._mounting) {
+      return this._mounting
+    }
+
+    this._mounting = this._mount().finally(() => {
+      this._mounting = null
+    })
+
+    return this._mounting
+  }
+
+  async _mount() {
     if (this._mollie) {
       return
     }

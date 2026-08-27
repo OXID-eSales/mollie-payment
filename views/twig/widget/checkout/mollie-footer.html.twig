@@ -255,6 +255,18 @@
     async _ensureComponents() {
       // Idempotent against OPC's double-connect: bail if already mounted or a mount is in flight.
       if (this._mollie || this._mountingComponents) return;
+      // The classic order page carries its own Mollie Components block
+      // (data-controller="mollie-components"), and that is the one the customer
+      // sees. Mounting a second set here — inside the collapsed accordion, so
+      // invisible — leaves Mollie's library holding two sets for the same
+      // fields, and the visible ones then throw on every focus, blur and
+      // keystroke ("Cannot read properties of undefined (reading 'isLoaded' /
+      // 'setLabel' / 'touched' / 'focusInput')"), which makes the card
+      // unfillable. Stand down and let the order page host them.
+      if (this._orderPageOwnsTheCardFields()) {
+        this._mdbg('[MollieCheckoutFooter] order page hosts the card fields — standing down');
+        return;
+      }
       if (!this.profileIdValue) {
         this._mdbg('[MollieCheckoutFooter] no profile id — cannot mount Components');
         return;
@@ -286,6 +298,16 @@
       } finally {
         this._mountingComponents = false;
       }
+    }
+
+    /**
+     * True when the classic order page hosts its own Mollie Components block.
+     * On the OPC one-page checkout there is no such block and this widget is the
+     * only host, so it mounts as before.
+     */
+    _orderPageOwnsTheCardFields() {
+      var host = document.querySelector('[data-controller~="mollie-components"]');
+      return Boolean(host) && Boolean(host.querySelector('[data-mollie-components-target="fields"]'));
     }
 
     _loadMollieJs() {
