@@ -473,6 +473,16 @@ services:
   OxidEsales\Payments\Mollie\Admin\AdminActionBounds:
     public: true
 
+  # Sprint 136: the panel's single live payment read. Shared (Symfony default),
+  # so the capture bound, the refund bound, the authorized-hold gate and the
+  # payment-method row cost one HTTP round trip per request instead of four.
+  # Must stay shared — a `shared: false` here silently restores the old cost.
+  OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProviderInterface:
+    alias: OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider
+    public: true
+  OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider:
+    public: true
+
   OxidEsales\Payments\Mollie\Admin\AdminAmountValidator:
     public: true
 
