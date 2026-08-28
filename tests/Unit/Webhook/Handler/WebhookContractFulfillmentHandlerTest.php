@@ -206,6 +206,24 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentExpired('tr_expired'));
     }
 
+    /**
+     * STRP-168. `committed` is not a terminal state, so the guard above let a
+     * contract whose payment had already been taken reach expire(). That used
+     * to silently rewrite settled payment history; since payment-base hardened
+     * the state machine it throws instead, which out of a webhook means a 500
+     * and a provider retrying forever. Either way the answer is to skip it.
+     */
+    public function testHandlePaymentExpired_IsNoOpWhenThePaymentWasAlreadyTaken(): void
+    {
+        $contract = $this->contractWithState(committed: true);
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+
+        $contract->expects(self::never())->method('expire');
+        $this->contractRepository->expects(self::never())->method('save');
+
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentExpired('tr_committed'));
+    }
+
     // --- handlePaymentCanceled ---
 
     public function testHandlePaymentCanceled_ReturnsNullWhenContractNotFound(): void
@@ -333,12 +351,14 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         bool $terminal = false,
         bool $notFinished = false,
         bool $pending = false,
+        bool $committed = false,
     ): PaymentContractInterface&MockObject {
         $state = $this->createMock(ContractState::class);
         $state->method('isFulfilled')->willReturn($fulfilled);
         $state->method('isTerminal')->willReturn($terminal);
         $state->method('isNotFinished')->willReturn($notFinished);
         $state->method('isPending')->willReturn($pending);
+        $state->method('isCommitted')->willReturn($committed);
 
         $contract = $this->createMock(PaymentContractInterface::class);
         $contract->method('getState')->willReturn($state);

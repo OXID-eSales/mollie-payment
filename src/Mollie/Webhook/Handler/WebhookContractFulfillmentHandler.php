@@ -125,6 +125,15 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             return FulfillmentOutcome::NoOp;
         }
 
+        // STRP-168: `committed` is not terminal, so a late or duplicate expiry
+        // for a contract whose payment has already been taken used to reach
+        // expire() and rewrite settled history. payment-base now refuses that
+        // transition outright, so acting on it would throw out of the webhook
+        // and Mollie would retry forever. Skip it.
+        if ($contract->getState()->isCommitted()) {
+            return FulfillmentOutcome::NoOp;
+        }
+
         $contract->expire();
         $this->contractRepository->save($contract);
         $this->auditRecorder->record(
