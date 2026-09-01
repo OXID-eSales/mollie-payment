@@ -109,9 +109,9 @@ services:
 
   OxidEsales\Payments\Mollie\Adapter\OxidShopOrderService:
     public: true
-  OxidEsales\PaymentBase\Adapter\ShopOrderServiceInterface:
-    alias: OxidEsales\Payments\Mollie\Adapter\OxidShopOrderService
-    public: true
+  # 2026-09-01 — this module no longer binds ShopOrderServiceInterface.
+  # payment-base owns order finalization; four modules aliasing one container
+  # id meant a single winner finalized every provider's orders.
 
   # ===========================================================================
   # Sprint 4: checkout flow.
