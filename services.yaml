@@ -109,9 +109,9 @@ services:
 
   OxidEsales\Payments\Mollie\Adapter\OxidShopOrderService:
     public: true
-  OxidEsales\PaymentBase\Adapter\ShopOrderServiceInterface:
-    alias: OxidEsales\Payments\Mollie\Adapter\OxidShopOrderService
-    public: true
+  # 2026-09-01 — this module no longer binds ShopOrderServiceInterface.
+  # payment-base owns order finalization; four modules aliasing one container
+  # id meant a single winner finalized every provider's orders.
 
   # ===========================================================================
   # Sprint 4: checkout flow.
@@ -135,6 +135,10 @@ services:
     arguments:
       $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
       $shopOrderService: '@OxidEsales\PaymentBase\Adapter\ShopOrderServiceInterface'
+      # STRP-171 - retire the NOT_FINISHED order this session already
+      # left behind, instead of stacking another one beside it.
+      $previousAttemptCleaner: '@OxidEsales\PaymentBase\Checkout\PreviousCheckoutAttemptCleanerInterface'
+      $openAttempts: '@OxidEsales\PaymentBase\Checkout\OpenCheckoutAttemptRegistryInterface'
     tags:
       - { name: payment.event_handler, priority: 90 }
     public: false
