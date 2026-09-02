@@ -14,6 +14,7 @@ use OxidEsales\PaymentBase\Controller\CheckoutReturnResponder;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\Payments\Mollie\Service\AbandonedAttemptCleanup;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\PaymentBase\Service\TokenServiceInterface;
 use OxidEsales\Payments\Mollie\Controller\MollieOrderController;
@@ -31,6 +32,9 @@ final class TestableMollieOrderController extends MollieOrderController
     public bool $delegatedToParent = false;
     public bool $unavailableErrorShown = false;
     public bool $pendingReturn = false;
+
+    /** STRP-171 - the payment-base service that retires an abandoned attempt. */
+    public ?AbandonedAttemptCleanup $attemptCleaner = null;
 
     /**
      * @param array<string, string> $requestParams
@@ -59,6 +63,7 @@ final class TestableMollieOrderController extends MollieOrderController
             ContractRepositoryInterface::class => $this->contractRepository,
             MollieReturnResolver::class => $this->resolver,
             EventDispatcherInterface::class => $this->dispatcher,
+            AbandonedAttemptCleanup::class => $this->attemptCleaner,
             default => null,
         };
     }

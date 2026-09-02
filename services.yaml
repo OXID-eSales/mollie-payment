@@ -131,6 +131,14 @@ services:
       - { name: payment.event_handler }
     public: true
 
+  # STRP-171 - retires the attempt of a shopper who returned from Mollie
+  # unpaid and did not retry. Public: MollieOrderController is an OXID
+  # controller, so it fetches this through the container at runtime.
+  OxidEsales\Payments\Mollie\Service\AbandonedAttemptCleanup:
+    arguments:
+      - '@OxidEsales\PaymentBase\Checkout\PreviousCheckoutAttemptCleanerInterface'
+    public: true
+
   OxidEsales\PaymentBase\EventSystem\Handler\EarlyOrderCreationHandler:
     arguments:
       $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
