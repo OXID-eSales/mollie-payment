@@ -179,6 +179,37 @@ class MolliePaymentHandler implements PaymentHandlerInterface
      * reject with an invalid-delivery/user state. The standard `cl=order` flow gets this from its
      * controller guards; the OPC handler runs before them, so it prepares the basket itself.
      *
+     * DOES NOT TOUCH `$_POST['sDeliveryAddressMD5']` — this resolves F10 (Sprint 11), which was
+     * documented and deliberately deferred pending a decision from whoever owns the OPC
+     * integration. That decision is now made: the hash is passed THROUGH from the OPC request.
+     *
+     * What this method used to do, and why it had to stop:
+     *
+     *     $_POST['sDeliveryAddressMD5'] = $user->getEncodedDeliveryAddress();
+     *
+     * Two separate faults in one line. First, forging the value server-side made OXID's guard
+     * compare a value with itself, so a delivery address that really did change between the
+     * address step and finalisation could never be caught — the check was disabled, not
+     * satisfied. Second, and the reason it surfaced now, the forged value is INCOMPLETE:
+     * `Order::validateDeliveryAddress()` builds `$user->getEncodedDeliveryAddress()` and then
+     * APPENDS the selected `oxaddress` row's own encoded form whenever `getDelAddressInfo()`
+     * returns one. Measured on the local shop for a guest who had just checked out:
+     *
+     *     submitted (the old line): 42ce5cac3ff87aa8ec84090e20537a05                                  (32)
+     *     expected (core)       : 42ce5cac3ff87aa8ec84090e20537a05477ebb5de0f9ec70d1d5cd251bf5644f  (64)
+     *
+     * Both required-field sets validated, so the mismatch was the only remaining cause of
+     * `finalizeOrder` state 7 (ORDER_STATE_INVALIDDELADDRESSCHANGED). The line was harmless
+     * only while no `oxaddress` row existed; OPC-156 began writing one and OPC-217 made one
+     * exist in nearly every flow, at which point the short hash was guaranteed to be wrong.
+     *
+     * OPC already supplies the correct value: `CheckoutService::prepareDeliveryAddressMd5()`
+     * computes user-plus-row and injects it immediately before dispatching to this handler
+     * (CheckoutService.php:110, handler invoked at :113). Overwriting it was the whole bug.
+     *
+     * The standard `cl=order` flow is unaffected — there the hash comes from the order form, and
+     * this method is only reached on the OPC path.
+     *
      * Overridable seam — unit tests stub it to avoid the OXID Registry.
      */
     protected function prepareOxidBasket(PaymentContextInterface $context): void
@@ -198,7 +229,6 @@ class MolliePaymentHandler implements PaymentHandlerInterface
         }
         if ($user instanceof User && $user->getId()) {
             $basket->setBasketUser($user);
-            $_POST['sDeliveryAddressMD5'] = $user->getEncodedDeliveryAddress();
         }
 
         $basket->calculateBasket(true);
