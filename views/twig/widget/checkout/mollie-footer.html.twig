@@ -88,7 +88,19 @@
   var FIELDS = ['cardNumber', 'cardHolder', 'expiryDate', 'verificationCode'];
   var BaseController = opc.Controller;
 
-  class MollieCheckoutFooterController extends BaseController {
+  // Kept on window, not on the controller: OPC re-injects this footer via
+  // innerHTML and re-runs this script, so the controller instance AND the
+  // button element are replaced while a checkout is still in flight.
+  var MollieCheckoutFooterSubmitState = window.__oeMollieCheckoutFooterSubmit || (
+    window.__oeMollieCheckoutFooterSubmit = {
+      _busy: false,
+      inFlight: function () { return this._busy === true; },
+      begin: function () { this._busy = true; },
+      end: function () { this._busy = false; }
+    }
+  );
+
+class MollieCheckoutFooterController extends BaseController {
     static values = {
       paymentMethod: String,
       csrfToken: String,
@@ -109,7 +121,12 @@
       this._components = {};
       this._mdbg('[MollieCheckoutFooter] Connected');
       if (this.hasSubmitButtonTarget) {
-        this.submitButtonTarget.disabled = false;
+        // Never hand the button back while a checkout is still in flight.
+        // OPC re-injects this footer and calls forceControllerReconnect(), so
+        // connect() runs again mid-submit; re-enabling here let a second click
+        // start a SECOND checkout, which is how one purchase ended up as two
+        // orders a second apart (one cancelled, one live).
+        this.submitButtonTarget.disabled = MollieCheckoutFooterSubmitState.inFlight();
       }
       this._syncCardMode();
     }
@@ -169,6 +186,16 @@
 
     async submitPayment(event) {
       if (event) event.preventDefault();
+
+      // The in-flight mark lives outside the controller on purpose: the footer
+      // is re-injected via innerHTML, so both this instance and the button
+      // element are replaced while the first checkout is still running.
+      if (MollieCheckoutFooterSubmitState.inFlight()) {
+        this._mdbg('[MollieCheckoutFooter] submit already in flight - ignoring repeat click');
+        return;
+      }
+      MollieCheckoutFooterSubmitState.begin();
+
       this._hideError();
       this._setLoading(true);
 
@@ -177,6 +204,7 @@
         if (this._isCardMode()) {
           cardToken = await this._tokenize();
           if (!cardToken) {
+            MollieCheckoutFooterSubmitState.end();
             this._setLoading(false);
             return; // tokenization error already shown
           }
@@ -196,6 +224,9 @@
         window.location.href = redirectUrl;
       } catch (err) {
         console.error('[MollieCheckoutFooter] Payment failed:', err);
+        // Released only on failure: a successful submit navigates to Mollie,
+        // and the shopper must not be able to start a second one on the way out.
+        MollieCheckoutFooterSubmitState.end();
         this._showError(err.message);
         this._setLoading(false);
       }
