@@ -186,6 +186,14 @@ services:
   # Return/ subdirectory, mirroring Stripe's own split) and registered explicitly here.
   OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver:
     public: true
+    arguments:
+      $paymentsAdapter: '@OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface'
+      $statusMapper: '@OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper'
+      # Only for the manual-capture diagnostic: Mollie can accept
+      # captureMode: manual for a card and settle it anyway, leaving the
+      # merchant with no capture button and no explanation.
+      $config: '@OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface'
+      $logger: '@oxid_esales.monolog.logger'
 
   OxidEsales\Payments\Mollie\Service\CheckoutPaymentServiceInterface:
     alias: OxidEsales\Payments\Mollie\Service\CheckoutPaymentService

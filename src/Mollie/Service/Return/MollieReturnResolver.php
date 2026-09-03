@@ -16,7 +16,10 @@ use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
 use OxidEsales\Payments\Mollie\Adapter\MollieOutcome;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
+use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
+use Psr\Log\LoggerInterface;
 
 /**
  * Wraps Mollie's getPayment call and maps the outcome onto the provider-neutral
@@ -31,10 +34,56 @@ use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
  */
 final class MollieReturnResolver implements ReturnResolverInterface
 {
+    /** Methods Mollie is known to settle immediately despite captureMode: manual. */
+    private const METHODS_WITHOUT_MANUAL_CAPTURE = ['creditcard', 'cartesbancaires'];
+
     public function __construct(
         private readonly MolliePaymentsAdapterInterface $paymentsAdapter,
         private readonly MollieStatusMapper $statusMapper,
+        // Optional so an unwired consumer keeps working; both only feed the
+        // manual-capture diagnostic below.
+        private readonly ?ModuleConfigurationServiceInterface $config = null,
+        private readonly ?LoggerInterface $logger = null,
     ) {
+    }
+
+    /**
+     * Mollie can accept `captureMode: manual` and capture anyway.
+     *
+     * Measured against the live API: a Klarna payment sent with captureMode
+     * manual comes back `authorized` (a hold the merchant captures later), but a
+     * CARD payment sent with the very same flag comes back `paid`, with no
+     * authorizedAt - the flag is stored on the payment and ignored. Manual
+     * captures for cards have to be enabled for the card method on the Mollie
+     * profile; until they are, the shop asks and Mollie declines, silently.
+     *
+     * The merchant then finds no capture button and nothing anywhere says why,
+     * because the admin panel correctly gates capture on the LIVE status being
+     * `authorized`. So say it here, once per return, rather than leave them to
+     * guess.
+     */
+    private function warnIfManualCaptureWasIgnored(MolliePaymentDto $payment): void
+    {
+        if ($this->config === null || $this->logger === null || !$this->config->isManualCapture()) {
+            return;
+        }
+
+        if ($payment->status !== MollieStatusMapper::STATUS_PAID) {
+            return;
+        }
+
+        $method = (string) ($payment->method ?? '');
+        if ($method === '' || !in_array(strtolower($method), self::METHODS_WITHOUT_MANUAL_CAPTURE, true)) {
+            return;
+        }
+
+        $this->logger->warning(
+            'Mollie captured a payment the shop asked to authorize only. Manual capture is '
+            . 'configured, but Mollie settled this method immediately, so there is no authorization '
+            . 'to capture later and the admin will offer no capture button. Manual captures must be '
+            . 'enabled for this method on the Mollie profile.',
+            ['payment_id' => $payment->id, 'method' => $method, 'status' => $payment->status],
+        );
     }
 
     public function resolve(
@@ -54,6 +103,8 @@ final class MollieReturnResolver implements ReturnResolverInterface
         } catch (MollieAdapterException $e) {
             return ReturnResolution::failed('get_payment_failed', $e->getMessage(), $paymentId);
         }
+
+        $this->warnIfManualCaptureWasIgnored($payment);
 
         return $this->resolutionForOutcome(
             $this->statusMapper->map($payment->status),
