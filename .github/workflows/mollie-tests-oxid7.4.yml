@@ -15,7 +15,7 @@ env:
 
 jobs:
   install_shop_with_module:
-    runs-on: [arc-runner-set]
+    runs-on: ubuntu-latest
     steps:
       - name: Print run parameters
         run: |
@@ -234,7 +234,7 @@ jobs:
     strategy:
       matrix:
         php: [ '8.2' ]
-    runs-on: [arc-runner-set]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout current module
         uses: actions/checkout@v5
@@ -291,7 +291,7 @@ jobs:
         php: [  '8.2' ]
         mysql: [ '5.7' ]
     needs: [ install_shop_with_module ]
-    runs-on: [arc-runner-set]
+    runs-on: ubuntu-latest
     steps:
       - name: Load current installation from cache
         uses: actions/cache/restore@v4
@@ -350,7 +350,7 @@ jobs:
         php:  [ '8.2',  '8.4' ]
         mysql: [ '8.1' ]
     needs: [ install_shop_with_module ]
-    runs-on: [arc-runner-set]
+    runs-on: ubuntu-latest
     steps:
       - name: Load current installation from cache
         uses: actions/cache/restore@v4
