@@ -8,7 +8,8 @@ const PW = process.env.TEST_USER_PASSWORD || 'useruser';
  * non-empty basket; this drops one known article in without depending on the homepage slider
  * (whose overlay links are not reliably clickable headless).
  */
-const DEMO_PRODUCT_URL = '/Merchandise/Sonnenbrillen/Ocean-Eyes.html';
+const DEMO_PRODUCT_URL =
+    process.env.MOLLIE_E2E_PRODUCT_URL || '/Merchandise/Sonnenbrillen/Ocean-Eyes.html';
 
 /**
  * Logs the storefront customer in via the account page. `cl=payment` bounces to the login/user
@@ -29,7 +30,39 @@ export async function loginStorefront(page: Page): Promise<void> {
 export async function addFirstFeaturedProductToBasket(page: Page): Promise<void> {
     await page.goto(DEMO_PRODUCT_URL);
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /In den Warenkorb|add to (cart|basket)/i }).first().click();
+
+    const button = page
+        .getByRole('button', { name: /In den Warenkorb|add to (cart|basket)/i })
+        .first();
+
+    if (await button.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await button.click();
+        await page.waitForLoadState('domcontentloaded');
+        return;
+    }
+
+    // Fallback: submit the page's own tobasket form. The button label is
+    // language- and theme-dependent, and DEMO_PRODUCT_URL is a German SEO path
+    // that only resolves on one shop — on any other the getByRole above waits
+    // out the whole test timeout for a control that was never rendered. The
+    // form carries the right `aid` and `stoken` for THIS shop.
+    const submitted = await page.evaluate(() => {
+        const form = Array.from(document.querySelectorAll('form')).find((f) => {
+            const fnc = f.querySelector('input[name="fnc"]') as HTMLInputElement | null;
+            return fnc?.value === 'tobasket';
+        });
+        if (!form) return false;
+        (form as HTMLFormElement).submit();
+        return true;
+    });
+
+    if (!submitted) {
+        throw new Error(
+            `No add-to-basket control and no tobasket form at ${DEMO_PRODUCT_URL}. ` +
+                'Set MOLLIE_E2E_PRODUCT_URL to a product-detail URL that exists on the shop ' +
+                'under test (e.g. /index.php?cl=details&anid=<oxid>).',
+        );
+    }
     await page.waitForLoadState('domcontentloaded');
 }
 
