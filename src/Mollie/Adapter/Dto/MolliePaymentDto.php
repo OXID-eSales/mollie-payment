@@ -14,6 +14,10 @@ use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
 /**
  * Immutable snapshot of a Mollie payment as the rest of the module sees it. No Mollie SDK type
  * crosses this boundary — the adapter maps the SDK Payment into this DTO.
+ *
+ * Sprint 136: `cardBrand`, `cardLast4` and `walletType` come from Mollie's `details` bag and feed
+ * the admin panel's "payment method used" row. All three are null for every method that has no
+ * card behind it, which is most of them — `$method` alone answers those.
  */
 final readonly class MolliePaymentDto
 {
@@ -33,6 +37,9 @@ final readonly class MolliePaymentDto
         public ?string $webhookUrl = null,
         public float $amountChargedBack = 0.0,
         public ?string $createdAt = null,
+        public ?string $cardBrand = null,
+        public ?string $cardLast4 = null,
+        public ?string $walletType = null,
     ) {
     }
 

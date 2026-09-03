@@ -41,6 +41,44 @@ final class MollieValueMapper
         return $out;
     }
 
+    /**
+     * Read one string field out of Mollie's loosely-typed `details` bag (a
+     * `stdClass` whose keys depend entirely on the payment method).
+     *
+     * Sprint 136.
+     */
+    public static function toDetailString(mixed $details, string $property): ?string
+    {
+        $data = is_object($details) ? (array) $details : (is_array($details) ? $details : []);
+
+        return self::toNullableString($data[$property] ?? null);
+    }
+
+    /**
+     * Last four digits out of Mollie's masked card number ("**** **** **** 4242").
+     *
+     * The mask characters vary by method and by API version, so the digits are
+     * taken from the tail rather than by cutting at a fixed offset. A number
+     * that carries no trailing digits yields null: the mask itself must never
+     * be presented as digits a customer can confirm.
+     *
+     * Sprint 136.
+     */
+    public static function toCardLast4(mixed $details): ?string
+    {
+        $cardNumber = self::toDetailString($details, 'cardNumber');
+
+        if ($cardNumber === null) {
+            return null;
+        }
+
+        if (preg_match('/(\d{4})\D*$/', $cardNumber, $matches) !== 1) {
+            return null;
+        }
+
+        return $matches[1];
+    }
+
     public static function toNullableString(mixed $value): ?string
     {
         if ($value === null || $value === '' || !is_scalar($value)) {

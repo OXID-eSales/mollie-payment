@@ -25,6 +25,7 @@ use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
 use OxidEsales\Payments\Mollie\Service\ContractTokenService;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
+use OxidEsales\Payments\Mollie\Service\AbandonedAttemptCleanup;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver;
 use RuntimeException;
@@ -124,6 +125,7 @@ class MollieOrderController extends MollieOrderController_parent
             if ($this->returnIsPending($contract)) {
                 return $this->onReturnPending($contract);
             }
+            $this->resolveService(AbandonedAttemptCleanup::class)?->retire($contractId);
             return $this->onReturnError('return_not_finalised');
         }
 

@@ -131,10 +131,22 @@ services:
       - { name: payment.event_handler }
     public: true
 
+  # STRP-171 - retires the attempt of a shopper who returned from Mollie
+  # unpaid and did not retry. Public: MollieOrderController is an OXID
+  # controller, so it fetches this through the container at runtime.
+  OxidEsales\Payments\Mollie\Service\AbandonedAttemptCleanup:
+    arguments:
+      - '@OxidEsales\PaymentBase\Checkout\PreviousCheckoutAttemptCleanerInterface'
+    public: true
+
   OxidEsales\PaymentBase\EventSystem\Handler\EarlyOrderCreationHandler:
     arguments:
       $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
       $shopOrderService: '@OxidEsales\PaymentBase\Adapter\ShopOrderServiceInterface'
+      # STRP-171 - retire the NOT_FINISHED order this session already
+      # left behind, instead of stacking another one beside it.
+      $previousAttemptCleaner: '@OxidEsales\PaymentBase\Checkout\PreviousCheckoutAttemptCleanerInterface'
+      $openAttempts: '@OxidEsales\PaymentBase\Checkout\OpenCheckoutAttemptRegistryInterface'
     tags:
       - { name: payment.event_handler, priority: 90 }
     public: false
@@ -471,6 +483,16 @@ services:
     alias: OxidEsales\Payments\Mollie\Admin\AdminActionBounds
     public: true
   OxidEsales\Payments\Mollie\Admin\AdminActionBounds:
+    public: true
+
+  # Sprint 136: the panel's single live payment read. Shared (Symfony default),
+  # so the capture bound, the refund bound, the authorized-hold gate and the
+  # payment-method row cost one HTTP round trip per request instead of four.
+  # Must stay shared — a `shared: false` here silently restores the old cost.
+  OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProviderInterface:
+    alias: OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider
+    public: true
+  OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider:
     public: true
 
   OxidEsales\Payments\Mollie\Admin\AdminAmountValidator:
