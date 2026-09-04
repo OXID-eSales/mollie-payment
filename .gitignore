@@ -4,3 +4,6 @@ tests/.phpunit.cache/
 .phpunit.result.cache
 tests/e2e/**/.env
 *.log
+
+# Secret-scan reports produced by .github/workflows/gitleaks.yml
+gitleaks-*.sarif
