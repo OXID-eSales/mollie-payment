@@ -10,17 +10,19 @@
     "oxid",
     "modules",
     "eShop",
+    "payment",
     "mollie"
   ],
-  "repositories": [
+  "authors": [
     {
-      "type": "path",
-      "url": "../payment-base",
-      "options": {
-        "symlink": true
-      }
+      "name": "OXID eSales AG",
+      "email": "info@oxid-esales.com"
     }
   ],
+  "support": {
+    "issues": "https://github.com/OXID-eSales/mollie-payment/issues",
+    "source": "https://github.com/OXID-eSales/mollie-payment"
+  },
   "conflict": {
     "oxid-esales/oxideshop-ce": "<7.4"
   },
@@ -28,29 +30,29 @@
   "prefer-stable": true,
   "require": {
     "php": "^8.2",
-    "oxid-esales/payment-base": "*",
+    "ext-json": "*",
+    "doctrine/dbal": "^2.13 || ^3.0",
     "mollie/mollie-api-php": "^2.0",
-    "symfony/yaml": "^6.4 || ^7.0",
-    "doctrine/dbal": "^2.13"
+    "oxid-esales/payment-base": ">=v1.2",
+    "psr/log": "^1.0 || ^2.0 || ^3.0",
+    "symfony/console": "^6.4 || ^7.0"
   },
   "require-dev": {
-    "symfony/filesystem": "^6.4",
     "phpstan/phpstan": "^2.0.2",
     "squizlabs/php_codesniffer": "^3.10",
     "phpmd/phpmd": "^2.15",
     "oxid-esales/oxideshop-ce": "dev-b-7.4.x",
     "phpunit/phpunit": "^11.4",
-    "mikey179/vfsstream": "~1.6.8",
     "oxid-esales/developer-tools": "dev-b-7.4.x"
   },
   "autoload": {
     "psr-4": {
-      "OxidEsales\\Payments\\Mollie\\": "./src/Mollie",
-      "OxidEsales\\Payments\\Mollie\\Tests\\": "./tests"
+      "OxidEsales\\Payments\\Mollie\\": "./src/Mollie"
     }
   },
   "autoload-dev": {
     "psr-4": {
+      "OxidEsales\\Payments\\Mollie\\Tests\\": "./tests",
       "OxidEsales\\EshopCommunity\\Tests\\": "./vendor/oxid-esales/oxideshop-ce/tests"
     }
   },
@@ -68,8 +70,7 @@
   "config": {
     "allow-plugins": {
       "oxid-esales/oxideshop-composer-plugin": true,
-      "oxid-esales/oxideshop-unified-namespace-generator": true,
-      "oxid-esales/payment-base": true
+      "oxid-esales/oxideshop-unified-namespace-generator": true
     }
   }
 }

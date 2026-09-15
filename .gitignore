@@ -7,3 +7,6 @@ tests/e2e/**/.env
 
 # Secret-scan reports produced by .github/workflows/gitleaks.yml
 gitleaks-*.sarif
+
+# Playwright run artefacts
+test-results/

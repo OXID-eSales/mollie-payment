@@ -31,10 +31,11 @@ $aModule = [
         'de' => 'Mollie-Zahlungsintegration mit Smart Contracts für OXID eShop 7',
         'en' => 'Mollie payment integration with Smart Contracts for OXID eShop 7',
     ],
-    'version' => '0.1.0',
+    'version' => '1.0.0-rc.1',
     'author' => 'OXID eSales AG',
     'url' => 'https://github.com/OXID-eSales/mollie-payment',
     'email' => 'info@oxid-esales.com',
+    'thumbnail' => 'img/logo.png',
     'extend' => [
         ViewConfig::class => MollieViewConfig::class,
         PaymentController::class => MolliePaymentController::class,

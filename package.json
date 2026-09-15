@@ -4,6 +4,8 @@
   "private": true,
   "description": "Frontend assets for the OXID Mollie payment module (storefront method selector).",
   "main": "assets/js/mollie-frontend.min.js",
+  "author": "OXID eSales AG",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "build": "node resources/build.js production",
     "build:dev": "node resources/build.js development",
