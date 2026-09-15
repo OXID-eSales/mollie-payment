@@ -10,3 +10,12 @@ gitleaks-*.sarif
 
 # Playwright run artefacts
 test-results/
+
+# Artefacts of a module-local `composer install`: oxideshop-ce is a dev
+# dependency, so its package installer lays down a shop skeleton and creates
+# directories named after the unresolved config placeholders.
+/source/
+/var/
+/<sCompileDir>/
+/<sShopDir>/
+composer.lock

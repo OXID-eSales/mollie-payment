@@ -112,7 +112,7 @@ jobs:
 
       - name: Install payment-base at shop level
         run: |
-          docker compose exec -T php composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH} as v1.0.0" --no-interaction --no-update
+          docker compose exec -T php composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH}" --no-interaction --no-update
 
       - name: Install module
         run: |
@@ -267,7 +267,7 @@ jobs:
 
       - name: Pin payment-base
         working-directory: source/test-module
-        run: composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH} as v1.0.0" --no-update --no-interaction
+        run: composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH}" --no-update --no-interaction
 
       - name: Install module dependencies
         id: dependencies
@@ -328,20 +328,20 @@ jobs:
 
       - name: Pin payment-base
         run: |
-          docker compose exec -T php bash -c "cd /var/www/test-module && composer require 'oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH} as v1.0.0' --no-update --no-interaction"
+          docker compose exec -T php bash -c "cd /var/www/test-module && composer require 'oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH}' --no-update --no-interaction"
 
       - name: Install module dependencies
         run: |
           docker compose exec -T php bash -c "cd /var/www/test-module && composer update --no-interaction"
 
       - name: Run isolated unit tests
-        # Use the SHOP's PHPUnit binary (/var/www/vendor), not the module's own
-        # (test-module/vendor). The test bootstrap loads the shop, which registers the shop's
-        # PHPUnit autoloader; running the module's separately-pinned PHPUnit alongside it puts
-        # two PHPUnit versions on the classpath and fatals. Always use the shop's binary so the
-        # PHPUnit version matches the bootstrap.
+        # Genuinely isolated: the module's own PHPUnit against
+        # tests/phpunit-unit.xml, which boots nothing but composer's autoloader
+        # (see tests/bootstrap-unit.php). No shop, no database — so there is no
+        # second PHPUnit on the classpath, the reason this job used to borrow
+        # the shop's binary.
         run: |
-          docker compose exec -T php bash -c "cd /var/www/test-module && /var/www/vendor/bin/phpunit -c tests/phpunit.xml --testsuite Unit --bootstrap=/var/www/source/bootstrap.php"
+          docker compose exec -T php bash -c "cd /var/www/test-module && vendor/bin/phpunit -c tests/phpunit-unit.xml"
 
   integration_tests:
     strategy:
@@ -390,7 +390,7 @@ jobs:
 
       - name: Install payment-base at shop level
         run: |
-          docker compose exec -T php composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH} as v1.0.0" --no-interaction --no-update
+          docker compose exec -T php composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH}" --no-interaction --no-update
 
       - name: Install testing dependencies
         run: |

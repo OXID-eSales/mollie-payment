@@ -26,8 +26,16 @@ first version cut for distribution via composer.
   neither was used.
 - `oxid-esales/payment-base` was listed under `config.allow-plugins`; it is a module, not a
   composer plugin, so the entry is gone.
-- The test namespace moved out of the production autoloader into `autoload-dev`.
 - `package.json` carries an author and `SEE LICENSE IN LICENSE`; it was already marked private.
+
+### Changed (tests)
+- The unit suite runs standalone: `tests/phpunit-unit.xml` with `tests/bootstrap-unit.php`, which
+  boots composer's autoloader plus the few things only an activated module would otherwise
+  provide (the `*_parent` classes, the shop's global functions, an in-memory `Config`). No shop,
+  no database, 595 tests. The CI job now uses the module's own PHPUnit instead of borrowing the
+  shop's binary, and the test namespace moved from `autoload` to `autoload-dev`.
+- The workflows no longer pin payment-base with an explicit `as v1.0.0` alias. payment-base
+  declares `extra.branch-alias`, so the branch under test satisfies `>=v1.2` by itself.
 
 ### Removed
 - `test-results/` is no longer tracked — it holds Playwright run artefacts, not module source.

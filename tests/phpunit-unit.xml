@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!--
+    Standalone unit suite — no shop, no database.
+
+    Runs against the module's own vendor/ (oxideshop-ce is a dev dependency, so
+    `OxidEsales\Eshop\*` resolves through the unified namespace generator) and
+    bootstrap-unit.php, which supplies the handful of things only a booted shop
+    would otherwise provide: the `*_parent` classes OXID creates at module
+    activation, the shop's global functions, and an in-memory Config.
+
+    The shop-bound suites stay in phpunit.xml.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/11.5/phpunit.xsd"
+         bootstrap="bootstrap-unit.php"
+         cacheDirectory=".phpunit.cache"
+         beStrictAboutTestsThatDoNotTestAnything="true"
+         colors="true">
+  <testsuites>
+    <testsuite name="Unit">
+      <directory>Unit/</directory>
+    </testsuite>
+  </testsuites>
+  <php>
+    <const name="OXID_PHP_UNIT" value="true"/>
+  </php>
+  <source>
+    <include>
+      <directory suffix=".php">../src</directory>
+    </include>
+  </source>
+</phpunit>

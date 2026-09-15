@@ -52,7 +52,14 @@ final class ComposerStructureTest extends TestCase
         $psr4 = $composer['autoload']['psr-4'] ?? [];
         self::assertIsArray($psr4);
         self::assertSame('./src/Mollie', $psr4['OxidEsales\\Payments\\Mollie\\'] ?? null);
-        self::assertSame('./tests', $psr4['OxidEsales\\Payments\\Mollie\\Tests\\'] ?? null);
+
+        // The test namespace belongs in autoload-dev, not in the production
+        // autoloader: tests/ is stripped from the composer package, and the unit
+        // suite runs standalone (tests/phpunit-unit.xml), where the module is the
+        // root package and autoload-dev applies.
+        $psr4Dev = $composer['autoload-dev']['psr-4'] ?? [];
+        self::assertIsArray($psr4Dev);
+        self::assertSame('./tests', $psr4Dev['OxidEsales\\Payments\\Mollie\\Tests\\'] ?? null);
     }
 
     public function testComposer_IsOxideshopModule(): void
