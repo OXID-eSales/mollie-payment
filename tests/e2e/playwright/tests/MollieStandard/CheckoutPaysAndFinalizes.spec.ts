@@ -5,6 +5,7 @@ import {
     goToCheckoutPayment,
     selectMolliePaymentMethod,
     continueToOrderReview,
+    acceptTermsAndConditions,
     completeMollieTestPayment,
 } from '../../fixtures/shop-helpers';
 
@@ -30,6 +31,7 @@ test.describe('Mollie standard checkout — happy path', () => {
 
         // "Place order" submits to cl=order&fnc=execute; MolliePaymentController hands off to
         // MollieOrderController::execute(), which 302s straight to Mollie's hosted checkout.
+        await acceptTermsAndConditions(page);
         await page.getByRole('button', { name: /zahlungspflichtig bestellen|place order|order now/i }).click();
 
         await completeMollieTestPayment(page, 'paid');

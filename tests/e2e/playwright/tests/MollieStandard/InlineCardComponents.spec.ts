@@ -2,6 +2,7 @@ import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import {
     loginStorefront,
     addFirstFeaturedProductToBasket,
+    acceptTermsAndConditions,
 } from '../../fixtures/shop-helpers';
 
 /**
@@ -132,6 +133,7 @@ test.describe('IFRAME-04 — Mollie Components inline card (end to end)', () => 
             }
             await shot(page, testInfo, '02a — test card entered in the inline fields');
 
+            await acceptTermsAndConditions(page);
             await page.getByRole('button', { name: /order now|zahlungspflichtig bestellen|place order/i })
                 .first().click();
 

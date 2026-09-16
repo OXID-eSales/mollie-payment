@@ -64,6 +64,12 @@ class MollieOrderController extends MollieOrderController_parent
             return $this->delegateToParent();
         }
 
+        if (!$this->confirmsTermsAndConditions()) {
+            $this->_blConfirmAGBError = true;
+
+            return null;
+        }
+
         $dispatcher = $this->resolveDispatcher();
         if ($dispatcher === null) {
             return $this->onCheckoutUnavailable();
@@ -142,6 +148,21 @@ class MollieOrderController extends MollieOrderController_parent
     }
 
     /**
+     * LSP: core OrderController::execute() never finalizes or leaves the shop without
+     * validateTermsAndConditions() passing (blConfirmAGB / ord_agb plus the intangible-product
+     * agreements). Intercepting execute() for Mollie must preserve that contract — otherwise a
+     * Mollie payment completes without the mandatory AGB acceptance. On rejection the core flag
+     * `_blConfirmAGBError` re-renders the order step with the READ_AND_CONFIRM_TERMS error,
+     * exactly like a non-Mollie payment.
+     *
+     * Testability seam: the parent method is Registry-backed.
+     */
+    protected function confirmsTermsAndConditions(): bool
+    {
+        return (bool) $this->validateTermsAndConditions();
+    }
+
+    /**
      * Testability seam: real OXID execution delegates to the class-chain parent, which performs
      * the standard `finalizeOrder()` flow for non-Mollie payment methods.
      */
@@ -168,14 +189,14 @@ class MollieOrderController extends MollieOrderController_parent
     {
         $session = Registry::getSession();
         $basket = $session->getBasket();
-        $user = $session->getUser();
-        $userId = is_object($user) && method_exists($user, 'getId') ? (string) $user->getId() : '';
+        // Base::getUser() returns User|false (anonymous session) — normalize to User|null once.
+        $user = $session->getUser() ?: null;
 
         return new EventContext([
             'paymentId' => $paymentId,
-            'userId' => $userId,
+            'userId' => (string) $user?->getId(),
             'basket' => $basket,
-            'user' => is_object($user) ? $user : null,
+            'user' => $user,
             'sessionId' => (string) $session->getId(),
             'conditionTypes' => ['payment_authorized'],
             // IFRAME-04: the inline method selection + (for card) the Mollie Components token,
@@ -294,12 +315,17 @@ class MollieOrderController extends MollieOrderController_parent
     }
 
     /**
-     * @param class-string $className
+     * @template T of object
+     * @param class-string<T> $className
+     * @return T|null
      */
     protected function resolveService(string $className): ?object
     {
         try {
-            return ContainerFacade::get($className);
+            /** @var T $service ContainerFacade::get() is untyped; the id IS the class name here */
+            $service = ContainerFacade::get($className);
+
+            return $service;
         } catch (Throwable $e) {
             // Sprint 11 Story 8: every caller handles null with an explicit user-facing error path, so
             // this controller is fail-closed throughout — but five call sites were resolving services

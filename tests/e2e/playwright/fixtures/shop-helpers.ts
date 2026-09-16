@@ -100,6 +100,19 @@ export async function continueToOrderReview(page: Page): Promise<void> {
 }
 
 /**
+ * Ticks the AGB / Terms-and-Conditions checkbox on the order-review step (rendered only when
+ * blConfirmAGB is active). MollieOrderController::execute() enforces the core terms validation
+ * server-side — "Order now" without it re-renders the order step with READ_AND_CONFIRM_TERMS
+ * (see AgbRequiredBlocksCheckout.spec.ts). No-op when the shop doesn't render the checkbox.
+ */
+export async function acceptTermsAndConditions(page: Page): Promise<void> {
+    const agb = page.locator('#checkAgbTop, input[name="ord_agb"][type="checkbox"]').first();
+    if (await agb.count()) {
+        await agb.check({ force: true });
+    }
+}
+
+/**
  * Completes payment on Mollie's TEST-mode hosted checkout.
  *
  * Test mode first shows a method-selection page (the methods enabled in the merchant's Mollie

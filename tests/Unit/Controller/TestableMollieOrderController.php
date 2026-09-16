@@ -47,8 +47,15 @@ final class TestableMollieOrderController extends MollieOrderController
         private readonly ?CheckoutReturnResponder $responder,
         private readonly string $paymentId = '',
         private readonly ?EventDispatcherInterface $dispatcher = null,
+        private readonly bool $termsAccepted = true,
     ) {
         // Intentionally does NOT call parent::__construct() — no OXID bootstrap needed.
+    }
+
+    protected function confirmsTermsAndConditions(): bool
+    {
+        // The real seam calls core validateTermsAndConditions() (Registry-backed).
+        return $this->termsAccepted;
     }
 
     protected function resolveCheckoutReturnResponder(): CheckoutReturnResponder

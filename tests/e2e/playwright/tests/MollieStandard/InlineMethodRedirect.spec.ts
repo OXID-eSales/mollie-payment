@@ -2,6 +2,7 @@ import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import {
     loginStorefront,
     addFirstFeaturedProductToBasket,
+    acceptTermsAndConditions,
 } from '../../fixtures/shop-helpers';
 
 /**
@@ -105,6 +106,7 @@ test.describe('IFRAME-04 — Mollie inline method selection (non-card redirect)'
                 'card fields must be hidden for a non-card method',
             ).toBeHidden();
 
+            await acceptTermsAndConditions(page);
             await page.getByRole('button', { name: /order now|zahlungspflichtig bestellen|place order/i })
                 .first().click();
 

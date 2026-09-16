@@ -2,6 +2,7 @@ import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import {
     loginStorefront,
     addFirstFeaturedProductToBasket,
+    acceptTermsAndConditions,
 } from '../../fixtures/shop-helpers';
 
 /**
@@ -77,6 +78,7 @@ test.describe('MOLLIE-ORDERS-API — Klarna inline via order data', () => {
 
         await test.step('02 — select Klarna → redirect to the Klarna flow', async () => {
             await klarna.check();
+            await acceptTermsAndConditions(page);
             await page.getByRole('button', { name: /order now|zahlungspflichtig bestellen|place order/i })
                 .first().click();
 

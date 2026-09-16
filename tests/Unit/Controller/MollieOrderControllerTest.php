@@ -114,9 +114,62 @@ final class MollieOrderControllerTest extends TestCase
         self::assertSame([], $controller->redirectedTo);
     }
 
+    public function testExecuteWhenAgbNotAcceptedDoesNotDispatchCheckoutSessionEvent(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::never())->method('dispatch');
+
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, $dispatcher, termsAccepted: false);
+
+        $controller->execute();
+    }
+
+    public function testExecuteWhenAgbNotAcceptedReturnsNullAndFlagsConfirmAgbError(): void
+    {
+        // Dispatcher deliberately unavailable: the guard must fire BEFORE service resolution,
+        // so an invalid request has zero side effects and no "checkout unavailable" error.
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, null, termsAccepted: false);
+
+        $result = $controller->execute();
+
+        self::assertNull($result);
+        // Loose == 1: core sets int 1, the module bool true; the Apex template checks `== 1`.
+        self::assertTrue($controller->isConfirmAGBError() == 1);
+        self::assertSame([], $controller->redirectedTo);
+        self::assertFalse($controller->delegatedToParent);
+        self::assertFalse($controller->unavailableErrorShown);
+    }
+
+    public function testExecuteWhenAgbAcceptedProceedsToCheckoutRedirect(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')
+            ->willReturnCallback(function (MollieCheckoutSessionRequestEvent $event) {
+                $event->getContext()->set('checkoutUrl', 'https://mollie.test/checkout/tr_2');
+                return $event;
+            });
+
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, $dispatcher, termsAccepted: true);
+
+        self::assertNull($controller->execute());
+        self::assertSame(['https://mollie.test/checkout/tr_2'], $controller->redirectedTo);
+    }
+
+    public function testExecuteWhenNonMollieMethodSkipsMollieAgbGuardAndDelegatesToParent(): void
+    {
+        // The parent's own execute() validates terms for non-Mollie payments — the Mollie guard
+        // must not run (and must not block delegation) for them.
+        $controller = $this->executeController('oxidcashondel', null, termsAccepted: false);
+
+        $controller->execute();
+
+        self::assertTrue($controller->delegatedToParent);
+    }
+
     private function executeController(
         string $paymentId,
         ?EventDispatcherInterface $dispatcher,
+        bool $termsAccepted = true,
     ): TestableMollieOrderController {
         return new TestableMollieOrderController(
             requestParams: [],
@@ -126,6 +179,7 @@ final class MollieOrderControllerTest extends TestCase
             responder: null,
             paymentId: $paymentId,
             dispatcher: $dispatcher,
+            termsAccepted: $termsAccepted,
         );
     }
 

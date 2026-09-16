@@ -2,6 +2,7 @@ import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import {
     loginStorefront,
     addFirstFeaturedProductToBasket,
+    acceptTermsAndConditions,
 } from '../../fixtures/shop-helpers';
 
 /**
@@ -73,6 +74,7 @@ test.describe('IFRAME-04 — Mollie pending payment lands on thank-you (not an e
 
         await test.step('01 — pay with PayPal', async () => {
             await paypal.check();
+            await acceptTermsAndConditions(page);
             await page.getByRole('button', { name: /order now|zahlungspflichtig bestellen|place order/i })
                 .first().click();
             await expect(page, 'redirected to Mollie').toHaveURL(/mollie\.com\/checkout/i, { timeout: 45000 });
