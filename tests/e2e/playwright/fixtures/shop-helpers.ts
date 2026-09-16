@@ -113,6 +113,33 @@ export async function acceptTermsAndConditions(page: Page): Promise<void> {
 }
 
 /**
+ * On inline-components shops the order page lists the Mollie methods; the CARD radio hands
+ * submit to the Components JS (client-side tokenization), which never POSTs the form. Specs
+ * that need the server-side `cl=order&fnc=execute` path pick a redirect method instead —
+ * PayPal preferred (its Mollie test flow is the simple status page), else any non-card.
+ *
+ * Returns 'none' (classic redirect flow, no selector rendered), 'picked' (redirect method
+ * selected), or 'card-only' (only card offered — callers should test.skip: the guard under
+ * test cannot be reached through the Components JS).
+ */
+export async function pickRedirectMollieMethod(page: Page): Promise<'none' | 'picked' | 'card-only'> {
+    const radios = page.locator('input[name="mollieMethod"]');
+    if ((await radios.count()) === 0) {
+        return 'none';
+    }
+
+    const paypal = page.locator('input[name="mollieMethod"][value="paypal"]').first();
+    const nonCard = page.locator('input[name="mollieMethod"]:not([value="creditcard"])').first();
+    if ((await nonCard.count()) === 0) {
+        return 'card-only';
+    }
+
+    await ((await paypal.count()) ? paypal : nonCard).check({ force: true });
+
+    return 'picked';
+}
+
+/**
  * Completes payment on Mollie's TEST-mode hosted checkout.
  *
  * Test mode first shows a method-selection page (the methods enabled in the merchant's Mollie

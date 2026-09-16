@@ -6,6 +6,7 @@ import {
     selectMolliePaymentMethod,
     continueToOrderReview,
     acceptTermsAndConditions,
+    pickRedirectMollieMethod,
 } from '../../fixtures/shop-helpers';
 
 /**
@@ -29,18 +30,10 @@ test.describe('Mollie standard checkout — basket-summary-hash enforcement', ()
 
         await acceptTermsAndConditions(page);
 
-        // Inline-components shops: pick a redirect method so the form POSTs natively
-        // (see AgbRequiredBlocksCheckout.spec.ts).
-        const methodRadios = page.locator('input[name="mollieMethod"]');
-        if ((await methodRadios.count()) > 0) {
-            const paypal = page.locator('input[name="mollieMethod"][value="paypal"]').first();
-            const nonCard = page.locator('input[name="mollieMethod"]:not([value="creditcard"])').first();
-            test.skip(
-                (await nonCard.count()) === 0,
-                'only the card method is offered — the Components JS intercepts submit client-side',
-            );
-            await ((await paypal.count()) ? paypal : nonCard).check({ force: true });
-        }
+        // Pick a redirect method so the form POSTs natively to cl=order&fnc=execute — the card
+        // Components JS would intercept the submit and mask the server-side guard under test.
+        const method = await pickRedirectMollieMethod(page);
+        test.skip(method === 'card-only', 'only the card method is offered — the server-side guard cannot be exercised');
 
         // Simulate "basket changed in another tab": the rendered form still carries the OLD hash.
         const tampered = await page.evaluate(() => {

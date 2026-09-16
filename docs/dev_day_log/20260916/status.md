@@ -12,3 +12,8 @@
   - PHPMD headroom came from deleting impossible-input instanceof re-checks after resolveService() went generic — pure-validator fallback not needed.
 - CI fix (DoD: green GitHub Actions): workflows' payment-base checkout token falls back to `github.token` (repo has no PAT secrets; payment-base is public); COMPOSER_AUTH only sent when a PAT exists.
 - Spin-offs to ticket: upstream CE (make basket-hash helpers protected); Stripe module lacks basketSummaryHash validation.
+- e2e suite repair — `mollie-standard` project now 10/10 green:
+  - `FrontendLoggingGated` was missing `loginStorefront()` (walk stalled on the anonymous login step).
+  - `CheckoutPaysAndFinalizes` now picks a redirect method on inline-components shops.
+  - Shared `pickRedirectMollieMethod()` helper in `shop-helpers.ts` replaces the block duplicated across the three regression specs (third call site = extraction).
+  - Ops note: deploying the PendingReturnProbe commit needs an OXID `var/cache` clear — stale compiled containers don't know the new service (fail-closed: pending returns show the error page until cleared).

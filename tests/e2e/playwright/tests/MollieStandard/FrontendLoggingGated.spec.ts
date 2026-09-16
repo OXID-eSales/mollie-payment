@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
+    loginStorefront,
     addFirstFeaturedProductToBasket,
     goToCheckoutPayment,
     selectMolliePaymentMethod,
@@ -37,6 +38,9 @@ test.describe('Frontend logging gated by log level (feature OFF)', () => {
             }
         });
 
+        // cl=payment bounces anonymous sessions to the login step — the walk stalls there
+        // and the payment radios (whose Stimulus controller is under test) never render.
+        await loginStorefront(page);
         await addFirstFeaturedProductToBasket(page);
         await goToCheckoutPayment(page);
         await selectMolliePaymentMethod(page, 'ideal');
