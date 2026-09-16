@@ -114,6 +114,155 @@ final class MollieOrderControllerTest extends TestCase
         self::assertSame([], $controller->redirectedTo);
     }
 
+    public function testExecuteWhenSessionChallengeInvalidDoesNotDispatchCheckoutSessionEvent(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::never())->method('dispatch');
+
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, $dispatcher, challengeValid: false);
+
+        $controller->execute();
+    }
+
+    public function testExecuteWhenSessionChallengeInvalidReturnsNullSilentlyWithoutSideEffects(): void
+    {
+        // Dispatcher deliberately unavailable: the guard must fire BEFORE service resolution.
+        // Core parity: rejection is a silent null — no AGB flag, no error, no redirect.
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, null, challengeValid: false);
+
+        $result = $controller->execute();
+
+        self::assertNull($result);
+        self::assertFalse((bool) $controller->isConfirmAGBError());
+        self::assertSame([], $controller->redirectedTo);
+        self::assertFalse($controller->delegatedToParent);
+        self::assertFalse($controller->unavailableErrorShown);
+    }
+
+    public function testExecuteWhenSessionChallengeValidProceedsToAgbValidation(): void
+    {
+        // Guard ordering mirrors core: challenge first, then terms — a valid challenge with
+        // rejected terms must land in the AGB error path, not the silent challenge rejection.
+        $controller = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            null,
+            termsAccepted: false,
+            challengeValid: true,
+        );
+
+        $result = $controller->execute();
+
+        self::assertNull($result);
+        self::assertTrue($controller->isConfirmAGBError() == 1);
+    }
+
+    public function testExecuteWhenNonMollieMethodDelegatesToParentWhichRunsItsOwnChallengeCheck(): void
+    {
+        $controller = $this->executeController('oxidcashondel', null, challengeValid: false);
+
+        $controller->execute();
+
+        self::assertTrue($controller->delegatedToParent);
+    }
+
+    public function testExecuteWhenBasketHashMismatchesDoesNotDispatchCheckoutSessionEvent(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::never())->method('dispatch');
+
+        $controller = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            $dispatcher,
+            requestParams: ['basketSummaryHash' => 'stale-hash'],
+        );
+
+        $controller->execute();
+    }
+
+    public function testExecuteWhenBasketHashMismatchesShowsBasketChangedErrorAndReturnsOrder(): void
+    {
+        $controller = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            null,
+            requestParams: ['basketSummaryHash' => 'stale-hash'],
+        );
+
+        $result = $controller->execute();
+
+        self::assertSame('order', $result);
+        self::assertSame(['order'], $controller->basketErrorsShown);
+        self::assertSame([], $controller->redirectedTo);
+        self::assertFalse($controller->unavailableErrorShown);
+    }
+
+    public function testExecuteWhenBasketHashMismatchesOnEmptyBasketReturnsBasket(): void
+    {
+        $controller = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            null,
+            requestParams: ['basketSummaryHash' => 'stale-hash'],
+            basketEmpty: true,
+        );
+
+        self::assertSame('basket', $controller->execute());
+        self::assertSame(['basket'], $controller->basketErrorsShown);
+    }
+
+    public function testExecuteWhenBasketHashMissingLogsWarningAndProceedsToRedirect(): void
+    {
+        // Core parity: a missing hash only warns — it must NOT block the checkout.
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')
+            ->willReturnCallback(function (MollieCheckoutSessionRequestEvent $event) {
+                $event->getContext()->set('checkoutUrl', 'https://mollie.test/checkout/tr_3');
+                return $event;
+            });
+
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, $dispatcher, requestParams: []);
+
+        self::assertNull($controller->execute());
+        self::assertSame(['https://mollie.test/checkout/tr_3'], $controller->redirectedTo);
+        self::assertSame([], $controller->basketErrorsShown);
+    }
+
+    public function testExecuteWhenBasketHashMatchesProceedsToRedirect(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')
+            ->willReturnCallback(function (MollieCheckoutSessionRequestEvent $event) {
+                $event->getContext()->set('checkoutUrl', 'https://mollie.test/checkout/tr_4');
+                return $event;
+            });
+
+        $controller = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            $dispatcher,
+            requestParams: ['basketSummaryHash' => TestableMollieOrderController::LIVE_BASKET_HASH],
+        );
+
+        self::assertNull($controller->execute());
+        self::assertSame(['https://mollie.test/checkout/tr_4'], $controller->redirectedTo);
+        self::assertSame([], $controller->basketErrorsShown);
+    }
+
+    public function testExecuteGuardOrderIsChallengeThenTermsThenBasketHash(): void
+    {
+        // Terms rejected + mismatched hash: core validates terms FIRST — the AGB error must win
+        // and the basket-hash guard must not have run.
+        $controller = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            null,
+            termsAccepted: false,
+            requestParams: ['basketSummaryHash' => 'stale-hash'],
+        );
+
+        $result = $controller->execute();
+
+        self::assertNull($result);
+        self::assertTrue($controller->isConfirmAGBError() == 1);
+        self::assertSame([], $controller->basketErrorsShown);
+    }
+
     public function testExecuteWhenAgbNotAcceptedDoesNotDispatchCheckoutSessionEvent(): void
     {
         $dispatcher = $this->createMock(EventDispatcherInterface::class);
@@ -166,13 +315,19 @@ final class MollieOrderControllerTest extends TestCase
         self::assertTrue($controller->delegatedToParent);
     }
 
+    /**
+     * @param array<string, string> $requestParams
+     */
     private function executeController(
         string $paymentId,
         ?EventDispatcherInterface $dispatcher,
         bool $termsAccepted = true,
+        bool $challengeValid = true,
+        array $requestParams = [],
+        bool $basketEmpty = false,
     ): TestableMollieOrderController {
         return new TestableMollieOrderController(
-            requestParams: [],
+            requestParams: $requestParams,
             tokenService: $this->createMock(TokenServiceInterface::class),
             contractRepository: $this->createMock(ContractRepositoryInterface::class),
             resolver: null,
@@ -180,6 +335,8 @@ final class MollieOrderControllerTest extends TestCase
             paymentId: $paymentId,
             dispatcher: $dispatcher,
             termsAccepted: $termsAccepted,
+            challengeValid: $challengeValid,
+            basketEmpty: $basketEmpty,
         );
     }
 

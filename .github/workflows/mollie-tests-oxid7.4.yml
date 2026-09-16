@@ -102,7 +102,9 @@ jobs:
           repository: OXID-eSales/payment-base
           ref: ${{ env.PAYMENT_BASE_BRANCH }}
           path: source/payment-base
-          token: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+          # payment-base is public: fall back to the ephemeral workflow token when no
+          # org-level PAT is configured (an empty token input fails the checkout action).
+          token: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN || github.token }}
 
       - name: Configure path repository for payment-base
         run: |
@@ -134,7 +136,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
         run: |
-          docker compose exec -T -e COMPOSER_AUTH="{\"github-oauth\":{\"github.com\":\"${GH_TOKEN}\"}}" \
+          # An EMPTY github-oauth token 401s where anonymous access would succeed —
+          # only pass COMPOSER_AUTH when a PAT is actually configured.
+          COMPOSER_AUTH_JSON="{}"
+          if [ -n "${GH_TOKEN}" ]; then
+            COMPOSER_AUTH_JSON="{\"github-oauth\":{\"github.com\":\"${GH_TOKEN}\"}}"
+          fi
+          docker compose exec -T -e COMPOSER_AUTH="${COMPOSER_AUTH_JSON}" \
             php composer update --with-all-dependencies --no-interaction
 
       # Workaround for a CI-environment-specific bug in
@@ -255,7 +263,9 @@ jobs:
           repository: OXID-eSales/payment-base
           ref: ${{ env.PAYMENT_BASE_BRANCH }}
           path: source/payment-base
-          token: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+          # payment-base is public: fall back to the ephemeral workflow token when no
+          # org-level PAT is configured (an empty token input fails the checkout action).
+          token: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN || github.token }}
 
       - name: Configure path repository for payment-base
         working-directory: source/test-module
@@ -272,8 +282,13 @@ jobs:
         id: dependencies
         working-directory: source/test-module
         env:
-          COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}"}}'
-        run: composer update --no-interaction
+          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+        run: |
+          # Only authenticate when a PAT exists — an empty github-oauth token 401s.
+          if [ -n "${GH_TOKEN}" ]; then
+            export COMPOSER_AUTH="{\"github-oauth\":{\"github.com\":\"${GH_TOKEN}\"}}"
+          fi
+          composer update --no-interaction
 
       # In GitHub Actions the module's pre-commit-check.sh runs the composer style scripts
       # (phpcs / phpstan level max / phpmd) and skips PHPUnit — unit + integration run in their
@@ -318,7 +333,9 @@ jobs:
           repository: OXID-eSales/payment-base
           ref: ${{ env.PAYMENT_BASE_BRANCH }}
           path: source/payment-base
-          token: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+          # payment-base is public: fall back to the ephemeral workflow token when no
+          # org-level PAT is configured (an empty token input fails the checkout action).
+          token: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN || github.token }}
 
       - name: Configure path repository for payment-base
         run: |
@@ -377,7 +394,9 @@ jobs:
           repository: OXID-eSales/payment-base
           ref: ${{ env.PAYMENT_BASE_BRANCH }}
           path: source/payment-base
-          token: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+          # payment-base is public: fall back to the ephemeral workflow token when no
+          # org-level PAT is configured (an empty token input fails the checkout action).
+          token: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN || github.token }}
 
       - name: Configure path repository for payment-base
         run: |
