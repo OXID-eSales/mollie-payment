@@ -9,52 +9,41 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 
-use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use OxidEsales\Payments\Mollie\Service\MollieUrlBuilder;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(MollieUrlBuilder::class)]
 final class MollieUrlBuilderTest extends TestCase
 {
-    private ModuleConfigurationServiceInterface&MockObject $config;
+    private MollieUrlBuilder $builder;
 
     protected function setUp(): void
     {
-        $this->config = $this->createMock(ModuleConfigurationServiceInterface::class);
+        $this->builder = new MollieUrlBuilder();
     }
 
-    public function testPaymentUrl_InTestMode_UsesTestModeDashboard(): void
+    public function testPaymentUrl_PointsAtTheDashboardPaymentPage(): void
     {
-        $this->config->method('isTestMode')->willReturn(true);
-        $builder = new MollieUrlBuilder($this->config);
-
-        self::assertSame(
-            'https://my.mollie.com/dashboard/test-mode/payments/tr_abc',
-            $builder->paymentUrl('tr_abc'),
-        );
-    }
-
-    public function testPaymentUrl_InLiveMode_UsesLiveDashboard(): void
-    {
-        $this->config->method('isTestMode')->willReturn(false);
-        $builder = new MollieUrlBuilder($this->config);
-
         self::assertSame(
             'https://my.mollie.com/dashboard/payments/tr_abc',
-            $builder->paymentUrl('tr_abc'),
+            $this->builder->paymentUrl('tr_abc'),
         );
+    }
+
+    public function testPaymentUrl_NeverCarriesATestModeSegment(): void
+    {
+        // Mollie's dashboard no longer encodes the mode in the path: the same
+        // /dashboard/payments/{id} page serves test and live payments, so the
+        // builder must not read the module mode at all.
+        self::assertStringNotContainsString('test-mode', $this->builder->paymentUrl('tr_abc'));
     }
 
     public function testPaymentUrl_EncodesThePaymentId(): void
     {
-        $this->config->method('isTestMode')->willReturn(false);
-        $builder = new MollieUrlBuilder($this->config);
-
         self::assertSame(
             'https://my.mollie.com/dashboard/payments/tr%2Fabc',
-            $builder->paymentUrl('tr/abc'),
+            $this->builder->paymentUrl('tr/abc'),
         );
     }
 }

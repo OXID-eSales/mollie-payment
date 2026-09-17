@@ -3,6 +3,15 @@
 All notable changes to this module are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions adhere to [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Admin *Payment* tab: the Mollie dashboard deep-link on the provider payment id carried a stale
+  `test-mode` path segment for test-mode orders (`…/dashboard/test-mode/payments/tr_…`). Mollie's
+  dashboard no longer encodes the mode in the URL, so the link was dead. `MollieUrlBuilder` now emits
+  `https://my.mollie.com/dashboard/payments/{id}` regardless of mode and no longer depends on the
+  module configuration.
+
 ## [v1.0.0-rc.1] - 2026-09-15
 
 First published release candidate. The module was developed as `0.1.0` without tags; this is the

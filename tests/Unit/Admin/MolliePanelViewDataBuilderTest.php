@@ -23,7 +23,6 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
-use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use OxidEsales\Payments\Mollie\Service\MollieUrlBuilder;
 use OxidEsales\Payments\Mollie\Service\TransactionHistoryServiceInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -47,9 +46,7 @@ final class MolliePanelViewDataBuilderTest extends TestCase
         $this->contracts = $this->createMock(ContractRepositoryInterface::class);
         $this->transactionHistory = $this->createMock(TransactionHistoryServiceInterface::class);
         $this->bounds = $this->createMock(AdminActionBoundsInterface::class);
-        $moduleConfig = $this->createMock(ModuleConfigurationServiceInterface::class);
-        $moduleConfig->method('isTestMode')->willReturn(true);
-        $this->urlBuilder = new MollieUrlBuilder($moduleConfig);
+        $this->urlBuilder = new MollieUrlBuilder();
         $this->validationFeedback = $this->createMock(AdminValidationFeedbackInterface::class);
         $this->validationFeedback->method('consume')->willReturn([]);
 
