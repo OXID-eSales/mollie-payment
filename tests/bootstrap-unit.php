@@ -60,10 +60,15 @@ if (!class_exists(\OxidEsales\Payments\Mollie\Controller\MollieOrderController_p
     eval(
         'namespace OxidEsales\\Payments\\Mollie\\Controller; '
         . 'class MollieOrderController_parent { '
+        // Core OrderController flag read by isConfirmAGBError(); MollieOrderController::execute()
+        // sets it when validateTermsAndConditions() fails, so the stub must declare it (PHP 8.2
+        // deprecates dynamic properties) and expose the same template getter core does.
+        . '  protected $_blConfirmAGBError = null; '
         . '  public function __construct() {} '
         . '  public function init(): void {} '
         . '  public function render() { return ""; } '
         . '  public function execute() { return null; } '
+        . '  public function isConfirmAGBError() { return $this->_blConfirmAGBError; } '
         . '  public function getUser() { return null; } '
         . '  public function getBasket() { return false; } '
         . '  public function getPayment() { return false; } '
