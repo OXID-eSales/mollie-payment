@@ -182,6 +182,15 @@ services:
   OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper:
     public: true
 
+  # Sprint 02 Story 1: pending-vs-failed classification on the checkout return leg, extracted
+  # from MollieOrderController::returnIsPending(). Public so the controller (a class-chain
+  # extension, not a service) can resolve it via ContainerFacade.
+  OxidEsales\Payments\Mollie\Service\Return\PendingReturnProbe:
+    public: true
+    arguments:
+      $paymentsAdapter: '@OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface'
+      $statusMapper: '@OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper'
+
   # MollieReturnResolver is excluded from the Service/* resource sweep above (it lives in the
   # Return/ subdirectory, mirroring Stripe's own split) and registered explicitly here.
   OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver:

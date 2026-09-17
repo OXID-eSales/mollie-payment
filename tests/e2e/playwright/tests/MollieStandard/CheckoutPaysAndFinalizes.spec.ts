@@ -5,6 +5,8 @@ import {
     goToCheckoutPayment,
     selectMolliePaymentMethod,
     continueToOrderReview,
+    acceptTermsAndConditions,
+    pickRedirectMollieMethod,
     completeMollieTestPayment,
 } from '../../fixtures/shop-helpers';
 
@@ -30,6 +32,11 @@ test.describe('Mollie standard checkout — happy path', () => {
 
         // "Place order" submits to cl=order&fnc=execute; MolliePaymentController hands off to
         // MollieOrderController::execute(), which 302s straight to Mollie's hosted checkout.
+        // On inline-components shops a redirect method must be picked, or the card Components
+        // JS intercepts the submit client-side and the form never POSTs.
+        await acceptTermsAndConditions(page);
+        const method = await pickRedirectMollieMethod(page);
+        test.skip(method === 'card-only', 'only the card method is offered — the redirect happy path cannot run');
         await page.getByRole('button', { name: /zahlungspflichtig bestellen|place order|order now/i }).click();
 
         await completeMollieTestPayment(page, 'paid');

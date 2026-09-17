@@ -2,6 +2,7 @@ import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import {
     loginStorefront,
     addFirstFeaturedProductToBasket,
+    acceptTermsAndConditions,
 } from '../../fixtures/shop-helpers';
 
 /**
@@ -74,6 +75,7 @@ test.describe('MOLLIE-ORDERS-API — Klarna full checkout (end to end)', () => {
         });
 
         await test.step('02 — place order → redirect to Klarna via Mollie (order data accepted)', async () => {
+            await acceptTermsAndConditions(page);
             await page.getByRole('button', { name: /order now|zahlungspflichtig bestellen|place order/i })
                 .first().click();
             await expect(page, 'must redirect to Mollie, not the unavailable error')

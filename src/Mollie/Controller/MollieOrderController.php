@@ -19,15 +19,12 @@ use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Controller\SessionWriterInterface;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
-use OxidEsales\PaymentBase\Service\TokenServiceInterface;
-use OxidEsales\Payments\Mollie\Adapter\MollieOutcome;
-use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
-use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
 use OxidEsales\Payments\Mollie\Service\ContractTokenService;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\AbandonedAttemptCleanup;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver;
+use OxidEsales\Payments\Mollie\Service\Return\PendingReturnProbe;
 use RuntimeException;
 use Throwable;
 
@@ -62,6 +59,21 @@ class MollieOrderController extends MollieOrderController_parent
         $paymentId = $this->getSelectedPaymentId();
         if ($paymentId !== MollieDefinitions::PAYMENT_ID) {
             return $this->delegateToParent();
+        }
+
+        if (!$this->passesSessionChallenge()) {
+            return null;
+        }
+
+        if (!$this->confirmsTermsAndConditions()) {
+            $this->_blConfirmAGBError = true;
+
+            return null;
+        }
+
+        $basketRedirect = $this->validateBasketSummaryHash();
+        if ($basketRedirect !== null) {
+            return $basketRedirect;
         }
 
         $dispatcher = $this->resolveDispatcher();
@@ -134,11 +146,100 @@ class MollieOrderController extends MollieOrderController_parent
 
     protected function resolveCheckoutReturnResponder(): CheckoutReturnResponder
     {
-        $responder = $this->resolveService(CheckoutReturnResponder::class);
+        // resolveService() is generic (T|null) and the container id IS the class name — no
+        // instanceof re-check needed here or in the sibling resolvers below.
+        return $this->resolveService(CheckoutReturnResponder::class)
+            ?? throw new RuntimeException('CheckoutReturnResponder not available');
+    }
 
-        return $responder instanceof CheckoutReturnResponder
-            ? $responder
-            : throw new RuntimeException('CheckoutReturnResponder not available');
+    /**
+     * LSP: core OrderController::execute() runs Session::checkSessionChallenge() as its FIRST
+     * guard and returns null (silent re-render) on failure. Intercepting execute() for Mollie
+     * must preserve that CSRF contract — otherwise a cross-site form POST can trigger a Mollie
+     * checkout session for a logged-in customer. Rejection is deliberately silent (core parity).
+     *
+     * Testability seam: the session is Registry-backed.
+     */
+    protected function passesSessionChallenge(): bool
+    {
+        return (bool) Registry::getSession()->checkSessionChallenge();
+    }
+
+    /**
+     * LSP: core OrderController::execute() never finalizes or leaves the shop without
+     * validateTermsAndConditions() passing (blConfirmAGB / ord_agb plus the intangible-product
+     * agreements). Intercepting execute() for Mollie must preserve that contract — otherwise a
+     * Mollie payment completes without the mandatory AGB acceptance. On rejection the core flag
+     * `_blConfirmAGBError` re-renders the order step with the READ_AND_CONFIRM_TERMS error,
+     * exactly like a non-Mollie payment.
+     *
+     * Testability seam: the parent method is Registry-backed.
+     */
+    protected function confirmsTermsAndConditions(): bool
+    {
+        return (bool) $this->validateTermsAndConditions();
+    }
+
+    /**
+     * LSP: core OrderController::execute() never finalizes or leaves the shop when the posted
+     * basketSummaryHash no longer matches the live basket ("basket changed in another tab") —
+     * it shows BASKET_ITEMS_CHANGED_ERROR and returns to the order (or basket) step. Core's
+     * helpers are PRIVATE (OrderController::getBasketSummaryHash() and friends), so the
+     * comparison is mirrored here — do not fork the behavior. Core parity throughout: a
+     * MISSING hash only logs a warning and proceeds.
+     *
+     * @return string|null null to proceed; otherwise the controller to return to
+     */
+    private function validateBasketSummaryHash(): ?string
+    {
+        $requestHash = $this->readRequestParameter('basketSummaryHash');
+        if ($requestHash === null) {
+            $this->warnBasketHashMissing();
+
+            return null;
+        }
+
+        if ($requestHash === $this->currentBasketSummaryHash()) {
+            return null;
+        }
+
+        $redirect = $this->basketRedirectTarget();
+        $this->showBasketChangedError($redirect);
+
+        return $redirect;
+    }
+
+    /**
+     * Mirror of core's private OrderController::getBasketSummaryHash() — byte-for-byte, or every
+     * legitimate order gets rejected. Testability seam (Registry-backed).
+     */
+    protected function currentBasketSummaryHash(): string
+    {
+        return md5((string) json_encode(Registry::getSession()->getBasket()->getBasketSummary()));
+    }
+
+    /**
+     * Core parity: an emptied basket returns to the basket step, otherwise back to order review.
+     */
+    protected function basketRedirectTarget(): string
+    {
+        return Registry::getSession()->getBasket()->getProductsCount() === 0 ? 'basket' : 'order';
+    }
+
+    protected function showBasketChangedError(string $redirect): void
+    {
+        Registry::getUtilsView()->addErrorToDisplay('BASKET_ITEMS_CHANGED_ERROR', false, true, '', $redirect);
+    }
+
+    /**
+     * Core-parity wording — mirror of the private notifyIfBasketSummaryValidationIsNotPossible().
+     */
+    protected function warnBasketHashMissing(): void
+    {
+        Registry::getLogger()->warning(
+            'Pricing and payments verification can not be performed, ' .
+            'the basketSummaryHash parameter was not sent with request data.'
+        );
     }
 
     /**
@@ -159,23 +260,21 @@ class MollieOrderController extends MollieOrderController_parent
 
     protected function resolveDispatcher(): ?EventDispatcherInterface
     {
-        $dispatcher = $this->resolveService(EventDispatcherInterface::class);
-
-        return $dispatcher instanceof EventDispatcherInterface ? $dispatcher : null;
+        return $this->resolveService(EventDispatcherInterface::class);
     }
 
     protected function buildCheckoutContext(string $paymentId): EventContext
     {
         $session = Registry::getSession();
         $basket = $session->getBasket();
-        $user = $session->getUser();
-        $userId = is_object($user) && method_exists($user, 'getId') ? (string) $user->getId() : '';
+        // Base::getUser() returns User|false (anonymous session) — normalize to User|null once.
+        $user = $session->getUser() ?: null;
 
         return new EventContext([
             'paymentId' => $paymentId,
-            'userId' => $userId,
+            'userId' => (string) $user?->getId(),
             'basket' => $basket,
-            'user' => is_object($user) ? $user : null,
+            'user' => $user,
             'sessionId' => (string) $session->getId(),
             'conditionTypes' => ['payment_authorized'],
             // IFRAME-04: the inline method selection + (for card) the Mollie Components token,
@@ -209,9 +308,7 @@ class MollieOrderController extends MollieOrderController_parent
 
     private function resolveReturnResolver(): ?ReturnResolverInterface
     {
-        $resolver = $this->resolveService(MollieReturnResolver::class);
-
-        return $resolver instanceof ReturnResolverInterface ? $resolver : null;
+        return $this->resolveService(MollieReturnResolver::class);
     }
 
     private function tokenIsValid(string $contractToken, string $contractId): bool
@@ -219,17 +316,13 @@ class MollieOrderController extends MollieOrderController_parent
         // Resolve Mollie's CONCRETE token service, not the shared
         // PaymentBase\TokenServiceInterface: that interface is single-valued in the merged DI
         // container and, when another PSP is active, resolves to the wrong provider's HMAC.
-        $tokenService = $this->resolveService(ContractTokenService::class);
-
-        return $tokenService instanceof TokenServiceInterface
-            && $tokenService->validateToken($contractToken, $contractId);
+        return $this->resolveService(ContractTokenService::class)
+            ?->validateToken($contractToken, $contractId) ?? false;
     }
 
     private function loadContract(string $contractId): ?PaymentContractInterface
     {
-        $repository = $this->resolveService(ContractRepositoryInterface::class);
-
-        return $repository instanceof ContractRepositoryInterface ? $repository->findById($contractId) : null;
+        return $this->resolveService(ContractRepositoryInterface::class)?->findById($contractId);
     }
 
     protected function readRequestParameter(string $name): ?string
@@ -250,26 +343,12 @@ class MollieOrderController extends MollieOrderController_parent
 
     /**
      * True when the Mollie payment is still open/pending on return (not paid/authorized yet, but not
-     * failed) — the webhook will finalize it. Overridable seam; production queries Mollie once.
+     * failed) — the webhook will finalize it. Overridable seam; production delegates to
+     * {@see PendingReturnProbe}, fail-closed to false when the service is unavailable.
      */
     protected function returnIsPending(PaymentContractInterface $contract): bool
     {
-        $paymentId = $contract->getProviderOrderId();
-        if ($paymentId === null || $paymentId === '') {
-            return false;
-        }
-
-        $adapter = $this->resolveService(MolliePaymentsAdapterInterface::class);
-        $mapper = $this->resolveService(MollieStatusMapper::class);
-        if (!$adapter instanceof MolliePaymentsAdapterInterface || !$mapper instanceof MollieStatusMapper) {
-            return false;
-        }
-
-        try {
-            return $mapper->map($adapter->getPayment($paymentId)->status) === MollieOutcome::PENDING;
-        } catch (Throwable) {
-            return false;
-        }
+        return $this->resolveService(PendingReturnProbe::class)?->isPending($contract) ?? false;
     }
 
     /**
@@ -282,9 +361,9 @@ class MollieOrderController extends MollieOrderController_parent
             'MollieOrderController: payment pending on return — order placed, awaiting webhook confirmation',
         );
 
-        $orderId = $contract->getOrderId();
+        $orderId = (string) $contract->getOrderId();
         $writer = $this->resolveService(SessionWriterInterface::class);
-        if (is_string($orderId) && $orderId !== '' && $writer instanceof SessionWriterInterface) {
+        if ($writer !== null && $orderId !== '') {
             $writer->writeSessChallenge($orderId);
         }
 
@@ -294,12 +373,17 @@ class MollieOrderController extends MollieOrderController_parent
     }
 
     /**
-     * @param class-string $className
+     * @template T of object
+     * @param class-string<T> $className
+     * @return T|null
      */
     protected function resolveService(string $className): ?object
     {
         try {
-            return ContainerFacade::get($className);
+            /** @var T $service ContainerFacade::get() is untyped; the id IS the class name here */
+            $service = ContainerFacade::get($className);
+
+            return $service;
         } catch (Throwable $e) {
             // Sprint 11 Story 8: every caller handles null with an explicit user-facing error path, so
             // this controller is fail-closed throughout — but five call sites were resolving services
