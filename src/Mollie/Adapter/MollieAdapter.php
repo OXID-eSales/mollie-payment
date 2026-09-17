@@ -286,6 +286,9 @@ final class MollieAdapter implements
             cardBrand: MollieValueMapper::toDetailString($payment->details, 'cardLabel'),
             cardLast4: MollieValueMapper::toCardLast4($payment->details),
             walletType: MollieValueMapper::toDetailString($payment->details, 'wallet'),
+            // Nullable by design: Mollie omits it for methods without captures, and the
+            // refundable ceiling must treat "omitted" (settled in full) differently from 0.00.
+            amountCaptured: MollieValueMapper::toOptionalAmountValue($payment->amountCaptured),
         );
     }
 

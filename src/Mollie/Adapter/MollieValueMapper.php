@@ -79,6 +79,20 @@ final class MollieValueMapper
         return $matches[1];
     }
 
+    /**
+     * Value of an OPTIONAL Mollie money object, keeping its absence observable. Unlike the SDK's
+     * `getAmount…()` accessors, which answer 0.0 for a missing object, null stays null — for
+     * `amountCaptured` the difference is "settled in full" versus "nothing captured yet".
+     */
+    public static function toOptionalAmountValue(mixed $amount): ?float
+    {
+        if ($amount === null) {
+            return null;
+        }
+
+        return self::toAmount($amount)->value;
+    }
+
     public static function toNullableString(mixed $value): ?string
     {
         if ($value === null || $value === '' || !is_scalar($value)) {

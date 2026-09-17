@@ -47,6 +47,7 @@ final class PaymentMoneyMappingRegressionTest extends TestCase
     private const REFUNDED = 5.00;
     private const REMAINING = 7.00;
     private const CHARGED_BACK = 40.00;
+    private const CAPTURED = 60.00;
 
     private MollieApiClient $client;
     private PaymentEndpoint $payments;
@@ -68,6 +69,20 @@ final class PaymentMoneyMappingRegressionTest extends TestCase
         self::assertSame(self::REFUNDED, $dto->amountRefunded, 'amountRefunded');
         self::assertSame(self::REMAINING, $dto->amountRemaining, 'amountRemaining');
         self::assertSame(self::CHARGED_BACK, $dto->amountChargedBack, 'amountChargedBack');
+        self::assertSame(self::CAPTURED, $dto->amountCaptured, 'amountCaptured');
+    }
+
+    public function testAmountCapturedStaysNullWhenMollieOmitsIt(): void
+    {
+        // "Only available when this payment supports captures" — absence means the payment
+        // settled in full, and must not collapse into a 0.00 that reads as "nothing captured".
+        $payment = $this->sdkPaymentWithAllMoneyFields();
+        $payment->amountCaptured = null;
+        $this->payments->method('get')->willReturn($payment);
+
+        $dto = (new MollieAdapter($this->client))->getPayment('tr_money');
+
+        self::assertNull($dto->amountCaptured);
     }
 
     public function testAmountChargedBackSurvivesTheWebhookVerificationFetch(): void
@@ -88,7 +103,8 @@ final class PaymentMoneyMappingRegressionTest extends TestCase
         $dto = (new MollieAdapter($this->client))->getPayment('tr_money');
 
         // 100.00 − 5.00 refunded − 40.00 charged back
-        self::assertSame(55.00, $dto->refundableAmount());
+        // …but the base is the 60.00 CAPTURED, not the 100.00 authorized: 60 − 5 − 40
+        self::assertSame(15.00, $dto->refundableAmount());
     }
 
     public function testMoneyFieldInventoryIsUnchanged(): void
@@ -103,7 +119,7 @@ final class PaymentMoneyMappingRegressionTest extends TestCase
         sort($moneyFields);
 
         self::assertSame(
-            ['amountChargedBack', 'amountRefunded', 'amountRemaining'],
+            ['amountCaptured', 'amountChargedBack', 'amountRefunded', 'amountRemaining'],
             $moneyFields,
             'A float field was added to or removed from MolliePaymentDto. Add it to this test and '
             . 'make sure MollieAdapter::mapPayment() maps it — a constructor default will otherwise '
@@ -120,6 +136,7 @@ final class PaymentMoneyMappingRegressionTest extends TestCase
         $payment->amountRefunded = (object) ['currency' => 'EUR', 'value' => '5.00'];
         $payment->amountRemaining = (object) ['currency' => 'EUR', 'value' => '7.00'];
         $payment->amountChargedBack = (object) ['currency' => 'EUR', 'value' => '40.00'];
+        $payment->amountCaptured = (object) ['currency' => 'EUR', 'value' => '60.00'];
         $payment->createdAt = '2026-08-12T10:00:00+00:00';
 
         return $payment;

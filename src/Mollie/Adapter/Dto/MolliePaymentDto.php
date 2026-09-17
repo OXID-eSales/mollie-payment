@@ -18,6 +18,12 @@ use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
  * Sprint 136: `cardBrand`, `cardLast4` and `walletType` come from Mollie's `details` bag and feed
  * the admin panel's "payment method used" row. All three are null for every method that has no
  * card behind it, which is most of them — `$method` alone answers those.
+ *
+ * `amountCaptured` is nullable on purpose. Mollie sends it "only when this payment supports
+ * captures", so null means "settled for the full amount" (iDEAL, PayPal, …) while 0.00 means "an
+ * authorization nothing has been captured from yet". Collapsing the two into 0.0 would make every
+ * non-capture payment look unrefundable — the same shape of ambiguity F11 fixed for
+ * {@see capturableAmount()}.
  */
 final readonly class MolliePaymentDto
 {
@@ -40,6 +46,7 @@ final readonly class MolliePaymentDto
         public ?string $cardBrand = null,
         public ?string $cardLast4 = null,
         public ?string $walletType = null,
+        public ?float $amountCaptured = null,
     ) {
     }
 
@@ -56,7 +63,8 @@ final readonly class MolliePaymentDto
      *     redirectUrl?: string|null,
      *     webhookUrl?: string|null,
      *     amountChargedBack?: string|int|float|null,
-     *     createdAt?: string|null
+     *     createdAt?: string|null,
+     *     amountCaptured?: string|int|float|null
      * } $data
      */
     public static function fromArray(array $data): self
@@ -74,18 +82,28 @@ final readonly class MolliePaymentDto
             isset($data['webhookUrl']) ? (string) $data['webhookUrl'] : null,
             (float) ($data['amountChargedBack'] ?? 0.0),
             isset($data['createdAt']) ? (string) $data['createdAt'] : null,
+            amountCaptured: isset($data['amountCaptured']) ? (float) $data['amountCaptured'] : null,
         );
     }
 
     /**
-     * Remaining refundable balance: the full amount minus whatever has already been refunded or
-     * charged back. Never negative. Single source of truth for both the admin panel's refund
+     * Remaining refundable balance: what actually settled minus whatever has already been refunded
+     * or charged back. Never negative. Single source of truth for both the admin panel's refund
      * bound ({@see \OxidEsales\Payments\Mollie\Admin\AdminActionBounds}) and Sprint 6's
      * {@see \OxidEsales\Payments\Mollie\Service\RefundService}.
+     *
+     * "What settled" is `amountCaptured` when Mollie reports it and the full `amount` otherwise.
+     * Starting from `amount` unconditionally reported a partially captured payment (authorized
+     * 100.00, captured 60.00) as 100.00 refundable — money the customer was never charged.
      */
     public function refundableAmount(): float
     {
-        return max(0.0, $this->amount->value - $this->amountRefunded - $this->amountChargedBack);
+        return max(0.0, $this->settledAmount() - $this->amountRefunded - $this->amountChargedBack);
+    }
+
+    private function settledAmount(): float
+    {
+        return $this->amountCaptured ?? $this->amount->value;
     }
 
     /**

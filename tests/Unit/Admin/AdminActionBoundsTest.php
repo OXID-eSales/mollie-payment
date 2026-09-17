@@ -47,6 +47,23 @@ final class AdminActionBoundsTest extends TestCase
         self::assertSame(60.0, $this->bounds->refundBound($contract));
     }
 
+    public function testRefundBound_PartiallyCapturedPayment_IsBoundedByTheCapturedAmount(): void
+    {
+        // The panel displayed the authorized 100.00 as refundable although only 60.00 was
+        // ever captured — money that never settled cannot be refunded.
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getProviderOrderId')->willReturn('tr_partial');
+        $this->paymentsAdapter->method('getPayment')->with('tr_partial')->willReturn(new MolliePaymentDto(
+            id: 'tr_partial',
+            status: 'paid',
+            amount: MollieAmountDto::fromComponents('EUR', 100.0),
+            amountRefunded: 10.0,
+            amountCaptured: 60.0,
+        ));
+
+        self::assertSame(50.0, $this->bounds->refundBound($contract));
+    }
+
     public function testCaptureBound_IsTheLivePaymentsCapturableAmount(): void
     {
         $contract = $this->createMock(PaymentContractInterface::class);

@@ -6,6 +6,11 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Fixed
+- Admin *Payment* tab and admin refunds: a partially captured payment (e.g. Klarna, authorized
+  100.00 and captured 60.00) showed the full authorized amount as refundable and accepted a refund
+  request for it. `MolliePaymentDto` now carries Mollie's `amountCaptured` and the refundable
+  balance is derived from what actually settled; the field stays `null` for methods without
+  captures, which settle in full.
 - Admin *Payment* tab: the Mollie dashboard deep-link on the provider payment id carried a stale
   `test-mode` path segment for test-mode orders (`…/dashboard/test-mode/payments/tr_…`). Mollie's
   dashboard no longer encodes the mode in the URL, so the link was dead. `MollieUrlBuilder` now emits

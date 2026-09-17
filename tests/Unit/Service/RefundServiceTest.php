@@ -77,6 +77,37 @@ final class RefundServiceTest extends TestCase
         self::assertSame('re_1', $dto->id);
     }
 
+    public function testRefund_Full_OnPartiallyCapturedPayment_RefundsOnlyWhatWasCaptured(): void
+    {
+        // Same ceiling the admin panel shows: a "refund everything" click on a payment that was
+        // authorized for 100.00 but captured for 60.00 must ask Mollie for 60.00, not 100.00.
+        $contract = $this->fulfilledContract('tr_123', '5');
+        $this->paymentsAdapter->method('getPayment')->with('tr_123')->willReturn(
+            $this->payment('tr_123', 100.0, 0.0, captured: 60.0),
+        );
+
+        $this->refundAdapter->expects(self::once())
+            ->method('createRefund')
+            ->with(self::callback(static fn (RefundRequest $request): bool => $request->amount->value === 60.0))
+            ->willReturn($this->refundDto('re_1', 'tr_123', 60.0));
+
+        $this->service->refund($contract);
+    }
+
+    public function testRefund_ExceedingCapturedAmount_ThrowsEvenIfWithinAuthorizedAmount(): void
+    {
+        $contract = $this->fulfilledContract('tr_123', '5');
+        $this->paymentsAdapter->method('getPayment')->willReturn(
+            $this->payment('tr_123', 100.0, 0.0, captured: 60.0),
+        );
+
+        $this->refundAdapter->expects(self::never())->method('createRefund');
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->service->refund($contract, 80.0);
+    }
+
     public function testRefund_Partial_AccumulatesAcrossClicks(): void
     {
         $contract = $this->fulfilledContract('tr_123', '5');
@@ -236,13 +267,18 @@ final class RefundServiceTest extends TestCase
         return $contract;
     }
 
-    private function payment(string $id, float $amount, float $amountRefunded): MolliePaymentDto
-    {
+    private function payment(
+        string $id,
+        float $amount,
+        float $amountRefunded,
+        ?float $captured = null,
+    ): MolliePaymentDto {
         return new MolliePaymentDto(
             id: $id,
             status: 'paid',
             amount: MollieAmountDto::fromComponents('EUR', $amount),
             amountRefunded: $amountRefunded,
+            amountCaptured: $captured,
         );
     }
 
