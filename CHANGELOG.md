@@ -6,6 +6,10 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Fixed
+- Admin *Payment* tab: the "Refunded" figure was the contract's running total and kept counting
+  refunds Mollie had since canceled or failed. It is now the sum of the live refund list shown in
+  the transaction table, minus the voided ones, so it always agrees with the refund bound
+  (refunded + refundable = captured). The local record is only shown when Mollie cannot be read.
 - Admin *Payment* tab: after a refund, capture or cancel the re-rendered tab still showed the
   pre-action refundable amount until reloaded. Two causes: the per-request Mollie payment memo
   was not dropped between the action and the re-render (`resetViewCache()` had been a no-op), and

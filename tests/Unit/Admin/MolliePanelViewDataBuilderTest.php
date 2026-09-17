@@ -19,6 +19,9 @@ use OxidEsales\Payments\Mollie\Admin\AdminActionBounds;
 use OxidEsales\Payments\Mollie\Admin\MolliePanelViewDataBuilder;
 use OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider;
 use OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProviderInterface;
+use OxidEsales\Payments\Mollie\Admin\RefundedAmountResolver;
+use OxidEsales\Payments\Mollie\Adapter\MollieOutcome;
+use OxidEsales\Payments\Mollie\Service\Result\TransactionRow;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
@@ -60,7 +63,29 @@ final class MolliePanelViewDataBuilderTest extends TestCase
             $this->validationFeedback,
             $this->snapshots,
             $this->translatorStub(),
+            new RefundedAmountResolver(),
         );
+    }
+
+    public function testBuild_RefundedAmountIsWhatMollieHoldsNotTheLocalRunningTotal(): void
+    {
+        // Local record: 11.31 (includes a refund Mollie later canceled). Live: 10.00 canceled,
+        // 1.00 pending, 0.31 refunded → the operator must see 1.31.
+        $order = $this->stubOrder('order-refunded');
+        $contract = $this->fulfilledContract();
+        $contract->method('getRefundedAmount')->willReturn(11.31);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('refundBound')->willReturn(998.69);
+        $this->transactionHistory->method('fetch')->willReturn([
+            new TransactionRow(TransactionRow::TYPE_PAYMENT, 'tr_1', 1156.55, 'EUR', 'paid', MollieOutcome::PAID),
+            new TransactionRow(TransactionRow::TYPE_REFUND, 're_1', 10.0, 'EUR', 'canceled', MollieOutcome::CANCELED),
+            new TransactionRow(TransactionRow::TYPE_REFUND, 're_2', 1.0, 'EUR', 'pending', MollieOutcome::PENDING),
+            new TransactionRow(TransactionRow::TYPE_REFUND, 're_3', 0.31, 'EUR', 'refunded', MollieOutcome::IGNORED),
+        ]);
+
+        $viewData = $this->builder->build($order);
+
+        self::assertSame('1.31', $viewData['refundedAmount']);
     }
 
     public function testBuild_WithNoContract_ReturnsEmptyViewWithErrorMessage(): void
@@ -205,6 +230,7 @@ final class MolliePanelViewDataBuilderTest extends TestCase
             $this->validationFeedback,
             $snapshots,
             $this->translatorStub(),
+            new RefundedAmountResolver(),
         );
 
         // The action handler validates against the bound first (this is the read that gets memoized)…
@@ -388,6 +414,7 @@ final class MolliePanelViewDataBuilderTest extends TestCase
             $this->validationFeedback,
             $this->snapshots,
             $translator,
+            new RefundedAmountResolver(),
         );
 
         self::assertSame('ideal', $builder->build($order)['paymentMethod']['label']);
@@ -420,6 +447,7 @@ final class MolliePanelViewDataBuilderTest extends TestCase
             $this->validationFeedback,
             $snapshots,
             $this->translatorStub(),
+            new RefundedAmountResolver(),
         );
 
         $viewData = $builder->build($order);

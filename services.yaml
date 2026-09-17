@@ -535,6 +535,10 @@ services:
   OxidEsales\Payments\Mollie\Admin\MolliePanelOrderLoader:
     public: false
 
+  # Pure read-model helper: the panel's "Refunded" figure from the live refund rows (2026-09-17).
+  OxidEsales\Payments\Mollie\Admin\RefundedAmountResolver:
+    public: false
+
   OxidEsales\Payments\Mollie\Admin\MolliePanelViewDataBuilder:
     public: false
 

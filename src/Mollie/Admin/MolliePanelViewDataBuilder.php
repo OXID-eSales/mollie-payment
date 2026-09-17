@@ -35,6 +35,7 @@ class MolliePanelViewDataBuilder
         // live Mollie read rather than one per question asked.
         private readonly MolliePaymentSnapshotProviderInterface $snapshots,
         private readonly LanguageTranslatorInterface $translator,
+        private readonly RefundedAmountResolver $refundedAmounts,
     ) {
     }
 
@@ -72,6 +73,9 @@ class MolliePanelViewDataBuilder
         // pattern), so contract.isAuthorized() is never true after checkout even while the
         // Mollie payment is still an uncaptured `authorized` hold. Mirrors Stripe's panel.
         $authorizedHold = $this->bounds->isAuthorizedHold($contract);
+        // One live refund list feeds both the transaction table and the "Refunded" figure, so
+        // the two cannot disagree — and a refund Mollie canceled is not counted (2026-09-17).
+        $transactions = $this->transactionHistory->fetch($contract);
 
         return [
             'orderId' => $orderId,
@@ -82,7 +86,7 @@ class MolliePanelViewDataBuilder
             'contractState' => $contract->getStateValue(),
             'currency' => $contract->getCurrency(),
             'capturedAmount' => $this->money($contract->getCapturedAmount()),
-            'refundedAmount' => $this->money($contract->getRefundedAmount()),
+            'refundedAmount' => $this->money($this->refundedAmounts->resolve($transactions, $contract)),
             'captureBound' => $captureBound,
             'captureBoundFormatted' => $this->money($captureBound),
             'refundBound' => $refundBound,
@@ -91,7 +95,7 @@ class MolliePanelViewDataBuilder
             'isRefundable' => $contract->getState()->isFulfilled() && $refundBound > 0.0,
             'isCancellable' => $authorizedHold,
             'dashboardUrl' => $this->dashboardUrl($providerOrderId),
-            'transactions' => $this->transactionHistory->fetch($contract),
+            'transactions' => $transactions,
             'errorMessage' => null,
             'validationErrors' => $validationErrors,
             // Sprint 136: what the customer actually paid with. 'paymentType'

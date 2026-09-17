@@ -13,4 +13,7 @@
   - Not a JS problem: the action POST already re-renders the tab. Two server-side causes: the Sprint-136 payment memo survived the action (`resetViewCache()` was a no-op) and the bound ignored *pending* refunds (Mollie's `amountRefunded` lags; `amountRemaining` doesn't). `refundableAmount()` now prefers `amountRemaining`.
   - Proof: new Playwright spec asserts on the refund POST's own response — 999.00 → 998.69 with no reload. Gates: ALL PASSED; Unit 632/632.
   - Observations for tickets: local "Refunded" figure includes a refund Mollie shows as canceled; e2e page objects don't fit this admin theme.
+- Refunded figure excludes canceled/failed refunds — DONE, **committed locally, not pushed**. See `reports/03-refunded-amount-excludes-canceled-refunds.md`.
+  - `RefundedAmountResolver` sums the live refund rows the table already shows (pending counts, voided doesn't); local record only as unreachable-fallback. Order 559 now reads 201.31 refunded / 798.69 refundable (sum = 1000.00 captured).
+  - Gates: ALL PASSED; Unit 637/637. Ticket candidate: the contract's `OXREFUNDEDAMOUNT` audit column still carries the canceled refund.
 - New user-level skill `/dev-log-day-mollie` scaffolds `docs/dev_day_log/YYYYMMDD/{done,reports,sprints,status.md}` (sibling of the PayPal/Stripe variants).
