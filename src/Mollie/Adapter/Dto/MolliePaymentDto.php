@@ -19,10 +19,13 @@ use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
  * the admin panel's "payment method used" row. All three are null for every method that has no
  * card behind it, which is most of them — `$method` alone answers those.
  *
- * `amountCaptured` is nullable on purpose. Mollie sends it "only when this payment supports
- * captures", so null means "settled for the full amount" (iDEAL, PayPal, …) while 0.00 means "an
- * authorization nothing has been captured from yet". Collapsing the two into 0.0 would make every
- * non-capture payment look unrefundable — the same shape of ambiguity F11 fixed for
+ * `amountCaptured` and `amountRemaining` are nullable on purpose — Mollie sends each only when it
+ * applies, and absence carries information the SDK's `getAmount…()` accessors (0.0 for null) throw
+ * away. `amountCaptured`: "only when this payment supports captures", so null means "settled for
+ * the full amount" (iDEAL, PayPal, …) while 0.00 means "an authorization nothing has been captured
+ * from yet". `amountRemaining`: "only when refunds are available for this payment", so null means
+ * "Mollie offers no refundable figure" while 0.00 means "nothing left to refund" — even while the
+ * refunds that exhausted it are still pending. Same shape of ambiguity F11 fixed for
  * {@see capturableAmount()}.
  */
 final readonly class MolliePaymentDto
@@ -38,7 +41,7 @@ final readonly class MolliePaymentDto
         public ?string $method = null,
         public array $metadata = [],
         public float $amountRefunded = 0.0,
-        public float $amountRemaining = 0.0,
+        public ?float $amountRemaining = null,
         public ?string $redirectUrl = null,
         public ?string $webhookUrl = null,
         public float $amountChargedBack = 0.0,
@@ -77,7 +80,7 @@ final readonly class MolliePaymentDto
             isset($data['method']) ? (string) $data['method'] : null,
             $data['metadata'] ?? [],
             (float) ($data['amountRefunded'] ?? 0.0),
-            (float) ($data['amountRemaining'] ?? 0.0),
+            isset($data['amountRemaining']) ? (float) $data['amountRemaining'] : null,
             isset($data['redirectUrl']) ? (string) $data['redirectUrl'] : null,
             isset($data['webhookUrl']) ? (string) $data['webhookUrl'] : null,
             (float) ($data['amountChargedBack'] ?? 0.0),
@@ -87,17 +90,27 @@ final readonly class MolliePaymentDto
     }
 
     /**
-     * Remaining refundable balance: what actually settled minus whatever has already been refunded
-     * or charged back. Never negative. Single source of truth for both the admin panel's refund
-     * bound ({@see \OxidEsales\Payments\Mollie\Admin\AdminActionBounds}) and Sprint 6's
-     * {@see \OxidEsales\Payments\Mollie\Service\RefundService}.
+     * Remaining refundable balance. Never negative. Single source of truth for both the admin
+     * panel's refund bound ({@see \OxidEsales\Payments\Mollie\Admin\AdminActionBounds}) and
+     * Sprint 6's {@see \OxidEsales\Payments\Mollie\Service\RefundService}.
      *
-     * "What settled" is `amountCaptured` when Mollie reports it and the full `amount` otherwise.
-     * Starting from `amount` unconditionally reported a partially captured payment (authorized
-     * 100.00, captured 60.00) as 100.00 refundable — money the customer was never charged.
+     * Mollie's own `amountRemaining` ("the remaining amount that can be refunded") is the answer
+     * whenever Mollie sends it: it already accounts for refunds that are still *pending*, which
+     * `amountRefunded` does not — right after an admin refund Mollie reports `amountRefunded 0.00`
+     * but `amountRemaining` already reduced, so local arithmetic overstated the bound by every
+     * pending refund and the panel kept showing the pre-refund amount (2026-09-17).
+     *
+     * Without that figure: what actually settled minus what was refunded or charged back. "What
+     * settled" is `amountCaptured` when Mollie reports it and the full `amount` otherwise —
+     * starting from `amount` unconditionally reported a partially captured payment (authorized
+     * 100.00, captured 60.00) as 100.00 refundable, money the customer was never charged.
      */
     public function refundableAmount(): float
     {
+        if ($this->amountRemaining !== null) {
+            return max(0.0, $this->amountRemaining);
+        }
+
         return max(0.0, $this->settledAmount() - $this->amountRefunded - $this->amountChargedBack);
     }
 
@@ -122,6 +135,6 @@ final readonly class MolliePaymentDto
             return 0.0;
         }
 
-        return $this->amountRemaining > 0.0 ? $this->amountRemaining : $this->amount->value;
+        return ($this->amountRemaining ?? 0.0) > 0.0 ? $this->amountRemaining : $this->amount->value;
     }
 }

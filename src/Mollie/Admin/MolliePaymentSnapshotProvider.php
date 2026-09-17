@@ -59,6 +59,11 @@ final class MolliePaymentSnapshotProvider implements MolliePaymentSnapshotProvid
         return $this->snapshots[$providerOrderId] = $this->read($contract, $providerOrderId);
     }
 
+    public function reset(): void
+    {
+        $this->snapshots = [];
+    }
+
     private function read(PaymentContractInterface $contract, string $providerOrderId): ?MolliePaymentDto
     {
         try {

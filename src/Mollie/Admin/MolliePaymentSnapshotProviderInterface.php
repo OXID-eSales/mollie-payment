@@ -28,4 +28,14 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 interface MolliePaymentSnapshotProviderInterface
 {
     public function snapshot(PaymentContractInterface $contract): ?MolliePaymentDto;
+
+    /**
+     * Forget every memoized payment so the next {@see snapshot()} reads Mollie again.
+     *
+     * An admin action request reads the payment once to validate the amount, performs the
+     * capture/refund/cancel, then re-renders the panel in the same request. Without this call the
+     * re-render would serve the pre-action memo — the panel showed the old refundable bound until
+     * the operator reloaded (2026-09-17).
+     */
+    public function reset(): void;
 }

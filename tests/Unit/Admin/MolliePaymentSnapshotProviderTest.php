@@ -59,6 +59,31 @@ final class MolliePaymentSnapshotProviderTest extends TestCase
         }
     }
 
+    /**
+     * 2026-09-17 — the admin panel showed pre-action amounts until the operator reloaded.
+     *
+     * An action request reads the payment once to validate the amount (memoized), performs the
+     * refund/capture/cancel, then re-renders the panel in the SAME request — and every bound came
+     * out of the memo taken BEFORE the action. reset() is the seam the panel calls between the two.
+     */
+    public function testResetForgetsTheSnapshotsSoTheNextReadHitsMollieAgain(): void
+    {
+        $adapter = $this->createMock(MolliePaymentsAdapterInterface::class);
+        $adapter->expects(self::exactly(2))
+            ->method('getPayment')
+            ->willReturnOnConsecutiveCalls(
+                $this->payment('tr_1', refunded: 0.0),
+                $this->payment('tr_1', refunded: 25.0),
+            );
+
+        $provider = $this->provider($adapter);
+        $contract = $this->contract('tr_1');
+
+        self::assertSame(0.0, $provider->snapshot($contract)?->amountRefunded, 'memo before the action');
+        $provider->reset();
+        self::assertSame(25.0, $provider->snapshot($contract)?->amountRefunded, 'fresh read after the action');
+    }
+
     public function testDistinctPaymentsAreCachedSeparately(): void
     {
         $adapter = $this->createMock(MolliePaymentsAdapterInterface::class);
@@ -126,12 +151,13 @@ final class MolliePaymentSnapshotProviderTest extends TestCase
         return $contract;
     }
 
-    private function payment(string $id): MolliePaymentDto
+    private function payment(string $id, float $refunded = 0.0): MolliePaymentDto
     {
         return new MolliePaymentDto(
             id: $id,
             status: 'paid',
             amount: MollieAmountDto::fromComponents('EUR', 100.0),
+            amountRefunded: $refunded,
         );
     }
 }

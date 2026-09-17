@@ -9,4 +9,8 @@
   - Root cause: `refundableAmount()` started from the authorized `amount`; `amountCaptured` was never mapped from the SDK. Fix in the DTO only (nullable `amountCaptured`, `settledAmount()` base); panel bound and RefundService inherit it.
   - Gates: pre-commit-check.sh ALL PASSED; Unit 624/624 (11 new). Not verified against a live partially captured payment — see report.
   - Related finding for a ticket: `capturableAmount()` reads `amountRemaining`, which Mollie documents as the *refundable* remainder.
+- Sprint 03 (Payment tab shows post-action state without reload) — DONE, **committed locally, NOT pushed**. See `sprints/03-panel-rebuild-after-action.md` and `reports/02-panel-rebuild-after-action.md`.
+  - Not a JS problem: the action POST already re-renders the tab. Two server-side causes: the Sprint-136 payment memo survived the action (`resetViewCache()` was a no-op) and the bound ignored *pending* refunds (Mollie's `amountRefunded` lags; `amountRemaining` doesn't). `refundableAmount()` now prefers `amountRemaining`.
+  - Proof: new Playwright spec asserts on the refund POST's own response — 999.00 → 998.69 with no reload. Gates: ALL PASSED; Unit 632/632.
+  - Observations for tickets: local "Refunded" figure includes a refund Mollie shows as canceled; e2e page objects don't fit this admin theme.
 - New user-level skill `/dev-log-day-mollie` scaffolds `docs/dev_day_log/YYYYMMDD/{done,reports,sprints,status.md}` (sibling of the PayPal/Stripe variants).

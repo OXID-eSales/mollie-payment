@@ -16,6 +16,7 @@ them.
 | Spec | Proves |
 |---|---|
 | `tests/MollieStandard/CheckoutPaysAndFinalizes.spec.ts` | Full standard-checkout happy path: select Mollie → Mollie sandbox pay → return → (webhook finalizes) → thank-you page, order not left in an error state. |
+| `tests/admin/mollie-admin-panel-rebuild-after-refund.spec.ts` | After a partial refund, the Payment tab's refundable bound, refund input `max`, refunded total and transaction history are all updated **in the response of the action itself** — no reload. Needs a refundable test-mode order (`MOLLIE_E2E_ORDER_NUMBER`, default 559); refunds a run-unique amount < 1.00 each run. |
 | `tests/MollieStandard/FrontendLoggingGated.spec.ts` | Zero Mollie-module `console.log` output while `sMollieLogLevel` is not `debug` (Sprint 8 Story 2 regression, mirrors the Stripe module's identical pattern). |
 
 ## Prerequisites

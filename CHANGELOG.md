@@ -6,6 +6,11 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Fixed
+- Admin *Payment* tab: after a refund, capture or cancel the re-rendered tab still showed the
+  pre-action refundable amount until reloaded. Two causes: the per-request Mollie payment memo
+  was not dropped between the action and the re-render (`resetViewCache()` had been a no-op), and
+  the refundable balance ignored refunds Mollie still lists as pending. The balance now follows
+  Mollie's own `amountRemaining` when present, falling back to the captured-based arithmetic.
 - Admin *Payment* tab and admin refunds: a partially captured payment (e.g. Klarna, authorized
   100.00 and captured 60.00) showed the full authorized amount as refundable and accepted a refund
   request for it. `MolliePaymentDto` now carries Mollie's `amountCaptured` and the refundable

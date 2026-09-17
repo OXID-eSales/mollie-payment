@@ -203,18 +203,19 @@ class MolliePanelViewDataBuilder
     }
 
     /**
-     * Reset any cached API data.
+     * Drop every per-request memo so the next {@see build()} reads Mollie again.
      *
-     * Story 2 (Sprint 9): Added for API parity with Stripe. Mollie's TransactionHistoryService
-     * reads directly from the Mollie API on each fetch() call, so there is no per-request
-     * cache to bust. This no-op exists so both panel providers share the same interface
-     * and the calling code (MolliePaymentPanelProvider) can call it uniformly after any
-     * admin action without branching on the provider.
+     * Story 2 (Sprint 9) added this for API parity with Stripe, as a no-op: at the time nothing
+     * in the Mollie render was cached. Sprint 136 then made the live payment a per-request memo
+     * ({@see MolliePaymentSnapshotProviderInterface}), and the no-op silently became a bug: the
+     * action request validated the amount against the memoized payment, acted, and re-rendered
+     * the same memo — the panel showed pre-action bounds until the operator reloaded (2026-09-17).
+     * {@see MolliePaymentPanelProvider} calls this after every successful action.
      *
      * @see StripePanelViewDataBuilder::resetViewCache()
      */
     public function resetViewCache(): void
     {
-        // No-op: Mollie reads directly from API on each call, no stale cache.
+        $this->snapshots->reset();
     }
 }

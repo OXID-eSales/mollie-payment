@@ -275,7 +275,9 @@ final class MollieAdapter implements
             method: MollieValueMapper::toNullableString($payment->method),
             metadata: MollieValueMapper::toMetadata($payment->metadata),
             amountRefunded: $payment->getAmountRefunded(),
-            amountRemaining: $payment->getAmountRemaining(),
+            // Nullable by design (see the DTO): "only available when refunds are available for
+            // this payment" — the SDK accessor would turn that absence into a misleading 0.00.
+            amountRemaining: MollieValueMapper::toOptionalAmountValue($payment->amountRemaining),
             redirectUrl: MollieValueMapper::toNullableString($payment->redirectUrl),
             webhookUrl: MollieValueMapper::toNullableString($payment->webhookUrl),
             amountChargedBack: $payment->getAmountChargedBack(),

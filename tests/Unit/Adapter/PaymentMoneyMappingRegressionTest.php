@@ -96,14 +96,28 @@ final class PaymentMoneyMappingRegressionTest extends TestCase
         self::assertGreaterThan(0.0, $dto->amountChargedBack);
     }
 
-    public function testRefundableAmountAccountsForTheChargeback(): void
+    public function testRefundableAmountIsMolliesRemainingFigureWhenMollieSendsOne(): void
     {
         $this->payments->method('get')->willReturn($this->sdkPaymentWithAllMoneyFields());
 
         $dto = (new MollieAdapter($this->client))->getPayment('tr_money');
 
-        // 100.00 − 5.00 refunded − 40.00 charged back
-        // …but the base is the 60.00 CAPTURED, not the 100.00 authorized: 60 − 5 − 40
+        // Mollie's own "remaining amount that can be refunded" (7.00) wins over the local
+        // arithmetic (60 captured − 5 refunded − 40 charged back = 15): it also accounts for
+        // refunds that are still pending, which amountRefunded does not.
+        self::assertSame(self::REMAINING, $dto->refundableAmount());
+    }
+
+    public function testRefundableAmountFallsBackToTheCapturedBasedArithmeticWithoutARemainingFigure(): void
+    {
+        $payment = $this->sdkPaymentWithAllMoneyFields();
+        $payment->amountRemaining = null;
+        $this->payments->method('get')->willReturn($payment);
+
+        $dto = (new MollieAdapter($this->client))->getPayment('tr_money');
+
+        self::assertNull($dto->amountRemaining, '"only available when refunds are available" — absence must stay observable');
+        // 60.00 captured − 5.00 refunded − 40.00 charged back
         self::assertSame(15.00, $dto->refundableAmount());
     }
 

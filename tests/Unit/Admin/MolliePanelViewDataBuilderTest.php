@@ -163,15 +163,70 @@ final class MolliePanelViewDataBuilderTest extends TestCase
     }
 
     // =========================================================================
-    // Story 2: View Cache Reset (no-op for Mollie)
+    // Story 2 (Sprint 9) / 2026-09-17: View Cache Reset
     // =========================================================================
 
-    public function testResetViewCache_NoOpDoesNotThrow(): void
+    public function testResetViewCache_ForgetsTheMemoizedMolliePayment(): void
     {
-        // Mollie reads directly from API on each fetch(), so resetViewCache() is a no-op.
-        // This test ensures the method exists and doesn't throw.
+        // Sprint 136 made the live payment a per-request memo. An action request reads it once
+        // to validate the amount, acts, then re-renders — resetViewCache() is what stands
+        // between "acted" and "re-rendered", so it must drop that memo.
+        $this->snapshots->expects(self::once())->method('reset');
+
         $this->builder->resetViewCache();
-        $this->assertTrue(true); // Assert passes if no exception thrown
+    }
+
+    /**
+     * The operator-visible regression, end to end inside one request: validate → refund →
+     * resetViewCache() → render must show the POST-refund bound, not the one memoized before.
+     */
+    public function testBuild_AfterResetViewCache_ShowsTheBoundAsItIsAfterTheAction(): void
+    {
+        $order = $this->stubOrder('order-rebuild');
+        $contract = $this->fulfilledContract();
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+
+        $adapter = $this->createMock(MolliePaymentsAdapterInterface::class);
+        $adapter->expects(self::exactly(2))
+            ->method('getPayment')
+            ->willReturnOnConsecutiveCalls(
+                $this->paidPayment(refunded: 0.0),
+                $this->paidPayment(refunded: 25.0),
+            );
+
+        $snapshots = new MolliePaymentSnapshotProvider($adapter, new NullLogger());
+        $bounds = new AdminActionBounds($snapshots);
+        $builder = new MolliePanelViewDataBuilder(
+            $this->contracts,
+            $this->transactionHistory,
+            $bounds,
+            $this->urlBuilder,
+            $this->validationFeedback,
+            $snapshots,
+            $this->translatorStub(),
+        );
+
+        // The action handler validates against the bound first (this is the read that gets memoized)…
+        self::assertSame(100.0, $bounds->refundBound($contract));
+        // …then the refund of 25.00 happens at Mollie, and the panel asks for a rebuild.
+        $builder->resetViewCache();
+
+        $viewData = $builder->build($order);
+
+        self::assertSame(75.0, $viewData['refundBound'], 'the re-render must not serve the pre-refund memo');
+        self::assertSame('75.00', $viewData['refundBoundFormatted']);
+    }
+
+    private function paidPayment(float $refunded): MolliePaymentDto
+    {
+        return new MolliePaymentDto(
+            id: 'tr_1',
+            status: 'paid',
+            amount: MollieAmountDto::fromComponents('EUR', 100.0),
+            method: 'creditcard',
+            amountRefunded: $refunded,
+        );
     }
 
     private function stubOrder(string $id, string $orderNumber = '', string $paymentType = ''): Order

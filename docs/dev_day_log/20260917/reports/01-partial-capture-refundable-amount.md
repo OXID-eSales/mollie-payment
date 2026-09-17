@@ -86,7 +86,12 @@ pick the fix up through the DTO.
 - Not pushed, per instruction. CI on `b-7.4.x` still has to confirm the isolated suite; the change
   touches no `*_parent` stub surface, so no fallout is expected.
 
-## Related finding (not changed here)
+## Related finding (not changed here) — **resolved later the same day**
+
+> Update: [`02-panel-rebuild-after-action.md`](02-panel-rebuild-after-action.md) proved on live data
+> that `amountRemaining` is Mollie's refundable remainder and made `refundableAmount()` prefer it;
+> the captured-based arithmetic below is now the fallback. `capturableAmount()` is unchanged.
+
 
 `capturableAmount()` uses `amountRemaining` as "remaining *capturable*" (F11). Mollie's API
 documents `amountRemaining` as "the remaining amount that can be **refunded**". For an
