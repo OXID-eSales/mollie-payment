@@ -34,26 +34,45 @@
                  data-mollie-components-locale-value="{{ oViewConf.getMollieComponentsLocale() }}"
                  data-mollie-components-debug-value="{{ oViewConf.isMollieDebugLoggingEnabled() ? 'true' : 'false' }}">
 
-                <p class="mb-2 fw-bold">{{ translate({ ident: "MOLLIE_CHOOSE_METHOD" }) }}</p>
-                <div class="mollie-methods mb-3">
-                    {% for m in mollieMethods %}
-                        <div class="form-check d-flex align-items-center py-1">
-                            {# name=mollieMethod + form= means the chosen method submits natively with
-                               the core order form; no JS needed to carry it for redirect methods. #}
-                            <input class="form-check-input me-2" type="radio" name="mollieMethod"
-                                   id="mollieMethod_{{ m.id }}" value="{{ m.id }}"
-                                   form="orderConfirmAgbBottom"
-                                   {% if loop.first %}checked{% endif %}
-                                   data-action="change->mollie-components#flowChanged">
-                            <label class="form-check-label d-flex align-items-center" for="mollieMethod_{{ m.id }}">
-                                {% if m.image %}
-                                    <img src="{{ m.image }}" alt="" width="28" height="28" class="mollie-method-icon me-2">
-                                {% endif %}
-                                {{ m.name }}
-                            </label>
-                        </div>
-                    {% endfor %}
-                </div>
+                {% if mollieMethods|length == 1 %}
+                    {# One enabled method is not a choice (the rule payment-base applies to the
+                       payment and shipping cards): name it, don't offer a selector. The field stays
+                       in the DOM — hidden, checked, form-associated — so the value still submits
+                       with the core order form and the Components controller still reads
+                       `input[name=mollieMethod]:checked` to decide on the card flow. #}
+                    {% set m = mollieMethods|first %}
+                    <input type="radio" name="mollieMethod" id="mollieMethod_{{ m.id }}" value="{{ m.id }}"
+                           form="orderConfirmAgbBottom" checked hidden
+                           data-mollie-order-method="fixed">
+                    <p class="mb-3 d-flex align-items-center" data-mollie-order-card="method">
+                        <span class="fw-bold me-2">{{ translate({ ident: "PAYMENT_METHOD" }) }}:</span>
+                        {% if m.image %}
+                            <img src="{{ m.image }}" alt="" width="28" height="28" class="mollie-method-icon me-2">
+                        {% endif %}
+                        {{ m.name }}
+                    </p>
+                {% else %}
+                    <p class="mb-2 fw-bold">{{ translate({ ident: "MOLLIE_CHOOSE_METHOD" }) }}</p>
+                    <div class="mollie-methods mb-3">
+                        {% for m in mollieMethods %}
+                            <div class="form-check d-flex align-items-center py-1">
+                                {# name=mollieMethod + form= means the chosen method submits natively with
+                                   the core order form; no JS needed to carry it for redirect methods. #}
+                                <input class="form-check-input me-2" type="radio" name="mollieMethod"
+                                       id="mollieMethod_{{ m.id }}" value="{{ m.id }}"
+                                       form="orderConfirmAgbBottom"
+                                       {% if loop.first %}checked{% endif %}
+                                       data-action="change->mollie-components#flowChanged">
+                                <label class="form-check-label d-flex align-items-center" for="mollieMethod_{{ m.id }}">
+                                    {% if m.image %}
+                                        <img src="{{ m.image }}" alt="" width="28" height="28" class="mollie-method-icon me-2">
+                                    {% endif %}
+                                    {{ m.name }}
+                                </label>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
 
                 {# Inline card fields — shown by the controller only when "creditcard" is selected. #}
                 <div data-mollie-components-target="fields" class="mollie-card-fields mb-3" style="display: none;">

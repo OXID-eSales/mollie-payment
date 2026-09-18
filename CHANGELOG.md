@@ -6,6 +6,10 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Fixed
+- Standard order page, inline mode: with exactly one enabled Mollie method the block opened with
+  "Choose your payment method" and a single radio. One method is not a choice: it is now named
+  read-only (icon + name), while the hidden, checked form field still submits the method with the
+  order and the card flow still detects it. Two or more methods render the selector as before.
 - Admin *Payment* tab: the "Refunded" figure was the contract's running total and kept counting
   refunds Mollie had since canceled or failed. It is now the sum of the live refund list shown in
   the transaction table, minus the voided ones, so it always agrees with the refund bound
