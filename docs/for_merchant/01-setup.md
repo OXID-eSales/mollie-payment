@@ -23,7 +23,7 @@ bin/oe-console oe:cache:clear
 | Group | Setting | Purpose | Example |
 |---|---|---|---|
 | General | `sMollieMode` | `test` or `live` | `test` |
-| General | `sMollieCaptureMode` | `automatic` (charge immediately) or `manual` (two-step: authorize then capture — see the known-limitation note below) | `automatic` |
+| General | `sMollieCaptureMode` | `automatic` (charge immediately) or `manual` (two-step: authorize then capture). Manual applies per method: card and Buy-Now-Pay-Later (Klarna, Riverty, Billie, in3) are authorized first and captured from the admin *Payment* tab; every other method (iDEAL, PayPal, bank transfer, Bancontact, …) stays available and settles immediately. | `automatic` |
 | Test config | `sMollieTestKey` | Your `test_…` API key | `test_aBcD…` |
 | Live config | `sMollieLiveKey` | Your `live_…` API key | `live_wXyZ…` |
 | Webhooks | `sMollieWebhookUrl` | Override the webhook URL (leave empty to use the default below) | |

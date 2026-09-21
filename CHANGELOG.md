@@ -6,6 +6,13 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Fixed
+- Manual capture (`sMollieCaptureMode=manual`) no longer narrows what the shopper can pay with. The
+  inline method selector used to list only the methods Mollie can authorize first (card, Klarna,
+  …), so a manual-capture shop silently lost iDEAL, PayPal, bank transfer and the rest. Every
+  enabled method is offered again; manual capture is now decided per created payment — card and
+  Buy-Now-Pay-Later are authorized first, instant methods are created with automatic capture and
+  settle immediately (Mollie rejects `captureMode=manual` pinned to an instant method with 422).
+  With no method pinned, Mollie's hosted page already behaves this way on its own.
 - Standard order page, inline mode: with exactly one enabled Mollie method the block opened with
   "Choose your payment method" and a single radio. One method is not a choice: it is now named
   read-only (icon + name), while the hidden, checked form field still submits the method with the

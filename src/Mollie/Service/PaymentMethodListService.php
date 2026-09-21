@@ -21,7 +21,8 @@ use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
  * EUR-only today — see MOLLIE_DEFINITIONS) before ever calling the Mollie API; the customer's
  * billing country is instead passed straight through to Mollie's own `billingCountry` filter,
  * which already knows which methods (e.g. iDEAL) are meaningful per country. Results are cached
- * per currency/country pair for the lifetime of this request-scoped service instance.
+ * per currency/country pair for the lifetime of this request-scoped service instance. The list is
+ * the same whatever the shop's capture mode — see {@see CheckoutPaymentService::captureModeFor()}.
  */
 final class PaymentMethodListService implements PaymentMethodListServiceInterface
 {
@@ -30,7 +31,6 @@ final class PaymentMethodListService implements PaymentMethodListServiceInterfac
 
     public function __construct(
         private readonly MollieMethodsAdapterInterface $methodsAdapter,
-        private readonly ModuleConfigurationServiceInterface $config,
     ) {
     }
 
@@ -51,19 +51,14 @@ final class PaymentMethodListService implements PaymentMethodListServiceInterfac
 
         // Always drop methods the inline create-payment flow cannot complete (BNPL/voucher need an
         // upfront billing address + order lines → 422 → MOLLIE_CHECKOUT_UNAVAILABLE).
+        //
+        // The shop's capture mode is deliberately NOT a filter here. Manual capture is decided per
+        // created payment (CheckoutPaymentService::captureModeFor): methods that cannot hold an
+        // authorization are offered all the same and simply settle immediately.
         $methods = array_values(array_filter(
             $methods,
             static fn (MollieMethodDto $m): bool => MollieDefinitions::isOfferableInline($m->id),
         ));
-
-        // Manual-capture shops may only offer capture-capable methods — otherwise Mollie rejects the
-        // create-payment (422). Hide the incompatible ones from the inline selector.
-        if ($this->config->isManualCapture()) {
-            $methods = array_values(array_filter(
-                $methods,
-                static fn (MollieMethodDto $m): bool => MollieDefinitions::supportsManualCapture($m->id),
-            ));
-        }
 
         return $this->cache[$cacheKey] = $methods;
     }

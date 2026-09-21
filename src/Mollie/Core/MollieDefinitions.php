@@ -100,10 +100,11 @@ final class MollieDefinitions
 
     /**
      * Mollie method ids that support MANUAL capture (the authorize-then-capture / two-step flow).
-     * When the shop runs in manual-capture mode, only these may be offered inline — otherwise Mollie
-     * rejects the create-payment with 422 "At least one of the provided payment methods must support
-     * captures". This is the reliably-capture-capable set (cards + Buy-Now-Pay-Later); instant methods
-     * (iDEAL, Bancontact, bank transfer, …) never support captures and are filtered out.
+     * On a manual-capture shop these are created with captureMode=manual; every other method is
+     * still offered and simply settles immediately (created with automatic capture), because Mollie
+     * rejects captureMode=manual pinned to an instant method with 422 "At least one of the provided
+     * payment methods must support captures". This is the reliably-capture-capable set (cards +
+     * Buy-Now-Pay-Later); instant methods (iDEAL, Bancontact, bank transfer, …) never support captures.
      *
      * PayPal is intentionally EXCLUDED: although Mollie documents PayPal as capture-capable, manual
      * capture requires extra PayPal onboarding and is rejected on accounts without it (verified on the
@@ -226,8 +227,8 @@ final class MollieDefinitions
 
     /**
      * True when the Mollie method id supports manual (two-step) capture — see
-     * {@see self::MANUAL_CAPTURE_METHODS}. Used to hide capture-incompatible methods from the inline
-     * selector on manual-capture shops.
+     * {@see self::MANUAL_CAPTURE_METHODS}. Decides, per created payment, whether a manual-capture
+     * shop asks Mollie to authorize first or lets the method settle immediately.
      */
     public static function supportsManualCapture(string $methodId): bool
     {

@@ -68,7 +68,13 @@ final class CheckoutPaymentServiceTest extends TestCase
         self::assertSame('https://shop.test/webhook', $request->webhookUrl);
     }
 
-    public function testBuildCreatePaymentRequestSendsCaptureModeFromConfig(): void
+    /**
+     * No method pinned → Mollie's hosted page picks it, and Mollie itself drops
+     * manual capture for methods that cannot hold an authorization (verified live:
+     * a manual-capture payment paid via iDEAL comes back with captureMode unset).
+     * So the shop's mode is passed through unchanged.
+     */
+    public function testBuildCreatePaymentRequestSendsManualCaptureWhenNoMethodIsPinned(): void
     {
         $contract = $this->contractStub();
         $service = $this->service(captureMode: MollieDefinitions::CAPTURE_MODE_MANUAL);
@@ -76,6 +82,59 @@ final class CheckoutPaymentServiceTest extends TestCase
         $request = $service->buildCreatePaymentRequest($contract, null, 'https://shop.test/return');
 
         self::assertSame(MollieDefinitions::CAPTURE_MODE_MANUAL, $request->captureMode);
+    }
+
+    /** Card and Klarna can be authorized first, so a manual-capture shop asks for that. */
+    public function testBuildCreatePaymentRequestSendsManualCaptureForACaptureCapableMethod(): void
+    {
+        $contract = $this->contractStub();
+        $service = $this->service(captureMode: MollieDefinitions::CAPTURE_MODE_MANUAL);
+
+        $card = $service->buildCreatePaymentRequest($contract, 'creditcard', 'https://shop.test/return');
+        $klarna = $service->buildCreatePaymentRequest($contract, 'klarna', 'https://shop.test/return');
+
+        self::assertSame(MollieDefinitions::CAPTURE_MODE_MANUAL, $card->captureMode);
+        self::assertSame(MollieDefinitions::CAPTURE_MODE_MANUAL, $klarna->captureMode);
+    }
+
+    /**
+     * iDEAL, PayPal, bank transfer, … settle immediately; Mollie answers 422
+     * ("At least one of the provided payment methods must support captures") when
+     * such a method is pinned together with captureMode=manual. A manual-capture
+     * shop therefore creates these payments with automatic capture — the shopper
+     * sees every method, and manual capture applies only where it exists.
+     */
+    public function testBuildCreatePaymentRequestFallsBackToAutomaticCaptureForAnInstantMethod(): void
+    {
+        $contract = $this->contractStub();
+        $service = $this->service(captureMode: MollieDefinitions::CAPTURE_MODE_MANUAL);
+
+        $ideal = $service->buildCreatePaymentRequest($contract, 'ideal', 'https://shop.test/return');
+        $paypal = $service->buildCreatePaymentRequest($contract, 'paypal', 'https://shop.test/return');
+
+        self::assertSame(MollieDefinitions::CAPTURE_MODE_AUTOMATIC, $ideal->captureMode);
+        self::assertSame(MollieDefinitions::CAPTURE_MODE_AUTOMATIC, $paypal->captureMode);
+    }
+
+    /** A card token pins creditcard, so the manual request survives the token path too. */
+    public function testBuildCreatePaymentRequestKeepsManualCaptureOnTheCardTokenPath(): void
+    {
+        $contract = $this->contractStub();
+        $service = $this->service(captureMode: MollieDefinitions::CAPTURE_MODE_MANUAL);
+
+        $request = $service->buildCreatePaymentRequest($contract, null, 'https://shop.test/return', 'tkn_123');
+
+        self::assertSame(MollieDefinitions::CAPTURE_MODE_MANUAL, $request->captureMode);
+    }
+
+    public function testBuildCreatePaymentRequestNeverAsksForManualCaptureOnAnAutomaticShop(): void
+    {
+        $contract = $this->contractStub();
+        $service = $this->service(captureMode: MollieDefinitions::CAPTURE_MODE_AUTOMATIC);
+
+        $request = $service->buildCreatePaymentRequest($contract, 'creditcard', 'https://shop.test/return');
+
+        self::assertSame(MollieDefinitions::CAPTURE_MODE_AUTOMATIC, $request->captureMode);
     }
 
     public function testBuildCreatePaymentRequestStoresContractIdInMetadata(): void

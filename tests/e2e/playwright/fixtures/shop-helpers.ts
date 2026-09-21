@@ -88,13 +88,22 @@ export async function goToCheckoutPayment(page: Page): Promise<void> {
  * argument is therefore accepted for call-site readability but is a no-op here.
  */
 export async function selectMolliePaymentMethod(page: Page, _method?: string): Promise<void> {
+    // payment-base skips the payment step when the customer is offered exactly one payment
+    // method and one delivery set: cl=payment redirects straight to cl=order and there is no
+    // radio to pick. Mollie is then already the method.
+    if (/cl=order/.test(page.url())) {
+        return;
+    }
     await page.locator('input[name="paymentid"][value="oe_payments_mollie"]').check();
 }
 
 /**
- * Advances from the payment step to the order-review step.
+ * Advances from the payment step to the order-review step (no-op when the step was skipped).
  */
 export async function continueToOrderReview(page: Page): Promise<void> {
+    if (/cl=order/.test(page.url())) {
+        return;
+    }
     await page.getByRole('button', { name: /weiter|continue|next/i }).first().click();
     await page.waitForLoadState('domcontentloaded');
 }

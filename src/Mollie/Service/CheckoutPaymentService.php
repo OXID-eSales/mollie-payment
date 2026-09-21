@@ -71,12 +71,36 @@ final class CheckoutPaymentService implements CheckoutPaymentServiceInterface
             webhookUrl: $this->webhookUrlProvider->getWebhookUrl(),
             method: $effectiveMethod,
             metadata: ['contract_id' => (string) ($contract->getId() ?? '')],
-            captureMode: $this->config->getCaptureMode(),
+            captureMode: $this->captureModeFor($effectiveMethod),
             cardToken: $hasCardToken ? $cardToken : null,
             billingAddress: $billingAddress,
             shippingAddress: $billingAddress,
             lines: $lines,
         );
+    }
+
+    /**
+     * Manual capture is decided per method, not per shop.
+     *
+     * A manual-capture shop still sells via iDEAL, PayPal, bank transfer, … — methods that
+     * settle immediately and cannot hold an authorization. Mollie answers 422 ("At least
+     * one of the provided payment methods must support captures") when such a method is
+     * pinned together with captureMode=manual, so those are created with automatic
+     * capture; card and Buy-Now-Pay-Later are authorized first as configured. With no
+     * method pinned the shop's mode is passed through: Mollie's hosted page offers every
+     * method and drops manual capture itself for the ones that cannot do it (verified
+     * live — a manual-capture payment paid via iDEAL comes back with captureMode unset).
+     */
+    private function captureModeFor(?string $method): string
+    {
+        $mode = $this->config->getCaptureMode();
+        if ($mode !== MollieDefinitions::CAPTURE_MODE_MANUAL || $method === null) {
+            return $mode;
+        }
+
+        return MollieDefinitions::supportsManualCapture($method)
+            ? MollieDefinitions::CAPTURE_MODE_MANUAL
+            : MollieDefinitions::CAPTURE_MODE_AUTOMATIC;
     }
 
     /**

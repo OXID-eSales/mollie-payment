@@ -12,7 +12,6 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MethodsListRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieMethodDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieMethodsAdapterInterface;
-use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use OxidEsales\Payments\Mollie\Service\PaymentMethodListService;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -22,24 +21,23 @@ use PHPUnit\Framework\TestCase;
 final class PaymentMethodListServiceTest extends TestCase
 {
     private MollieMethodsAdapterInterface&MockObject $methodsAdapter;
-    private ModuleConfigurationServiceInterface&MockObject $config;
     private PaymentMethodListService $service;
 
     protected function setUp(): void
     {
         $this->methodsAdapter = $this->createMock(MollieMethodsAdapterInterface::class);
-        $this->config = $this->createMock(ModuleConfigurationServiceInterface::class);
-        // Default: automatic capture (no capture filtering).
-        $this->config->method('isManualCapture')->willReturn(false);
-        $this->service = new PaymentMethodListService($this->methodsAdapter, $this->config);
+        $this->service = new PaymentMethodListService($this->methodsAdapter);
     }
 
-    public function testList_ManualCapture_FiltersOutCaptureIncompatibleMethods(): void
+    /**
+     * Manual capture is a per-method decision made when the payment is created
+     * (see CheckoutPaymentService), not a reason to hide methods: the list no
+     * longer knows the shop's capture mode at all. A shop that captures cards
+     * manually still sells via iDEAL, PayPal and bank transfer — those simply
+     * settle immediately, exactly as Mollie's own hosted page does.
+     */
+    public function testList_OffersEveryMethodWhateverTheCaptureMode(): void
     {
-        $config = $this->createMock(ModuleConfigurationServiceInterface::class);
-        $config->method('isManualCapture')->willReturn(true);
-        $service = new PaymentMethodListService($this->methodsAdapter, $config);
-
         $this->methodsAdapter->method('listActiveMethods')->willReturn([
             new MollieMethodDto('creditcard', 'Card'),
             new MollieMethodDto('ideal', 'iDEAL'),
@@ -47,12 +45,10 @@ final class PaymentMethodListServiceTest extends TestCase
             new MollieMethodDto('klarna', 'Klarna'),
         ]);
 
-        $result = $service->listActiveMethods('EUR');
+        $result = $this->service->listActiveMethods('EUR');
         $ids = array_map(static fn (MollieMethodDto $m): string => $m->id, $result);
 
-        // Card + Klarna support manual capture; iDEAL is instant (no capture), PayPal is
-        // onboarding-gated (not in the manual-capture allowlist) — both dropped.
-        self::assertSame(['creditcard', 'klarna'], $ids);
+        self::assertSame(['creditcard', 'ideal', 'paypal', 'klarna'], $ids);
     }
 
     public function testList_DropsVoucherMethodsEvenUnderAutomaticCapture(): void

@@ -11,7 +11,9 @@
   amount shown is read live from Mollie (not a locally cached total), so it always reflects
   chargebacks too.
 - **Capture** and **Cancel authorization** — shown only for two-step methods (card/Klarna with
-  `sMollieCaptureMode=manual`) on an authorized-but-not-yet-captured payment.
+  `sMollieCaptureMode=manual`) on an authorized-but-not-yet-captured payment. Orders paid with an
+  instant method (iDEAL, PayPal, bank transfer, …) on a manual-capture shop arrive already captured
+  and show neither button — there is nothing left to capture.
 
   **Known limitation:** as of this release, the module does not yet drive a two-step payment into
   the "authorized" state through any live path (see
