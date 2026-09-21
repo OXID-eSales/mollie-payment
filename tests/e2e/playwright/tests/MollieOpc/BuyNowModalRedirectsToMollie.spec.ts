@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import {
     loginStorefront,
     addFirstFeaturedProductToBasket,
-    submitOpcMollieFooter, openOpcCheckoutModal, opcPaymentSectionFolded, OPC_FOLD_SKIP, waitForOpcPaymentState } from '../../fixtures/shop-helpers';
+    submitOpcMollieFooter, openOpcCheckoutModal, opcPaymentSectionFolded, OPC_FOLD_SKIP, waitForOpcPaymentState, chooseMollieInOpcModal } from '../../fixtures/shop-helpers';
 
 /**
  * OPC buy-now modal + Mollie must REDIRECT to Mollie's hosted checkout (redirect return + webhook
@@ -16,14 +16,12 @@ test.describe('OPC buy-now modal — Mollie must redirect to hosted checkout', (
 
         // Open the one-page-checkout modal from the basket (shared helper picks the right trigger).
         const opcModal = await openOpcCheckoutModal(page);
-        test.skip((await waitForOpcPaymentState(opcModal)) === 'folded', OPC_FOLD_SKIP);
+        const opcState = await chooseMollieInOpcModal(opcModal);
+        test.skip(opcState === 'folded', OPC_FOLD_SKIP);
 
         const modal = page.locator('#buyNowCheckoutModal');
         await expect(modal).toBeVisible({ timeout: 20_000 });
 
-        const select = modal.locator('#paymentMethodSelect');
-        await select.selectOption('oe_payments_mollie', { force: true });
-        await select.dispatchEvent('change');
         await page.waitForTimeout(1500);
 
         // Footer-agnostic submit: works with the default redirect footer (iframe flag off) and the

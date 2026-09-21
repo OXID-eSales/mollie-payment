@@ -12,6 +12,8 @@
   - Footer inherits the per-method capture decision (same service + handler); template now names a
     single method read-only (`MollieFooterSingleMethodTemplateTest` 2/2). Live: footer offers 10
     methods on the manual-mode shop; PayPal via OPC `processCheckout` → paid, captureMode null → thank-you.
-  - **OPC defect found:** single method + iframe mode → OPC phantom-folds `payment-execution` and hides
-    every provider footer. OPC specs skip loudly on it (`OPC_FOLD_SKIP`). Needs an OPC ticket.
+  - **OPC defect found and fixed** (one-page-checkout `b-7.4.x-opc-fold-keeps-payment-execution`,
+    CI green, merge pending Daniil's go): single method + iframe mode folded `payment-execution` and hid
+    every provider footer; now only the picker folds. All 4 Mollie OPC specs GREEN live on that build.
+  - Standard-checkout specs need OPC disabled (replacement mode overlays the classic checkout).
   - Shared e2e helpers: `openOpcCheckoutModal()`, `waitForOpcPaymentState()`, `opcPaymentSectionFolded()`.

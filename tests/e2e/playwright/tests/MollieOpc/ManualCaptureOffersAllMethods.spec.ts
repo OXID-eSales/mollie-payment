@@ -1,5 +1,5 @@
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
-import { loginStorefront, addFirstFeaturedProductToBasket, completeMollieTestPayment, openOpcCheckoutModal, opcPaymentSectionFolded, OPC_FOLD_SKIP, waitForOpcPaymentState } from '../../fixtures/shop-helpers';
+import { loginStorefront, addFirstFeaturedProductToBasket, completeMollieTestPayment, openOpcCheckoutModal, opcPaymentSectionFolded, OPC_FOLD_SKIP, waitForOpcPaymentState, tickOpcConsents, chooseMollieInOpcModal, pickMollieMethodRadio } from '../../fixtures/shop-helpers';
 
 /**
  * OPC footer — manual capture must not narrow what the shopper can pay with.
@@ -27,13 +27,8 @@ test.describe('OPC footer — manual capture keeps every Mollie method available
         await loginStorefront(page);
         await addFirstFeaturedProductToBasket(page);
         const modal = await openOpcCheckoutModal(page);
-        const state = await waitForOpcPaymentState(modal);
+        const state = await chooseMollieInOpcModal(modal);
         testInfo.annotations.push({ type: 'opc-payment-state', description: state });
-        if (state === 'select') {
-            const select = modal.locator('#paymentMethodSelect');
-            await select.selectOption('oe_payments_mollie', { force: true });
-            await select.dispatchEvent('change');
-        }
         // Single method: OPC auto-assigns it and loads its footer without any selection.
         const footer = modal.locator(FOOTER);
         await footer.waitFor({ state: 'attached', timeout: 20_000 }).catch(() => {});
@@ -51,11 +46,8 @@ test.describe('OPC footer — manual capture keeps every Mollie method available
         test.skip(await opcPaymentSectionFolded(modal), OPC_FOLD_SKIP);
 
         const chosen = offered.includes('paypal') ? 'paypal' : instant[0];
-        await modal.locator(`input[name=mollieMethod][value=${chosen}]`).check({ force: true });
-        for (const id of ['#confirmTermsCheckout', '#confirmPrivacyCheckout']) {
-            const cb = modal.locator(id);
-            if (await cb.count()) await cb.check({ force: true }).catch(() => {});
-        }
+        await pickMollieMethodRadio(modal.locator(`input[name=mollieMethod][value=${chosen}]`));
+        await tickOpcConsents(modal);
         await modal.locator(`${FOOTER} [data-mollie-checkout-footer-target="submitButton"]`).first().click();
         await page.waitForURL(/mollie\.com\/checkout/i, { timeout: 45_000 });
         console.log(`[opc-manual-capture] paying with ${chosen} at ${page.url()}`);

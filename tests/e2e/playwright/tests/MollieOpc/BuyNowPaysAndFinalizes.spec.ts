@@ -3,7 +3,7 @@ import {
     loginStorefront,
     addFirstFeaturedProductToBasket,
     completeMollieTestPayment,
-    submitOpcMollieFooter, openOpcCheckoutModal, opcPaymentSectionFolded, OPC_FOLD_SKIP, waitForOpcPaymentState } from '../../fixtures/shop-helpers';
+    submitOpcMollieFooter, openOpcCheckoutModal, opcPaymentSectionFolded, OPC_FOLD_SKIP, waitForOpcPaymentState, chooseMollieInOpcModal } from '../../fixtures/shop-helpers';
 
 /**
  * Full OPC happy path: buy-now one-page-checkout → pay with Mollie → return → order finalized.
@@ -21,12 +21,10 @@ test.describe('OPC buy-now — Mollie happy path', () => {
 
         // Open the one-page-checkout buy-now modal from the basket.
         const modal = await openOpcCheckoutModal(page);
-        test.skip((await waitForOpcPaymentState(modal)) === 'folded', OPC_FOLD_SKIP);
+        const opcState = await chooseMollieInOpcModal(modal);
+        test.skip(opcState === 'folded', OPC_FOLD_SKIP);
 
         // Payment methods load from ?cl=OeOpcPayment&fnc=getPaymentListJson.
-        const select = modal.locator('#paymentMethodSelect');
-        await select.selectOption('oe_payments_mollie', { force: true });
-        await select.dispatchEvent('change');
         await page.waitForTimeout(1500);
 
         // Capture the footer type BEFORE submitting (the page navigates away on submit).
