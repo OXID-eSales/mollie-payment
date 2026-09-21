@@ -1,5 +1,5 @@
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
-import { loginStorefront, addFirstFeaturedProductToBasket, openOpcCheckoutModal, opcPaymentSectionFolded, OPC_FOLD_SKIP, waitForOpcPaymentState } from '../../fixtures/shop-helpers';
+import { loginStorefront, addFirstFeaturedProductToBasket, openOpcCheckoutModal, opcPaymentSectionFolded, OPC_FOLD_SKIP, waitForOpcPaymentState, tickOpcConsents, chooseMollieInOpcModal, pickMollieMethodRadio } from '../../fixtures/shop-helpers';
 
 /**
  * IFRAME (OPC) — Mollie renders its OWN inline footer widget in the buy-now modal.
@@ -36,10 +36,9 @@ async function openOpcModalWithMollie(page: Page): Promise<import('@playwright/t
 
     // Single method: OPC folds the section and disables the select; Mollie is auto-assigned.
     // The visible-footer assertions below cannot hold then — see OPC_FOLD_SKIP.
-    test.skip((await waitForOpcPaymentState(modal)) === 'folded', OPC_FOLD_SKIP);
-    const select = modal.locator('#paymentMethodSelect');
-    await select.selectOption('oe_payments_mollie', { force: true });
-    await select.dispatchEvent('change');
+    const state = await chooseMollieInOpcModal(modal);
+    test.skip(state === 'folded', OPC_FOLD_SKIP);
+    // 'auto': Mollie is the only method, OPC assigned it and loads its footer by itself.
     await page.waitForTimeout(2000); // AJAX footer-widget swap
     return modal;
 }
@@ -66,14 +65,9 @@ test.describe('IFRAME (OPC) — Mollie inline footer widget in the buy-now modal
             // Prefer a non-card method (card would open Components + need a token).
             const nonCard = modal.locator(`${METHOD_RADIO}:not([value="creditcard"])`).first();
             const target = (await nonCard.count()) ? nonCard : modal.locator(METHOD_RADIO).first();
-            await target.check({ force: true }).catch(() => {});
+            await pickMollieMethodRadio(target);
 
-            for (const id of ['#confirmTermsCheckout', '#confirmPrivacyCheckout']) {
-                const cb = modal.locator(id);
-                if (await cb.count()) {
-                    await cb.check({ force: true }).catch(() => {});
-                }
-            }
+            await tickOpcConsents(modal);
 
             const submit = modal.locator(`${FOOTER} [data-mollie-checkout-footer-target="submitButton"]`).first();
             await expect(submit, 'the widget provides its own submit button').toBeVisible();
