@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\EventSystem\Handler;
 
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
+use OxidEsales\PaymentBase\Adapter\ShopOrderServiceInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
@@ -202,6 +203,117 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
         self::assertNull($context->get('checkoutUrl'));
     }
 
+    /**
+     * OPC-233. The early-order handler writes a real, numbered order before the shopper has paid
+     * (`OXTRANSSTATUS=NOT_FINISHED`), and `User::getOrders()` filters on nothing but the user id —
+     * so an attempt the provider never accepted is shown to the shopper as an order. Mollie only
+     * hears about a payment it created, and here creation itself failed, so no webhook will ever
+     * arrive to retire it: this handler is the last place that knows.
+     *
+     * Measured on pay1 2026-09-16 16:39 — contracts 034fd96f/be13f3f3 reached `failed` with no
+     * provider and no provider order id, while their orders 1536/1537 stayed NOT_FINISHED.
+     */
+    public function testHandleOnAdapterExceptionRetiresTheOrderTheShopperNeverPaidFor(): void
+    {
+        $contract = $this->contractStub();
+        ['handler' => $handler, 'checkoutPaymentService' => $checkoutPaymentService, 'adapter' => $adapter, 'shopOrderService' => $shopOrderService]
+            = $this->handler();
+
+        $checkoutPaymentService->method('buildCreatePaymentRequest')->willReturn(new CreatePaymentRequest(
+            amount: MollieAmountDto::fromComponents('EUR', 10.0),
+            description: 'x',
+            redirectUrl: 'https://shop.test/return',
+        ));
+        $adapter->method('createPayment')->willThrowException(new MollieAdapterException('boom'));
+
+        $shopOrderService->expects(self::once())
+            ->method('deleteNotFinishedOrder')
+            ->with('order-1');
+
+        $context = new EventContext();
+        $context->setContract($contract);
+
+        $handler->handle(new MollieCheckoutSessionRequestEvent($context));
+    }
+
+    public function testHandleOnUntrustedRedirectHostRetiresTheOrderTheShopperNeverPaidFor(): void
+    {
+        $contract = $this->contractStub();
+        ['handler' => $handler, 'checkoutPaymentService' => $checkoutPaymentService, 'adapter' => $adapter, 'shopOrderService' => $shopOrderService]
+            = $this->handler();
+
+        $checkoutPaymentService->method('buildCreatePaymentRequest')->willReturn(new CreatePaymentRequest(
+            amount: MollieAmountDto::fromComponents('EUR', 10.0),
+            description: 'x',
+            redirectUrl: 'https://shop.test/return',
+        ));
+        $adapter->method('createPayment')->willReturn(new MolliePaymentDto(
+            id: 'tr_evil',
+            status: 'open',
+            amount: MollieAmountDto::fromComponents('EUR', 10.0),
+            checkoutUrl: 'https://attacker.example/tr_evil',
+        ));
+
+        $shopOrderService->expects(self::once())
+            ->method('deleteNotFinishedOrder')
+            ->with('order-1');
+
+        $context = new EventContext();
+        $context->setContract($contract);
+
+        $handler->handle(new MollieCheckoutSessionRequestEvent($context));
+    }
+
+    /**
+     * A contract that failed before the early-order handler linked an order has nothing to retire,
+     * and `deleteNotFinishedOrder('')` would be a guessed id rather than a no-op.
+     */
+    public function testHandleDoesNotRetireAnythingWhenTheContractCarriesNoOrder(): void
+    {
+        $contract = $this->contractStub(null);
+        ['handler' => $handler, 'checkoutPaymentService' => $checkoutPaymentService, 'adapter' => $adapter, 'shopOrderService' => $shopOrderService]
+            = $this->handler();
+
+        $checkoutPaymentService->method('buildCreatePaymentRequest')->willReturn(new CreatePaymentRequest(
+            amount: MollieAmountDto::fromComponents('EUR', 10.0),
+            description: 'x',
+            redirectUrl: 'https://shop.test/return',
+        ));
+        $adapter->method('createPayment')->willThrowException(new MollieAdapterException('boom'));
+
+        $shopOrderService->expects(self::never())->method('deleteNotFinishedOrder');
+
+        $context = new EventContext();
+        $context->setContract($contract);
+
+        $handler->handle(new MollieCheckoutSessionRequestEvent($context));
+    }
+
+    /**
+     * The retirement is guarded on failure alone: a payment Mollie accepted leaves the order for
+     * the shopper to pay, and the storno guard in the adapter must never be reached on this path.
+     */
+    public function testHandleKeepsTheOrderWhenMollieAcceptsThePayment(): void
+    {
+        $contract = $this->contractStub();
+        ['handler' => $handler, 'checkoutPaymentService' => $checkoutPaymentService, 'adapter' => $adapter, 'shopOrderService' => $shopOrderService]
+            = $this->handler();
+
+        $checkoutPaymentService->method('buildCreatePaymentRequest')->willReturn(new CreatePaymentRequest(
+            amount: MollieAmountDto::fromComponents('EUR', 10.0),
+            description: 'x',
+            redirectUrl: 'https://shop.test/return',
+        ));
+        $adapter->method('createPayment')->willReturn($this->paymentDto());
+
+        $shopOrderService->expects(self::never())->method('deleteNotFinishedOrder');
+
+        $context = new EventContext();
+        $context->setContract($contract);
+
+        $handler->handle(new MollieCheckoutSessionRequestEvent($context));
+    }
+
     public function testHandleWithCardTokenPassesCreditcardMethodAndTokenToService(): void
     {
         $contract = $this->contractStub();
@@ -362,6 +474,8 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
         $shopAdapter = $this->createMock(ShopAdapterInterface::class);
         $shopAdapter->method('getShopUrl')->willReturn('https://shop.test/');
 
+        $shopOrderService = $this->createMock(ShopOrderServiceInterface::class);
+
         $handler = new MollieCheckoutSessionHandler(
             $checkoutPaymentService,
             $adapter,
@@ -369,6 +483,8 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
             $tokenService,
             $shopAdapter,
             new MollieRedirectUrlValidator(),
+            null,
+            $shopOrderService,
         );
 
         return [
@@ -376,13 +492,15 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
             'checkoutPaymentService' => $checkoutPaymentService,
             'adapter' => $adapter,
             'repository' => $repository,
+            'shopOrderService' => $shopOrderService,
         ];
     }
 
-    private function contractStub(): PaymentContractInterface&\PHPUnit\Framework\MockObject\MockObject
+    private function contractStub(?string $orderId = 'order-1'): PaymentContractInterface&\PHPUnit\Framework\MockObject\MockObject
     {
         $contract = $this->createMock(PaymentContractInterface::class);
         $contract->method('getId')->willReturn('contract-1');
+        $contract->method('getOrderId')->willReturn($orderId);
         $contract->method('getAmount')->willReturn(10.0);
         $contract->method('getCurrency')->willReturn('EUR');
         $contract->method('getMetadata')->willReturnCallback(

@@ -155,6 +155,9 @@ services:
     arguments:
       # Concrete Mollie token service (see ContractTokenService note) — not the shared interface.
       $tokenService: '@OxidEsales\Payments\Mollie\Service\ContractTokenService'
+      # OPC-233 - retire the NOT_FINISHED order when create-payment fails. Mollie never learns
+      # about a payment it did not create, so the webhook path cannot clean this up.
+      $shopOrderService: '@OxidEsales\PaymentBase\Adapter\ShopOrderServiceInterface'
     tags:
       - { name: payment.event_handler }
     public: true

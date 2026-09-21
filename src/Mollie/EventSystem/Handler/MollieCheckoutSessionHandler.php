@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\EventSystem\Handler;
 
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
+use OxidEsales\PaymentBase\Adapter\ShopOrderServiceInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\Handler\HandlerInterface;
@@ -45,6 +46,7 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
         private readonly ShopAdapterInterface $shopAdapter,
         private readonly MollieRedirectUrlValidator $redirectUrlValidator = new MollieRedirectUrlValidator(),
         private readonly ?LoggerInterface $logger = null,
+        private readonly ?ShopOrderServiceInterface $shopOrderService = null,
     ) {
     }
 
@@ -187,6 +189,7 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
         $this->logger?->error('MollieCheckoutSessionHandler: create payment failed', [
             'error' => $e->getMessage(),
         ]);
+        $this->retireUnpaidOrder($contract, 'mollie_create_payment_failed');
     }
 
     private function failUntrustedRedirectHost(PaymentContractInterface $contract, string $paymentId): void
@@ -195,6 +198,50 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
         $this->contractRepository->save($contract);
         $this->logger?->error('MollieCheckoutSessionHandler: checkoutUrl host not allowed', [
             'paymentId' => $paymentId,
+        ]);
+        $this->retireUnpaidOrder($contract, 'untrusted_redirect_host');
+    }
+
+    /**
+     * OPC-233 — retire the order this attempt already left behind.
+     *
+     * payment-base's EarlyOrderCreationHandler writes a real, numbered order BEFORE the shopper
+     * pays (`OXTRANSSTATUS=NOT_FINISHED`), and `User::getOrders()` filters on the user id alone —
+     * so an attempt no provider ever accepted is listed in the shopper's order history like a
+     * completed purchase. Core never had this problem: `Order::executePayment()` deletes the row
+     * the moment the gateway refuses.
+     *
+     * Failing the contract was not enough on its own. `WebhookContractFulfillmentHandler` mirrors
+     * a failure onto the linked order, but it only runs for a payment Mollie actually created —
+     * and on this path creation is exactly what failed, so no webhook will ever arrive. Measured
+     * on pay1 2026-09-16 16:39: contracts 034fd96f/be13f3f3 sat at `failed` with no provider and
+     * no provider order id while orders 1536/1537 stayed NOT_FINISHED, storno 0.
+     *
+     * Storno rather than `markFailed()`: the adapter's guarded cancel also releases the vouchers
+     * and moves the row off NOT_FINISHED, which is what keeps OXID's `checkOrderExist()` from
+     * mistaking it for a live order when the shopper retries. The guard is inside the adapter —
+     * a row that finished paying in the meantime is left alone.
+     */
+    private function retireUnpaidOrder(PaymentContractInterface $contract, string $reason): void
+    {
+        $orderId = $contract->getOrderId();
+        if ($orderId === null || $orderId === '') {
+            return;
+        }
+
+        if ($this->shopOrderService === null) {
+            $this->logger?->warning(
+                'MollieCheckoutSessionHandler: no shop order service, leaving an unpaid order behind',
+                ['orderId' => $orderId, 'reason' => $reason],
+            );
+
+            return;
+        }
+
+        $this->shopOrderService->deleteNotFinishedOrder($orderId);
+        $this->logger?->info('MollieCheckoutSessionHandler: retired the order of a failed attempt', [
+            'orderId' => $orderId,
+            'reason' => $reason,
         ]);
     }
 }
