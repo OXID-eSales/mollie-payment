@@ -3,8 +3,7 @@ import {
     loginStorefront,
     addFirstFeaturedProductToBasket,
     completeMollieTestPayment,
-    submitOpcMollieFooter,
-} from '../../fixtures/shop-helpers';
+    submitOpcMollieFooter, openOpcCheckoutModal, opcPaymentSectionFolded, OPC_FOLD_SKIP, waitForOpcPaymentState } from '../../fixtures/shop-helpers';
 
 /**
  * Full OPC happy path: buy-now one-page-checkout → pay with Mollie → return → order finalized.
@@ -20,17 +19,12 @@ test.describe('OPC buy-now — Mollie happy path', () => {
         await loginStorefront(page);
         await addFirstFeaturedProductToBasket(page);
 
-        // Open the one-page-checkout buy-now modal.
-        await page.locator(
-            '[data-action*="buy-now#openCheckoutFromBasket"], [data-action*="buy-now#prepareBuyNow"], .onepage-buy-now',
-        ).first().click({ force: true });
-
-        const modal = page.locator('#buyNowCheckoutModal');
-        await expect(modal).toBeVisible({ timeout: 20_000 });
+        // Open the one-page-checkout buy-now modal from the basket.
+        const modal = await openOpcCheckoutModal(page);
+        test.skip((await waitForOpcPaymentState(modal)) === 'folded', OPC_FOLD_SKIP);
 
         // Payment methods load from ?cl=OeOpcPayment&fnc=getPaymentListJson.
         const select = modal.locator('#paymentMethodSelect');
-        await expect(select).toBeEnabled({ timeout: 30_000 });
         await select.selectOption('oe_payments_mollie', { force: true });
         await select.dispatchEvent('change');
         await page.waitForTimeout(1500);
@@ -42,18 +36,15 @@ test.describe('OPC buy-now — Mollie happy path', () => {
         // widget (flag on). Both hand the browser off to Mollie's hosted checkout.
         await submitOpcMollieFooter(modal);
 
-        // The inline widget forces a specific Mollie method, so the hosted page lands on THAT
-        // method's flow (PayPal — the method completeMollieTestPayment can drive — is not in the
-        // inline list on this profile). Assert the redirect handoff and stop: the full pay+finalize
-        // leg is covered by the default-footer path (iframe flag off, as in CI) and by the
-        // MollieStandard specs. With the default footer, complete the whole flow here.
-        if (inlineWidget) {
-            await expect(page, 'inline widget hands off to Mollie hosted checkout')
-                .toHaveURL(/mollie\.com\/checkout/i, { timeout: 45_000 });
-            return;
-        }
+        // The inline widget forces the chosen Mollie method, so the hosted page lands on THAT
+        // method's flow. submitOpcMollieFooter prefers PayPal, whose test page is the simple
+        // status screen completeMollieTestPayment drives (it clicks the PayPal tile only when
+        // Mollie shows a method selection). Since manual capture stopped narrowing the inline
+        // list (2026-09-21) PayPal is offered here too, so both footers complete the whole flow.
+        await expect(page, `${inlineWidget ? 'inline widget' : 'default footer'} hands off to Mollie hosted checkout`)
+            .toHaveURL(/mollie\.com\/checkout/i, { timeout: 45_000 });
 
-        // Hand-off to Mollie's hosted checkout, then pay in test mode (PayPal → status "Paid").
+        // Pay in test mode (PayPal → status "Paid").
         await completeMollieTestPayment(page, 'paid');
 
         // Return leg re-fetches the paid status, finalizes the order, and renders thank-you.

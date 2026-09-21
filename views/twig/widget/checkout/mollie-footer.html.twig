@@ -19,24 +19,42 @@
      data-mollie-checkout-footer-debug-value="{{ mollieConfig.debug ? 'true' : 'false' }}">
 
     {% if mollieConfig.methods is not empty %}
-        <p class="mb-2 fw-bold">{{ translate({ ident: "MOLLIE_CHOOSE_METHOD" }) }}</p>
-        <div class="mollie-methods mb-3">
-            {% for m in mollieConfig.methods %}
-                <div class="form-check d-flex align-items-center py-1">
-                    <input class="form-check-input me-2" type="radio" name="mollieMethod"
-                           id="mollieFooterMethod_{{ m.id }}" value="{{ m.id }}"
-                           {% if loop.first %}checked{% endif %}
-                           data-mollie-checkout-footer-target="methodRadio"
-                           data-action="change->mollie-checkout-footer#methodChanged">
-                    <label class="form-check-label d-flex align-items-center" for="mollieFooterMethod_{{ m.id }}">
-                        {% if m.image %}
-                            <img src="{{ m.image }}" alt="" width="28" height="28" class="mollie-method-icon me-2">
-                        {% endif %}
-                        {{ m.name }}
-                    </label>
-                </div>
-            {% endfor %}
-        </div>
+        {% if mollieConfig.methods|length == 1 %}
+            {# One enabled method is not a choice (same rule as the standard order page): name it,
+               don't offer a selector. The radio stays — hidden, checked, still a `methodRadio`
+               target — so `_selectedMethod()` finds it and the method rides through processCheckout. #}
+            {% set m = mollieConfig.methods|first %}
+            <input type="radio" name="mollieMethod" id="mollieFooterMethod_{{ m.id }}" value="{{ m.id }}"
+                   checked hidden
+                   data-mollie-checkout-footer-target="methodRadio"
+                   data-mollie-order-method="fixed">
+            <p class="mb-3 d-flex align-items-center" data-mollie-order-card="method">
+                <span class="fw-bold me-2">{{ translate({ ident: "PAYMENT_METHOD" }) }}:</span>
+                {% if m.image %}
+                    <img src="{{ m.image }}" alt="" width="28" height="28" class="mollie-method-icon me-2">
+                {% endif %}
+                {{ m.name }}
+            </p>
+        {% else %}
+            <p class="mb-2 fw-bold">{{ translate({ ident: "MOLLIE_CHOOSE_METHOD" }) }}</p>
+            <div class="mollie-methods mb-3">
+                {% for m in mollieConfig.methods %}
+                    <div class="form-check d-flex align-items-center py-1">
+                        <input class="form-check-input me-2" type="radio" name="mollieMethod"
+                               id="mollieFooterMethod_{{ m.id }}" value="{{ m.id }}"
+                               {% if loop.first %}checked{% endif %}
+                               data-mollie-checkout-footer-target="methodRadio"
+                               data-action="change->mollie-checkout-footer#methodChanged">
+                        <label class="form-check-label d-flex align-items-center" for="mollieFooterMethod_{{ m.id }}">
+                            {% if m.image %}
+                                <img src="{{ m.image }}" alt="" width="28" height="28" class="mollie-method-icon me-2">
+                            {% endif %}
+                            {{ m.name }}
+                        </label>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
 
         {# Inline card fields — shown by the controller only when "creditcard" is selected. #}
         <div data-mollie-checkout-footer-target="cardFields" class="mollie-card-fields mb-3" style="display: none;">

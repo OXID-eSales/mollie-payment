@@ -8,3 +8,10 @@
   - Live on the manual-mode dev shop: selector offers 10 methods; PayPal → `paid`, captureMode null;
     card → `authorized`, captureMode manual, amountCaptured 0.00.
   - E2E helpers tolerate the skipped payment step; 4 MollieStandard specs green.
+- OPC footer — manual capture per method + one-option rule — DONE. See `reports/02-opc-footer-manual-capture.md`.
+  - Footer inherits the per-method capture decision (same service + handler); template now names a
+    single method read-only (`MollieFooterSingleMethodTemplateTest` 2/2). Live: footer offers 10
+    methods on the manual-mode shop; PayPal via OPC `processCheckout` → paid, captureMode null → thank-you.
+  - **OPC defect found:** single method + iframe mode → OPC phantom-folds `payment-execution` and hides
+    every provider footer. OPC specs skip loudly on it (`OPC_FOLD_SKIP`). Needs an OPC ticket.
+  - Shared e2e helpers: `openOpcCheckoutModal()`, `waitForOpcPaymentState()`, `opcPaymentSectionFolded()`.
