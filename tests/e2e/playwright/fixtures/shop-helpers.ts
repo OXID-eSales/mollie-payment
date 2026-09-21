@@ -175,6 +175,84 @@ export async function completeMollieTestPayment(page: Page, outcome: 'paid' | 'f
 }
 
 /**
+ * Opens the one-page-checkout modal from the basket.
+ *
+ * Prefers OPC's minibasket trigger (`buy-now#openCheckoutFromBasket`): a product page also
+ * carries one `buy-now#prepareBuyNow` button per listed product, and a comma-joined selector
+ * with `.first()` picks whichever comes first in the DOM — on the demo product page that is a
+ * per-product button whose click leaves `#buyNowCheckoutModal` hidden. Falls back to the other
+ * triggers only when no basket trigger is rendered.
+ */
+export async function openOpcCheckoutModal(page: Page): Promise<Locator> {
+    // The trigger is wired by OPC's Stimulus app; a click before that app has connected (the
+    // add-to-basket navigation resolves at domcontentloaded, scripts still loading) is lost.
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForFunction(() => !!(window as any).OnepageCheckout?.stimulus, null, { timeout: 15_000 }).catch(() => {});
+
+    const basketTrigger = page.locator('[data-action*="buy-now#openCheckoutFromBasket"]').first();
+    const trigger = (await basketTrigger.count())
+        ? basketTrigger
+        : page.locator('[data-action*="buy-now#prepareBuyNow"], .onepage-buy-now').first();
+    const modal = page.locator('#buyNowCheckoutModal');
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+        await trigger.scrollIntoViewIfNeeded().catch(() => {});
+        await trigger.click({ force: true });
+        if (await modal.isVisible({ timeout: 7_000 }).catch(() => false)) {
+            return modal;
+        }
+    }
+    await expect(modal).toBeVisible({ timeout: 5_000 });
+    return modal;
+}
+
+/**
+ * True when OPC has folded the `payment-execution` section (the only place a provider footer
+ * renders in iframe mode) into its "phantom" state. OPC does this for a single available payment
+ * method (OPC-208 single-method fold, `PaymentMethodController`); in iframe mode the picker lives
+ * INSIDE payment-execution, so the fold hides the provider footer with it and nothing on the modal
+ * can start a payment. Measured on daniil.oxiddev.de 2026-09-21 (Mollie the only method, iframe
+ * flag on). Specs that need the footer visible skip loudly on this instead of failing on OPC.
+ */
+export async function opcPaymentSectionFolded(modal: Locator): Promise<boolean> {
+    const item = modal.locator('#accordion-collapse-payment-execution').locator('xpath=ancestor::*[contains(@class,"accordion-item")][1]');
+    if (!(await item.count())) {
+        return false;
+    }
+    return item.evaluate((el) => (el as HTMLElement).hidden || el.classList.contains('opc-section--phantom'));
+}
+
+/**
+ * Waits until OPC has settled the payment section after the modal opened: either the payment
+ * select is usable ('select', 2+ methods) or the section has been folded ('folded', single
+ * method under payment-base auto-assign — the select stays disabled forever in that state).
+ */
+export async function waitForOpcPaymentState(modal: Locator): Promise<'select' | 'folded'> {
+    const select = modal.locator('#paymentMethodSelect');
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+        if (await opcPaymentSectionFolded(modal)) {
+            return 'folded';
+        }
+        if ((await select.count()) && (await select.isEnabled().catch(() => false))) {
+            // The select is enabled for a moment after the payment list loads and only THEN
+            // folded for a single method — let that decision land before answering.
+            await modal.page().waitForTimeout(2_000);
+            if (await opcPaymentSectionFolded(modal)) {
+                return 'folded';
+            }
+            if (await select.isEnabled().catch(() => false)) {
+                return 'select';
+            }
+        }
+        await modal.page().waitForTimeout(500);
+    }
+    return (await opcPaymentSectionFolded(modal)) ? 'folded' : 'select';
+}
+
+export const OPC_FOLD_SKIP = 'OPC folds the payment-execution section for a single payment method in iframe mode (OPC defect, see opcPaymentSectionFolded) — the provider footer is hidden, the payment leg cannot be driven';
+
+/**
  * Submit the OPC modal for Mollie, whichever footer is active — robust to the payment-base
  * "Use iframe instead of checkout button" flag:
  *  - flag ON  → the Mollie inline footer widget (pick a redirect method, click its own submit;

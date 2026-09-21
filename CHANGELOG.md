@@ -6,6 +6,9 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Fixed
+- One-page-checkout footer, inline mode: with exactly one enabled Mollie method the widget opened
+  with "Choose your payment method" and a single radio. It now names the method read-only, like the
+  standard order page; the hidden, checked field still carries the method into processCheckout.
 - Manual capture (`sMollieCaptureMode=manual`) no longer narrows what the shopper can pay with. The
   inline method selector used to list only the methods Mollie can authorize first (card, Klarna,
   …), so a manual-capture shop silently lost iDEAL, PayPal, bank transfer and the rest. Every

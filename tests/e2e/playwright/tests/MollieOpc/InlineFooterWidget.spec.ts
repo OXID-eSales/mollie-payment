@@ -1,5 +1,5 @@
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
-import { loginStorefront, addFirstFeaturedProductToBasket } from '../../fixtures/shop-helpers';
+import { loginStorefront, addFirstFeaturedProductToBasket, openOpcCheckoutModal, opcPaymentSectionFolded, OPC_FOLD_SKIP, waitForOpcPaymentState } from '../../fixtures/shop-helpers';
 
 /**
  * IFRAME (OPC) — Mollie renders its OWN inline footer widget in the buy-now modal.
@@ -32,17 +32,12 @@ async function openOpcModalWithMollie(page: Page): Promise<import('@playwright/t
     await loginStorefront(page);
     await addFirstFeaturedProductToBasket(page);
 
-    const trigger = page.locator(
-        '[data-action*="buy-now#openCheckoutFromBasket"], [data-action*="buy-now#prepareBuyNow"], .onepage-buy-now',
-    ).first();
-    await trigger.scrollIntoViewIfNeeded().catch(() => {});
-    await trigger.click({ force: true });
+    const modal = await openOpcCheckoutModal(page);
 
-    const modal = page.locator('#buyNowCheckoutModal');
-    await expect(modal).toBeVisible({ timeout: 20_000 });
-
+    // Single method: OPC folds the section and disables the select; Mollie is auto-assigned.
+    // The visible-footer assertions below cannot hold then — see OPC_FOLD_SKIP.
+    test.skip((await waitForOpcPaymentState(modal)) === 'folded', OPC_FOLD_SKIP);
     const select = modal.locator('#paymentMethodSelect');
-    await expect(select).toBeEnabled({ timeout: 30_000 });
     await select.selectOption('oe_payments_mollie', { force: true });
     await select.dispatchEvent('change');
     await page.waitForTimeout(2000); // AJAX footer-widget swap
