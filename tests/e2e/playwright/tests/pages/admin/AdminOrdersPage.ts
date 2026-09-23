@@ -14,14 +14,40 @@ export class AdminOrdersPage extends AdminBasePage {
             throw new Error('Menu frame not found');
         }
 
-        // Click Administer Orders to expand
+        // The current twig-admin-theme (OXID 7.4 Enterprise) uses an accordion sidebar: the
+        // top-level category and its single submenu item share the same label — "Orders" (EN)
+        // or "Bestellungen" (DE), i.e. "mxdisplayorders", not "mxorders"/"Administer Orders".
+        // The first click expands the category (submenu items are hidden, so only the category
+        // link is in the accessibility tree beforehand); a second click on the now-visible
+        // submenu link (same label) navigates to the order list. Depending on prior sidebar
+        // state the category can already be expanded, in which case the first click navigates
+        // directly. Verified 2026-09-23 (Sprint 2026-09-23/01, Story 1) against both locales.
+        const ordersEntries = menuFrame.getByRole('link', { name: /^(Administer Orders|Orders|Bestellungen)$/i });
+        if (await ordersEntries.first().isVisible({ timeout: 10000 }).catch(() => false)) {
+            await ordersEntries.first().click();
+            await this.page.waitForTimeout(1500);
+
+            if (!this.getListFrame()) {
+                const submenuEntry = ordersEntries.last();
+                if (await submenuEntry.isVisible({ timeout: 5000 }).catch(() => false)) {
+                    await submenuEntry.click();
+                    await this.page.waitForTimeout(2000);
+                }
+            }
+
+            if (this.getListFrame()) {
+                return;
+            }
+        }
+
+        // Classic admin skin fallback: expand "Administer Orders", then click "Orders" in
+        // the basefrm content area.
         const adminOrdersLink = menuFrame.locator(this.selectors.administerOrdersLink);
         await adminOrdersLink.click();
         await this.page.waitForTimeout(1000);
         await adminOrdersLink.click().catch(() => {});
         await this.page.waitForTimeout(1000);
 
-        // Click Orders in basefrm content area
         const baseFrame = this.getBaseFrame();
         if (baseFrame) {
             const ordersInContent = baseFrame.locator(this.selectors.ordersLink).first();

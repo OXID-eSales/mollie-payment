@@ -42,7 +42,70 @@ export class AdminMollieOrderPage extends AdminBasePage {
 
         // Transaction history
         transactionHistory: '[data-testid="mollie-transaction-history"]',
+
+        // Addresses tab (core order_address.html.twig, tab id "tbclorder_address" —
+        // see Sprint 2026-09-23/01, Story 1)
+        billingLastNameInput: 'input[name="editval[oxorder__oxbilllname]"]',
+        shippingLastNameInput: 'input[name="editval[oxorder__oxdellname]"]',
     };
+
+    /**
+     * Switches to the order's "Addresses"/"Adressen" tab (core `order_address` controller, tab
+     * id `tbclorder_address`). Same tab-bar pattern as `AdminOrdersPage.openPaymentTab()` —
+     * duplicated here rather than extracted, per the module's "extract on the third occurrence"
+     * rule (Sprint 2026-09-23/01, Story 1).
+     */
+    async openAddressesTab(): Promise<void> {
+        const listFrame = this.getListFrame();
+        if (!listFrame) {
+            throw new Error('List frame not found');
+        }
+
+        const addressesTab = listFrame
+            .locator('table.tabs a, .tabs a, [id^="tbcl"]')
+            .filter({ hasText: /^(Addresses|Adressen)$/ })
+            .first();
+
+        let clicked = false;
+        if (await addressesTab.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await addressesTab.click();
+            clicked = true;
+        } else {
+            const fallback = listFrame.locator('a').filter({ hasText: /^(Addresses|Adressen)$/ }).first();
+            if (await fallback.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await fallback.click();
+                clicked = true;
+            }
+        }
+
+        if (!clicked) {
+            throw new Error('Addresses tab link not found');
+        }
+
+        await this.page.waitForTimeout(2000);
+    }
+
+    /**
+     * Reads the billing last name (`editval[oxorder__oxbilllname]`) from the Addresses tab.
+     */
+    async billingLastName(): Promise<string> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return '';
+
+        return (await editFrame.locator(this.selectors.billingLastNameInput).inputValue({ timeout: 5000 }).catch(() => '')).trim();
+    }
+
+    /**
+     * Reads the shipping last name (`editval[oxorder__oxdellname]`) from the Addresses tab. Core
+     * only fills this when a separate `oxaddress` row was selected as `deladrid` — empty here,
+     * with a non-empty billing last name, is the ticket's defect (Sprint 2026-09-23/01, Story 1).
+     */
+    async shippingLastName(): Promise<string> {
+        const editFrame = this.getEditFrame();
+        if (!editFrame) return '';
+
+        return (await editFrame.locator(this.selectors.shippingLastNameInput).inputValue({ timeout: 5000 }).catch(() => '')).trim();
+    }
 
     /**
      * Get payment details from the Mollie panel.
