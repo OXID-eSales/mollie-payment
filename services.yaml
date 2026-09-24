@@ -464,6 +464,18 @@ services:
       - { name: 'console.command', command: 'mollie:reconcile-oxpaid' }
     public: true
 
+  # MOL-17: fulfil contracts stuck at `committed` whose Mollie payment is paid (the lost update the
+  # optimistic contract version now prevents left such rows behind; without `fulfilled` no refund).
+  OxidEsales\Payments\Mollie\Command\ReconcilePaidContractsCommand:
+    arguments:
+      $contracts: '@OxidEsales\PaymentBase\Repository\ContractStateQueryInterface'
+      $payments: '@OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface'
+      $statusMapper: '@OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper'
+      $fulfillment: '@OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandlerInterface'
+    tags:
+      - { name: 'console.command', command: 'mollie:reconcile-paid' }
+    public: true
+
   # Admin request handlers — delegate to the services above, tagged so
   # EventListenerProvider dispatches the Mollie concrete event produced by the translator.
   OxidEsales\Payments\Mollie\EventSystem\Handler\MollieRefundRequestHandler:

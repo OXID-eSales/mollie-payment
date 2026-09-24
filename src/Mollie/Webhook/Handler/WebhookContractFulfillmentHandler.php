@@ -13,6 +13,7 @@ use DomainException;
 use OxidEsales\PaymentBase\Contract\ContractCondition;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\PaymentBase\Repository\StaleContractException;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface;
@@ -49,7 +50,63 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
     ) {
     }
 
+    public function handlePaymentAuthorized(string $providerOrderId): FulfillmentOutcome
+    {
+        return $this->attemptTwice(fn () => $this->doPaymentAuthorized($providerOrderId));
+    }
+
     public function handlePaymentPaid(string $providerOrderId): FulfillmentOutcome
+    {
+        return $this->attemptTwice(fn () => $this->doPaymentPaid($providerOrderId));
+    }
+
+    public function handlePaymentFailed(string $providerOrderId, string $reason): FulfillmentOutcome
+    {
+        return $this->attemptTwice(fn () => $this->doPaymentFailed($providerOrderId, $reason));
+    }
+
+    public function handlePaymentExpired(string $providerOrderId): FulfillmentOutcome
+    {
+        return $this->attemptTwice(fn () => $this->doPaymentExpired($providerOrderId));
+    }
+
+    public function handlePaymentCanceled(string $providerOrderId, string $reason): FulfillmentOutcome
+    {
+        return $this->attemptTwice(fn () => $this->doPaymentCanceled($providerOrderId, $reason));
+    }
+
+    /**
+     * MOL-17: the webhook and the shopper's return leg race on the contract. When a save here is refused
+     * because the return leg moved the row on meanwhile, the whole step is run once more - it re-loads
+     * the contract, so the ladder continues from the state the return leg left. A second refusal is
+     * answered Failed (non-200), and Mollie comes back later with a fresh delivery.
+     *
+     * @param callable(): FulfillmentOutcome $step
+     */
+    private function attemptTwice(callable $step): FulfillmentOutcome
+    {
+        try {
+            return $step();
+        } catch (StaleContractException $first) {
+            $this->logger->info(
+                '[WebhookContractFulfillmentHandler] contract changed under the webhook; retrying on a fresh copy',
+                ['contractId' => $first->contractId],
+            );
+        }
+
+        try {
+            return $step();
+        } catch (StaleContractException $second) {
+            $this->logger->warning(
+                '[WebhookContractFulfillmentHandler] contract changed twice; asking Mollie to retry',
+                ['contractId' => $second->contractId, 'error' => $second->getMessage()],
+            );
+
+            return FulfillmentOutcome::Failed;
+        }
+    }
+
+    private function doPaymentPaid(string $providerOrderId): FulfillmentOutcome
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
@@ -61,6 +118,8 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         }
 
         $this->advanceToCommitted($contract);
+
+        $this->recordCapturedAmount($contract);
         $this->contractRepository->save($contract);
 
         $fulfilled = $this->contractFulfillmentService->fulfill($contract);
@@ -87,7 +146,7 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         return FulfillmentOutcome::Acted;
     }
 
-    public function handlePaymentFailed(string $providerOrderId, string $reason): FulfillmentOutcome
+    private function doPaymentFailed(string $providerOrderId, string $reason): FulfillmentOutcome
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
@@ -114,7 +173,7 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         return FulfillmentOutcome::Acted;
     }
 
-    public function handlePaymentExpired(string $providerOrderId): FulfillmentOutcome
+    private function doPaymentExpired(string $providerOrderId): FulfillmentOutcome
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
@@ -146,7 +205,7 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         return FulfillmentOutcome::Acted;
     }
 
-    public function handlePaymentCanceled(string $providerOrderId, string $reason): FulfillmentOutcome
+    private function doPaymentCanceled(string $providerOrderId, string $reason): FulfillmentOutcome
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
@@ -181,7 +240,7 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
      * attempting the ladder would be a wasted (and harmless, thanks to {@see attemptTransition})
      * no-op, so it is skipped outright to avoid recording a spurious audit transaction.
      */
-    public function handlePaymentAuthorized(string $providerOrderId): FulfillmentOutcome
+    private function doPaymentAuthorized(string $providerOrderId): FulfillmentOutcome
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
@@ -209,6 +268,24 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
      * inapplicable step (already advanced past it) is a silent no-op instead of propagating —
      * mirrors {@see advanceToCommitted()}.
      */
+    /**
+     * MOL-17 Story 5: an automatically captured payment never wrote OXCAPTUREDAMOUNT (only the manual
+     * CaptureService did), so the admin panel showed "Captured 0.00" for every paid Mollie order. The
+     * refund gate does not read it; merchants do. Set once the ladder reached a state that allows it.
+     */
+    private function recordCapturedAmount(PaymentContractInterface $contract): void
+    {
+        if ($contract->getCapturedAmount() !== null || !$contract->getState()->isCommitted()) {
+            return;
+        }
+
+        $this->attemptTransition(
+            'setCapturedAmount',
+            $contract,
+            static fn () => $contract->setCapturedAmount($contract->getAmount())
+        );
+    }
+
     private function advanceToAuthorized(PaymentContractInterface $contract): void
     {
         $this->attemptTransition('transitionToPending', $contract, static fn () => $contract->transitionToPending());

@@ -48,6 +48,13 @@ export default defineConfig({
             use: { ...devices['Desktop Chrome'] },
         },
         {
+            // Diagnostics: record and print (DB, Mollie API, admin panel), assert nothing, create one
+            // paid order per method. Run on purpose, never as part of a regression project.
+            name: 'mollie-diagnostic',
+            testMatch: 'tests/MollieDiagnostic/*.spec.ts',
+            use: { ...devices['Desktop Chrome'] },
+        },
+        {
             name: 'mollie-standard',
             testMatch: 'tests/MollieStandard/*.spec.ts',
             use: { ...devices['Desktop Chrome'] },

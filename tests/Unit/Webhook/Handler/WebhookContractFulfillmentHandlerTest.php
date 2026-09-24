@@ -16,6 +16,7 @@ use OxidEsales\PaymentBase\Contract\ContractState;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Contract\Transaction;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\PaymentBase\Repository\StaleContractException;
 use OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
@@ -132,6 +133,91 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
     }
 
     // --- handlePaymentFailed ---
+
+    // ── MOL-17: the webhook races the shopper's return leg on the contract row ───────────────────
+
+    public function testHandlePaymentPaid_RetriesOnceOnAFreshCopyWhenTheContractWasStale(): void
+    {
+        $stale = $this->pendingContract();
+        $fresh = $this->pendingContract();
+        $this->contractRepository->method('findByProviderOrderId')
+            ->willReturnOnConsecutiveCalls($stale, $fresh);
+        $saves = 0;
+        $this->contractRepository->method('save')->willReturnCallback(function (PaymentContractInterface $c) use (&$saves, $stale): void {
+            $saves++;
+            if ($c === $stale) {
+                throw new StaleContractException('c-1', 2, 3);
+            }
+        });
+        $this->contractFulfillmentService->method('fulfill')->with($fresh)->willReturn(true);
+        $this->transactionRepository->expects(self::once())->method('save');
+
+        $outcome = $this->handler->handlePaymentPaid('tr_1');
+
+        self::assertSame(FulfillmentOutcome::Acted, $outcome);
+        self::assertSame(2, $saves, 'the stale save, then the fresh one');
+    }
+
+    public function testHandlePaymentPaid_GivesUpAfterASecondStaleRefusal(): void
+    {
+        $this->contractRepository->method('findByProviderOrderId')->willReturnCallback(fn () => $this->pendingContract());
+        $this->contractRepository->method('save')->willThrowException(new StaleContractException('c-1', 2, 3));
+        $this->contractFulfillmentService->expects(self::never())->method('fulfill');
+        $this->transactionRepository->expects(self::never())->method('save');
+
+        self::assertSame(FulfillmentOutcome::Failed, $this->handler->handlePaymentPaid('tr_1'));
+    }
+
+    public function testHandlePaymentFailed_AlsoRetriesOnAStaleSave(): void
+    {
+        $stale = $this->pendingContract();
+        $fresh = $this->pendingContract();
+        $this->contractRepository->method('findByProviderOrderId')->willReturnOnConsecutiveCalls($stale, $fresh);
+        $this->contractRepository->method('save')->willReturnCallback(function (PaymentContractInterface $c) use ($stale): void {
+            if ($c === $stale) {
+                throw new StaleContractException('c-1', 1, 2);
+            }
+        });
+
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentFailed('tr_1', 'declined'));
+    }
+
+    public function testHandlePaymentPaid_RecordsTheCapturedAmountOnceTheContractIsCommitted(): void
+    {
+        $contract = $this->pendingContract();
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+        $this->contractFulfillmentService->method('fulfill')->willReturn(true);
+
+        $this->handler->handlePaymentPaid('tr_1');
+
+        self::assertSame(10.0, $contract->getCapturedAmount());
+    }
+
+    public function testHandlePaymentPaid_LeavesAnExistingCapturedAmountAlone(): void
+    {
+        $contract = $this->pendingContract();
+        $contract->fulfillCondition(ContractCondition::TYPE_PAYMENT_AUTHORIZED);
+        $contract->commitToOrder('order-1');
+        $contract->setCapturedAmount(4.0);   // a manual partial capture happened before the paid webhook
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+        $this->contractFulfillmentService->method('fulfill')->willReturn(true);
+
+        $this->handler->handlePaymentPaid('tr_1');
+
+        self::assertSame(4.0, $contract->getCapturedAmount());
+    }
+
+    private function pendingContract(): PaymentContractInterface
+    {
+        $contract = new \OxidEsales\PaymentBase\Contract\PaymentContract(1, 'user-1', \OxidEsales\PaymentBase\Contract\BasketSnapshot::fromArray([
+            'items' => [], 'discounts' => [], 'totalGross' => 10.0, 'totalNet' => 8.4, 'totalVat' => 1.6, 'currency' => 'EUR',
+        ]), 'c-1');
+        $contract->addCondition(ContractCondition::paymentAuthorized());
+        $contract->transitionToNotFinished('order-1');
+        $contract->transitionToPending();
+
+        return $contract;
+    }
 
     public function testHandlePaymentFailed_ReturnsNullWhenContractNotFound(): void
     {
