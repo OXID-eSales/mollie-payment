@@ -88,18 +88,19 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         try {
             return $step();
         } catch (StaleContractException $first) {
-            $this->logger->info('[WebhookContractFulfillmentHandler] contract changed under the webhook; retrying on a fresh copy', [
-                'contractId' => $first->contractId,
-            ]);
+            $this->logger->info(
+                '[WebhookContractFulfillmentHandler] contract changed under the webhook; retrying on a fresh copy',
+                ['contractId' => $first->contractId],
+            );
         }
 
         try {
             return $step();
         } catch (StaleContractException $second) {
-            $this->logger->warning('[WebhookContractFulfillmentHandler] contract changed twice; asking Mollie to retry', [
-                'contractId' => $second->contractId,
-                'error' => $second->getMessage(),
-            ]);
+            $this->logger->warning(
+                '[WebhookContractFulfillmentHandler] contract changed twice; asking Mollie to retry',
+                ['contractId' => $second->contractId, 'error' => $second->getMessage()],
+            );
 
             return FulfillmentOutcome::Failed;
         }

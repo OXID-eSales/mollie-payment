@@ -61,7 +61,11 @@ final class ReconcilePaidContractsCommand extends Command
         $limit = is_numeric($limitOption) ? max(1, (int) $limitOption) : null;
 
         $stuck = $this->contracts->findByStateAndProvider('committed', MollieDefinitions::PROVIDER_NAME, $limit);
-        $io->writeln(sprintf('%d committed Mollie contract(s) to inspect%s', count($stuck), $dryRun ? ' (dry run)' : ''));
+        $io->writeln(sprintf(
+            '%d committed Mollie contract(s) to inspect%s',
+            count($stuck),
+            $dryRun ? ' (dry run)' : '',
+        ));
 
         $fulfilled = 0;
         foreach ($stuck as $contract) {
