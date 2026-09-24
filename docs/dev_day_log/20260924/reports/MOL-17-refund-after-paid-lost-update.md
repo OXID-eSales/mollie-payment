@@ -160,5 +160,11 @@ by hand. Stripe and PayPal share the return responder and the repository, so the
   PHPStan rule set forbids concrete-class parameters.
 - **The race e2e drives the admin check from a fresh browser context**; sharing the storefront page (with
   its request interceptor) hung the admin navigation.
+- **A second defect surfaced in the regression** (`OrderRetryAfterUnpaidReturnCreatesNewOrder`, MOL-18): when
+  Mollie's `failed` webhook terminates the attempt before the shopper returns, payment-base's
+  `PreviousCheckoutAttemptCleaner` refused to retire the terminal contract and therefore never forgot
+  `sess_challenge`; the next "Order now" hit `order_exists` and showed "payment via Mollie not available".
+  Before MOL-18 the phantom order masked it. Fixed in payment-base (challenge forgotten for settled
+  attempts too; MOL-18's "keeps the challenge for a committed attempt" test superseded).
 - **Local migration run blocked** behind open transactions left by interrupted integration runs
   (`ALTER TABLE` metadata lock); killed the stale threads. Noted for operations.
