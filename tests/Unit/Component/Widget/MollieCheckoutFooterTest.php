@@ -11,6 +11,9 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Component\Widget;
 
 use OxidEsales\Payments\Mollie\Component\Widget\MollieCheckoutFooter;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
+use OxidEsales\Payments\Mollie\Service\AllowedSymbolsDescriber;
+use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
+use OxidEsales\Payments\Mollie\Service\ValidationRulesProvider;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -64,6 +67,18 @@ final class MollieCheckoutFooterTest extends TestCase
     /**
      * @param array<string, mixed> $viewParams
      */
+    // MOL-15: the footer hands the validator controller everything it needs to call the central
+    // payment-base endpoint with Mollie's rules.
+    public function testGetCheckoutDataExposesValidationUrlPluginIdAndAllowedSymbols(): void
+    {
+        $data = $this->buildFooter(['csrfToken' => 'tok'])->exposedGetCheckoutData();
+
+        self::assertSame('https://shop.test/index.php?cl=oepaymentvalidationapi&fnc=validate', $data['validationUrl']);
+        self::assertSame(MollieDefinitions::MODULE_ID, $data['pluginModuleId']);
+        self::assertSame("letters, digits, spaces, ' - . , /", $data['fieldAllowed']['street']);
+        self::assertArrayHasKey('postalCode', $data['fieldAllowed']);
+    }
+
     private function buildFooter(array $viewParams = []): TestableMollieCheckoutFooter
     {
         return new TestableMollieCheckoutFooter($viewParams);
@@ -105,6 +120,33 @@ final class TestableMollieCheckoutFooter extends MollieCheckoutFooter
     public function getCapturedTplParams(): array
     {
         return $this->tplParams;
+    }
+
+    protected function getShopUrl(): string
+    {
+        return 'https://shop.test/';
+    }
+
+    protected function validationRulesProvider(): ValidationRulesProvider
+    {
+        return new ValidationRulesProvider();
+    }
+
+    protected function allowedSymbolsDescriber(): AllowedSymbolsDescriber
+    {
+        $translator = new class implements LanguageTranslatorInterface {
+            public function translateString(string $key): string
+            {
+                return match ($key) {
+                    'MOLLIE_VALIDATION_CLASS_LETTERS' => 'letters',
+                    'MOLLIE_VALIDATION_CLASS_DIGITS' => 'digits',
+                    'MOLLIE_VALIDATION_CLASS_SPACES' => 'spaces',
+                    default => $key,
+                };
+            }
+        };
+
+        return (new ValidationRulesProvider())->createDescriber($translator);
     }
 
     public function getViewParameter($name): mixed

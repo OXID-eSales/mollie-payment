@@ -9,9 +9,16 @@
  # entry is inline; the payment itself still completes via redirect.
  #}
 <div class="checkout-footer-mollie"
-     data-controller="mollie-checkout-footer"
+     data-controller="mollie-checkout-footer mollie-user-data-validator"
      data-mollie-checkout-footer-payment-method-value="{{ checkoutData.paymentMethodId }}"
      data-mollie-checkout-footer-csrf-token-value="{{ checkoutData.csrfToken }}"
+     {# MOL-15: the validator posts the live address fields to payment-base's central endpoint with
+        Mollie's module id before the footer posts processCheckout; same rules as the classic flow. #}
+     data-mollie-user-data-validator-url-value="{{ checkoutData.validationUrl }}"
+     data-mollie-user-data-validator-plugin-id-value="{{ checkoutData.pluginModuleId }}"
+     data-mollie-user-data-validator-csrf-value="{{ checkoutData.csrfToken }}"
+     data-mollie-user-data-validator-allowed-value="{{ checkoutData.fieldAllowed|json_encode|e('html_attr') }}"
+     data-mollie-user-data-validator-review-message-value="{{ translate({ ident: 'MOLLIE_VALIDATION_REVIEW_ADDRESS' }) }}"
      data-mollie-checkout-footer-profile-id-value="{{ mollieConfig.profileId }}"
      data-mollie-checkout-footer-testmode-value="{{ mollieConfig.testmode ? 'true' : 'false' }}"
      data-mollie-checkout-footer-locale-value="{{ mollieConfig.locale }}"
@@ -397,6 +404,191 @@ class MollieCheckoutFooterController extends BaseController {
   }
 
   opc.stimulus.register('mollie-checkout-footer', MollieCheckoutFooterController);
+
+  // -----------------------------------------------------------------------
+  // mollie-user-data-validator (MOL-15)
+  //
+  // Wraps mollie-checkout-footer#submitPayment: POSTs the live OPC address fields to payment-base's
+  // central validation endpoint (cl=oepaymentvalidationapi&fnc=validate) with Mollie's module id and
+  // the CSRF token, renders each rejected field with `.is-invalid` + the server-formatted message
+  // ("The street field is not valid. Allowed symbols are: …"), and raises `oe:payment:error` so OPC's
+  // notice shows the review hint. Releases the submit on `valid:true`.
+  //
+  // Fail-open: on HTTP 4xx/5xx (a guard refused, transient error) or a network failure the submit is
+  // released - the server-side gate in the standard checkout is the source of truth; this is the
+  // shopper-facing early feedback. Inline (not in the module bundle) on purpose: it must register on
+  // OPC's Stimulus application to find the footer controller instance.
+  //
+  // OPC address inputs carry data-billing-address-target / data-delivery-address-target
+  // (one-page-checkout/.../checkout-steps/billing-address.html.twig): firstName, lastName, street,
+  // streetNumber, zipCode, city.
+  // -----------------------------------------------------------------------
+  class MollieUserDataValidatorController extends BaseController {
+    static values = {
+      url: String,
+      pluginId: String,
+      csrf: String,
+      allowed: Object,
+      reviewMessage: String
+    }
+
+    connect() {
+      this._wrapSubmitPayment();
+      this._attachClearOnInputListeners();
+    }
+
+    disconnect() {
+      this._unwrapSubmitPayment();
+      this._detachClearOnInputListeners();
+    }
+
+    // Logical field (payment-base rules) -> OPC address target. One map for collect / render / clear.
+    _fieldTargetMap() {
+      return {
+        firstName: 'firstName',
+        lastName: 'lastName',
+        street: 'street',
+        houseNumber: 'streetNumber',
+        postalCode: 'zipCode',
+        city: 'city'
+      };
+    }
+
+    _fieldNodes(target) {
+      return document.querySelectorAll(
+        '[data-billing-address-target="' + target + '"], [data-delivery-address-target="' + target + '"]'
+      );
+    }
+
+    _wrapSubmitPayment() {
+      var footer = this.application.getControllerForElementAndIdentifier(this.element, 'mollie-checkout-footer');
+      if (!footer) {
+        return;
+      }
+      this._footer = footer;
+      this._originalSubmit = footer.submitPayment.bind(footer);
+      footer.submitPayment = this._interceptSubmit.bind(this);
+    }
+
+    _unwrapSubmitPayment() {
+      if (this._footer && this._originalSubmit) {
+        this._footer.submitPayment = this._originalSubmit;
+      }
+    }
+
+    async _interceptSubmit(event) {
+      if (event) event.preventDefault();
+      this._clearErrors();
+
+      var fields = this._collectFields();
+      if (Object.keys(fields).length === 0) {
+        this._originalSubmit(event);
+        return;
+      }
+
+      try {
+        var body = new FormData();
+        body.append('pluginModuleId', this.pluginIdValue);
+        body.append('stoken', this.csrfValue);
+        for (var [name, value] of Object.entries(fields)) {
+          body.append(name, value);
+        }
+        var response = await fetch(this.urlValue, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          body: body
+        });
+        if (!response.ok) {
+          this._originalSubmit(event);
+          return;
+        }
+        var data = await response.json();
+        if (data.valid) {
+          this._originalSubmit(event);
+          return;
+        }
+        this._renderErrors(data.errors || []);
+      } catch (err) {
+        console.error('[MollieUserDataValidator] validation request failed, releasing submit:', err);
+        this._originalSubmit(event);
+      }
+    }
+
+    _collectFields() {
+      var out = {};
+      for (var [logical, target] of Object.entries(this._fieldTargetMap())) {
+        for (var el of this._fieldNodes(target)) {
+          var value = el && typeof el.value === 'string' ? el.value.trim() : '';
+          if (value !== '') { out[logical] = value; break; }
+        }
+      }
+      return out;
+    }
+
+    _renderErrors(errors) {
+      if (!Array.isArray(errors) || errors.length === 0) {
+        return;
+      }
+      var allowed = this.allowedValue || {};
+      var targets = this._fieldTargetMap();
+      var violated = [];
+      for (var err of errors) {
+        violated.push({ field: err.field, allowed: allowed[err.field] || '' });
+        var target = err && err.field ? targets[err.field] : null;
+        if (!target) continue;
+        for (var el of this._fieldNodes(target)) {
+          el.classList.add('is-invalid');
+          this._removeFeedback(el);
+          var feedback = document.createElement('div');
+          feedback.className = 'invalid-feedback d-block';
+          feedback.setAttribute('data-mollie-validation', 'true');
+          feedback.textContent = (err.message || '').toString().trim() || 'Invalid value';
+          el.insertAdjacentElement('afterend', feedback);
+        }
+      }
+      document.dispatchEvent(new CustomEvent('oe:payment:error', {
+        detail: { message: this.reviewMessageValue || 'Please review your address details.', fields: violated }
+      }));
+    }
+
+    _removeFeedback(el) {
+      var feedback = el.parentElement && el.parentElement.querySelector('.invalid-feedback[data-mollie-validation]');
+      if (feedback) feedback.remove();
+    }
+
+    _clearErrors() {
+      for (var target of Object.values(this._fieldTargetMap())) {
+        for (var el of this._fieldNodes(target)) {
+          el.classList.remove('is-invalid');
+          this._removeFeedback(el);
+        }
+      }
+    }
+
+    _attachClearOnInputListeners() {
+      this._inputListeners = [];
+      for (var target of Object.values(this._fieldTargetMap())) {
+        for (var el of this._fieldNodes(target)) {
+          var handler = function (element) {
+            element.classList.remove('is-invalid');
+            this._removeFeedback(element);
+          }.bind(this, el);
+          el.addEventListener('input', handler);
+          this._inputListeners.push({ el: el, handler: handler });
+        }
+      }
+    }
+
+    _detachClearOnInputListeners() {
+      for (var rec of (this._inputListeners || [])) {
+        rec.el.removeEventListener('input', rec.handler);
+      }
+      this._inputListeners = [];
+    }
+  }
+
+  opc.stimulus.register('mollie-user-data-validator', MollieUserDataValidatorController);
 })();
 </script>
 

@@ -9,9 +9,14 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Component\Widget;
 
+use OxidEsales\Eshop\Core\Registry;
+use OxidEsales\EshopCommunity\Core\Di\ContainerFacade;
 use OxidEsales\Eshop\Application\Component\Widget\WidgetController;
 use OxidEsales\Eshop\Core\ViewConfig;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
+use Throwable;
+use OxidEsales\Payments\Mollie\Service\ValidationRulesProvider;
+use OxidEsales\Payments\Mollie\Service\AllowedSymbolsDescriber;
 use OxidEsales\Payments\Mollie\Core\ViewConfig as MollieViewConfig;
 
 /**
@@ -55,7 +60,53 @@ class MollieCheckoutFooter extends WidgetController
         return [
             'paymentMethodId' => (string) $this->getViewParameter('paymentMethodId'),
             'csrfToken' => (string) $this->getViewParameter('csrfToken'),
+            // MOL-15: the footer validates the live address fields against payment-base's central
+            // endpoint before it posts processCheckout - with Mollie's rules, by module id.
+            'validationUrl' => $this->getShopUrl() . 'index.php?cl=oepaymentvalidationapi&fnc=validate',
+            'pluginModuleId' => MollieDefinitions::MODULE_ID,
+            'fieldAllowed' => $this->getValidationFieldAllowed(),
         ];
+    }
+
+    /**
+     * Logical field => human-readable allowed symbols, for the inline hint next to a rejected field.
+     * Empty (and logged) when the describer cannot be built - the endpoint's message is the fallback.
+     *
+     * @return array<string, string>
+     */
+    protected function getValidationFieldAllowed(): array
+    {
+        try {
+            $fields = array_keys($this->validationRulesProvider()->getFieldAllowMap());
+            $describer = $this->allowedSymbolsDescriber();
+            $allowed = [];
+            foreach ($fields as $field) {
+                $allowed[$field] = $describer->describe($field);
+            }
+
+            return $allowed;
+        } catch (Throwable $e) {
+            Registry::getLogger()->error('[MollieCheckoutFooter] failed to build the allowed-symbols map', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
+    }
+
+    protected function getShopUrl(): string
+    {
+        return Registry::getConfig()->getShopUrl();
+    }
+
+    protected function validationRulesProvider(): ValidationRulesProvider
+    {
+        return ContainerFacade::get(ValidationRulesProvider::class);
+    }
+
+    protected function allowedSymbolsDescriber(): AllowedSymbolsDescriber
+    {
+        return ContainerFacade::get(AllowedSymbolsDescriber::class);
     }
 
     /**
