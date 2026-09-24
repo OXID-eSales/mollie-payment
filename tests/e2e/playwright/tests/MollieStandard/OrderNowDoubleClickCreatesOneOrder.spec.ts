@@ -93,6 +93,63 @@ test.describe('MOL-18 — "Order now" clicked twice creates exactly one order', 
     });
 });
 
+test.describe('MOL-18 — the order button submits once', () => {
+    test('the order button locks itself after the first click and further clicks send nothing', async ({ page }) => {
+        await reachOrderPageWithRedirectMethod(page);
+
+        // Every POST of the order form the browser actually sends. Two same-tick submits collapse
+        // into one navigation per the HTML spec, so the extra clicks below are spread over later
+        // ticks - without the guard each one would abort the running navigation and POST again.
+        const orderPosts: string[] = [];
+        page.on('request', (request) => {
+            if (request.method() === 'POST' && /fnc=execute/.test(request.postData() ?? '')) {
+                orderPosts.push(request.url());
+            }
+        });
+
+        // Click in the page itself and read the button back synchronously: a Playwright locator
+        // would wait for the navigation the click starts, and by then the page is gone.
+        const afterFirstClick = await page.evaluate(async () => {
+            const button = document.querySelector<HTMLButtonElement>(
+                'button[data-action*="placeOrder"], button[data-controller="mollie-place-order"]',
+            );
+            if (!button) {
+                throw new Error('Mollie order button not found');
+            }
+            button.click();
+            const state = { disabled: button.disabled, loading: button.classList.contains('is-loading') };
+            await new Promise((resolve) => setTimeout(resolve, 60));
+            button.click();
+            await new Promise((resolve) => setTimeout(resolve, 60));
+            button.click();
+            await new Promise((resolve) => setTimeout(resolve, 120));
+            return state;
+        }).catch((error: Error) => {
+            // The navigation to Mollie may tear the document down before the promise settles;
+            // the state was captured synchronously after the first click either way.
+            if (/Execution context was destroyed|navigation/i.test(error.message)) {
+                return null;
+            }
+            throw error;
+        });
+
+        await page.waitForURL(/mollie\.com/i, { timeout: 45_000 });
+
+        if (afterFirstClick) {
+            expect(afterFirstClick.disabled, 'the button must be disabled right after the first click').toBe(true);
+            expect(afterFirstClick.loading, 'the button must show its loading state').toBe(true);
+        }
+        expect(orderPosts, 'three clicks must produce exactly one order POST').toHaveLength(1);
+
+        // Best-effort tidy-up: fail the one payment so the return leg retires the attempt. Mollie's
+        // classic checkout (no preselected method) keeps the shopper on its own page after a
+        // failure to pick another method, so not getting back to the shop is fine here - the
+        // not-finished cleanup handles a lingering attempt.
+        await completeMollieTestPayment(page, 'failed').catch(() => {});
+        await page.waitForURL((url) => !/mollie\.com$/i.test(url.hostname), { timeout: 15_000 }).catch(() => {});
+    });
+});
+
 async function reachOrderPageWithRedirectMethod(page: Page): Promise<void> {
     await loginStorefront(page);
     await addFirstFeaturedProductToBasket(page);
