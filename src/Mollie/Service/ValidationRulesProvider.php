@@ -36,4 +36,12 @@ final class ValidationRulesProvider
 
         return $map;
     }
+
+    /**
+     * MOL-15: the describer is built here so the formatter and the OPC footer read the same rules.
+     */
+    public function createDescriber(LanguageTranslatorInterface $translator): AllowedSymbolsDescriber
+    {
+        return new AllowedSymbolsDescriber($translator, $this->getFieldAllowMap());
+    }
 }

@@ -133,4 +133,12 @@ $aLang = [
     'MOLLIE_PAYMENT_METHOD_GIFTCARD' => 'Gift card',
     'MOLLIE_PAYMENT_METHOD_VOUCHER' => 'Voucher',
     'MOLLIE_PAYMENT_METHOD_POINTOFSALE' => 'Point of sale',
+
+    // MOL-15: admin free text (capture reason / refund description) validated with the checkout rules.
+    'MOLLIE_VALIDATION_FIELD_INVALID' => 'The %1$s field is not valid. Allowed symbols are: %2$s',
+    'MOLLIE_VALIDATION_CLASS_LETTERS' => 'letters',
+    'MOLLIE_VALIDATION_CLASS_DIGITS' => 'digits',
+    'MOLLIE_VALIDATION_CLASS_SPACES' => 'spaces',
+    'MOLLIE_VALIDATION_LABEL_CAPTUREREASON' => 'capture reason',
+    'MOLLIE_VALIDATION_LABEL_REFUNDDESCRIPTION' => 'refund description',
 ];

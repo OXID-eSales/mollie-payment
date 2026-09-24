@@ -248,12 +248,29 @@ services:
     class: OxidEsales\Payments\Mollie\Service\OxidLanguageTranslator
     public: false
 
+  # MOL-15: one describer (allow rule -> "letters, digits, spaces, ' - .") shared by the message
+  # formatter and the OPC footer widget, built from the rules file by the provider.
+  OxidEsales\Payments\Mollie\Service\AllowedSymbolsDescriber:
+    factory: ['@OxidEsales\Payments\Mollie\Service\ValidationRulesProvider', 'createDescriber']
+    arguments:
+      - '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
+    public: true
+
   OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter:
     arguments:
       $translator: '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
-      $rulesProvider: '@OxidEsales\Payments\Mollie\Service\ValidationRulesProvider'
+      $allowedSymbolsDescriber: '@OxidEsales\Payments\Mollie\Service\AllowedSymbolsDescriber'
     tags:
       - { name: oe.payment_base.validation_message_formatter }
+    public: true
+
+  # MOL-15: "may this shopper's address data go to Mollie?" asked by the payment step and the order
+  # step; answers with the translated per-field messages. Public: OXID controllers fetch it at runtime.
+  OxidEsales\Payments\Mollie\Service\CheckoutUserDataGate:
+    arguments:
+      $validator: '@OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface'
+      $messageFormatter: '@OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter'
+      $translator: '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
     public: true
 
   # ===========================================================================

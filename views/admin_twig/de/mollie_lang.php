@@ -127,4 +127,12 @@ $aLang = [
     'MOLLIE_PAYMENT_METHOD_GIFTCARD' => 'Geschenkkarte',
     'MOLLIE_PAYMENT_METHOD_VOUCHER' => 'Gutschein',
     'MOLLIE_PAYMENT_METHOD_POINTOFSALE' => 'Point of Sale',
+
+    // MOL-15: Freitext im Admin (Capture-Grund / Refund-Beschreibung) mit den Checkout-Regeln validiert.
+    'MOLLIE_VALIDATION_FIELD_INVALID' => 'Das Feld %1$s ist ungültig. Erlaubte Zeichen: %2$s',
+    'MOLLIE_VALIDATION_CLASS_LETTERS' => 'Buchstaben',
+    'MOLLIE_VALIDATION_CLASS_DIGITS' => 'Ziffern',
+    'MOLLIE_VALIDATION_CLASS_SPACES' => 'Leerzeichen',
+    'MOLLIE_VALIDATION_LABEL_CAPTUREREASON' => 'Capture-Grund',
+    'MOLLIE_VALIDATION_LABEL_REFUNDDESCRIPTION' => 'Refund-Beschreibung',
 ];
