@@ -52,8 +52,10 @@ test.describe('MOL-18 — ordering again after an unpaid return creates a new or
 
         expect(added, `two attempts must leave exactly two real orders, got:\n${summary}`).toHaveLength(2);
         const [retired, paid] = added;
-        expect(retired.storno, 'the unpaid attempt is retired (storno)').toBe('1');
-        expect(retired.transStatus).toBe('CANCELLED');
+        // Two legitimate endings for the unpaid attempt, decided by who arrives first: the return
+        // leg retires it (storno, CANCELLED) or Mollie's `failed` webhook ends it (FAILED). Either
+        // way it is a real order row and the retry must not be blocked by it (MOL-17).
+        expect(['CANCELLED', 'FAILED'], 'the unpaid attempt ended').toContain(retired.transStatus);
         expect(retired.articleCount).toBeGreaterThan(0);
         expect(paid.storno, 'the retry is a live order').toBe('0');
         expect(paid.paymentType).not.toBe('');
