@@ -6,6 +6,8 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- `mollie:reconcile-paid` console command (MOL-17): fulfils contracts stuck at `committed` whose Mollie
+  payment is `paid`, running the webhook's own fulfilment; `--dry-run` lists, `--limit` bounds.
 - User-data validation exactly as in the Stripe module (MOL-15), on payment-base's central
   validation system with Mollie's own rules file and module id: the billing **and** the selected
   delivery address are validated; the field set matches Stripe's (`postalCode`, `cellPhone`,
@@ -20,6 +22,13 @@ All notable changes to this module are documented here. Format follows
   Stripe module (pinned by a unit test); both modules depend on payment-base only.
 
 ### Fixed
+- Successfully paid orders (reported for Pay by Bank and EPS, in fact any method) offered no Refund
+  action in the admin Payment tab (MOL-17). The admin gate needs contract state `fulfilled`, which only
+  the `paid` webhook sets; the shopper's return leg overwrote it with its stale `committed` copy when the
+  webhook arrived first. With payment-base's versioned contract save, `WebhookContractFulfillmentHandler`
+  now re-runs a step once on a fresh copy when its save was refused, and answers Failed (Mollie retries)
+  on a second refusal. The paid path also records the captured amount, so the panel no longer shows
+  "Captured 0.00" for automatically captured payments.
 - "Order now" clicked several times on the standard order page created several orders (MOL-18).
   The clicks reach PHP one after the other; the second one used to start a second checkout
   attempt, which retired the first (order storno'd) and - with core's `sess_challenge` still

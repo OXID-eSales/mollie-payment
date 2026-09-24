@@ -128,7 +128,7 @@ and "Captured 0.00 EUR" (see *Not the cause*). Capture / cancel forms: none (aut
   `fulfilled` with a Refund form"); kept as a diagnostic for now, not part of the `mollie-standard` run
   (it is slow and creates one order per method).
 
-## Fix direction (detailed in `../sprints/MOL-17-refund-after-paid-lost-update.md`)
+## Fix (sprint `../sprints/MOL-17-refund-after-paid-lost-update.md`, implemented 2026-09-24)
 
 Coordinate the two writers instead of hoping they do not overlap: **optimistic concurrency on the contract
 row** in payment-base (`OXVERSION`, `UPDATE … WHERE OXVERSION = :loaded`, `StaleContractException`), with the
@@ -136,3 +136,29 @@ return leg treating "somebody newer already committed/fulfilled this" as success
 its ladder once on a fresh copy. Plus a reconciliation command that fulfils the contracts already stuck at
 `committed` whose Mollie payment is `paid`, so merchants get their Refund forms back without touching rows
 by hand. Stripe and PayPal share the return responder and the repository, so they inherit the fix.
+
+## Implementation results
+
+| Story | Where | Proof |
+|---|---|---|
+| 1 red proofs | payment-base `ContractLostUpdateTest`; Mollie e2e `RefundAfterWebhookWinsRace` | integration: `committed` / no exception before the fix; e2e: with versioning alone the webhook side was refused ("expected version 4, row is at 5", order 665 stayed `committed`) |
+| 2 `OXVERSION` + `StaleContractException` | payment-base `28b84bc` | integration 3 tests green; unit versioning tests |
+| 3 return leg yields, webhook retries once | payment-base `fede907`, Mollie `4a847bb` | responder 4 new unit tests, handler 3 new unit tests; e2e green (see status) |
+| 4 `mollie:reconcile-paid` | payment-base `330fcb4`, Mollie `44481db` | dry run then real run on this shop: **13 contracts fulfilled** (orders incl. 605, 607, 613, 638, 640, 649, 655, 657, 662, 665), 6 kept (card authorizations awaiting manual capture), 18 skipped (payments of another Mollie account, 404) |
+| 5 captured amount on the paid path | Mollie `4a847bb` | handler unit tests; panel shows the amount for new orders |
+| 6 regression, docs, CI | both | see `../status.md` |
+
+### Deviations from the plan
+
+- **The webhook side needed the retry more than expected.** With versioning alone, the webhook lost the
+  race in one of two runs (order 665): its refused save became a `failed` webhook, and because the event
+  id is claimed before processing, Mollie's retry would have been dropped. The in-request retry (Story 3)
+  covers it; the general "failed claims are re-claimable" change stays a follow-up.
+- **No public `getVersion()` on `PaymentContract`**: PHPMD's public-member limit (50) is exhausted; the
+  version travels through `toArray()`.
+- **`StaleContractException` is passed to helpers as its message**, not as the object: payment-base's
+  PHPStan rule set forbids concrete-class parameters.
+- **The race e2e drives the admin check from a fresh browser context**; sharing the storefront page (with
+  its request interceptor) hung the admin navigation.
+- **Local migration run blocked** behind open transactions left by interrupted integration runs
+  (`ALTER TABLE` metadata lock); killed the stale threads. Noted for operations.
