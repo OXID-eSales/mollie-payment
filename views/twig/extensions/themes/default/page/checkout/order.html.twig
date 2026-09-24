@@ -11,12 +11,36 @@
 {% extends "page/checkout/order.html.twig" %}
 
 {% block checkout_order_next_step_side %}
-    {% set mollieInlineCard = oView.getPayment() and oView.getPayment().getId() == oViewConf.getMollieModuleId() and oViewConf.isMollieInlineCardEnabled() %}
+    {% set molliePayment = oView.getPayment() and oView.getPayment().getId() == oViewConf.getMollieModuleId() %}
+    {% set mollieInlineCard = molliePayment and oViewConf.isMollieInlineCardEnabled() %}
     {% set mollieMethods = mollieInlineCard ? oViewConf.getMollieMethods() : [] %}
-    {% if not mollieInlineCard or mollieMethods is empty %}
+    {% set displayBasketOrderButton = oViewConf.getViewThemeParam('basketLowOrderDisplayOrderButton') %}
+    {% if not molliePayment %}
         {{ parent() }}
+    {% elseif not mollieInlineCard or mollieMethods is empty %}
+        {# MOL-18: classic redirect flow - apex's own button, apex's own conditions, plus a
+           Stimulus controller that lets it submit once per click burst (the server rejoins an
+           attempt already in flight, so this is UX). The inline onclick stays as the fallback
+           for a page where the bundle did not load; the controller removes it on connect. #}
+        {% if not oView.isLowOrderPrice() or (displayBasketOrderButton == 'show' or displayBasketOrderButton == 'disabled') %}
+            <script>
+                window.oMollie = window.oMollie || {};
+                window.oMollie.debug = {{ oViewConf.isMollieDebugLoggingEnabled() ? 'true' : 'false' }};
+            </script>
+            <script src="{{ oViewConf.getModuleUrl('oe_payments_mollie', oViewConf.getMollieJsPath()) }}?v={{ oViewConf.getMollieModuleVersion() }}"></script>
+            <button type="button" class="btn btn-highlight btn-lg w-100"
+                    data-controller="mollie-place-order"
+                    data-action="click->mollie-place-order#submit"
+                    {% if oView.isLowOrderPrice() and displayBasketOrderButton == 'disabled' %}
+                    disabled="disabled"
+                    {% else %}
+                    onclick="document.getElementById('orderConfirmAgbBottom').submit();"
+                    {% endif %}
+            >
+                {{ translate({ ident: "SUBMIT_ORDER" }) }}
+            </button>
+        {% endif %}
     {% else %}
-        {% set displayBasketOrderButton = oViewConf.getViewThemeParam('basketLowOrderDisplayOrderButton') %}
         {% if not oView.isLowOrderPrice() or (displayBasketOrderButton == 'show' or displayBasketOrderButton == 'disabled') %}
             {# Mollie Components JS is emitted here (not in base_js) because the core order template
                captures its body rather than extending the layout, so base_js overrides collide

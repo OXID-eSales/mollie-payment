@@ -24,3 +24,7 @@
     added (incl. the order-mail/thank-you-page side effect). Full write-up:
     `done/01-order-shipping-address-from-billing.md`, `reports/01-order-shipping-address-from-billing.md`
     "Fix and proof" section. **Nothing committed or pushed in either repo.**
+- Sprint MOL-18 (one order per checkout attempt — "Order now" clicked several times) — PLANNED, awaiting approval. See `sprints/MOL-18-single-order-per-checkout-attempt.md`.
+  - Finding: PHP file sessions serialise the clicks; click 2 retires attempt 1 (order storno'd) and core's `ORDEREXISTS` reload-blocker is then treated as success by payment-base's `OxidShopOrderService`, which saves a never-loaded `Order` → phantom row (no user/articles/payment type, number consumed). Local DB: 53 phantoms since 2026-07-29, 8 with committed/fulfilled contracts. Same path fires on every legit retry.
+  - Plan: 6 stories — red e2e + red integration, no phantom on ORDEREXISTS (payment-base), in-flight attempt resolver + `sess_challenge` rotation on retire (payment-base), controller replay (Mollie), single-submit button (Mollie), retry e2e + changelogs. Push, CI green, no merge.
+- MOL-10 (contract / order / transaction states vs Mollie, Stripe, PayPal statuses) — REPORT written, no code changed. See `reports/MOL-10-contract-order-transactioon-states.md`. Key finding: Mollie folds `open`+`pending`, Stripe folds four `requires_*`/`processing` statuses and has no `expired` path, PayPal mapper is unused; recommendation is one provider-neutral outcome enum + one transition rule table in payment-base.

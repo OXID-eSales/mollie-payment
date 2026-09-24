@@ -43,6 +43,16 @@ export default class extends Controller {
     this._debug = createDebugLogger(() => this.debugValue)
     this._components = {}
     this._mounting = null
+    this._inFlight = false
+    this._orderButton = null
+    // MOL-18: browser back from Mollie restores this page from the bfcache with its JS state
+    // intact - the order button must unlock again or the shopper cannot order at all.
+    this._onPageShow = (event) => {
+      if (event.persisted) {
+        this._releaseOrderButton()
+      }
+    }
+    window.addEventListener('pageshow', this._onPageShow)
     this._cardMode = this._readCardMode()
     this._syncMode()
     this._debug('Mollie Components controller connected', { cardMode: this._cardMode })
@@ -59,6 +69,7 @@ export default class extends Controller {
    * 'touched' / 'focusInput')" — and the card fields cannot be filled in at all.
    */
   disconnect() {
+    window.removeEventListener('pageshow', this._onPageShow)
     for (const [name, component] of Object.entries(this._components || {})) {
       if (component && typeof component.unmount === 'function') {
         try {
@@ -152,11 +163,18 @@ export default class extends Controller {
     if (event) {
       event.preventDefault()
     }
+    // MOL-18: one submission per click burst. The server rejoins an attempt already in flight,
+    // so this is UX - the button locks and shows a loading state until the browser has left.
+    if (this._inFlight) {
+      this._debug('order submission already in flight — click ignored')
+      return
+    }
     const form = document.getElementById(this.formIdValue)
     if (!form) {
       this._showError('Order form not found.')
       return
     }
+    this._lockOrderButton(event ? event.currentTarget : null)
 
     if (!this._cardMode) {
       this._submit(form)
@@ -169,6 +187,7 @@ export default class extends Controller {
     }
     if (!this._mollie) {
       this._showError('Card form is not ready. Please try again.')
+      this._releaseOrderButton()
       return
     }
 
@@ -176,6 +195,7 @@ export default class extends Controller {
       const { token, error } = await this._mollie.createToken()
       if (error) {
         this._showError(error.message || 'Please check your card details.')
+        this._releaseOrderButton()
         return
       }
       if (this.hasTokenTarget) {
@@ -186,6 +206,25 @@ export default class extends Controller {
     } catch (err) {
       this._debug('createToken failed', err)
       this._showError('Could not process the card. Please try again.')
+      this._releaseOrderButton()
+    }
+  }
+
+  _lockOrderButton(button) {
+    this._inFlight = true
+    this._orderButton = button instanceof HTMLButtonElement ? button : null
+    if (this._orderButton) {
+      this._orderButton.disabled = true
+      this._orderButton.classList.add('is-loading')
+    }
+  }
+
+  /** Released only when the submission did not leave the page: tokenisation failed, or bfcache restore. */
+  _releaseOrderButton() {
+    this._inFlight = false
+    if (this._orderButton) {
+      this._orderButton.disabled = false
+      this._orderButton.classList.remove('is-loading')
     }
   }
 

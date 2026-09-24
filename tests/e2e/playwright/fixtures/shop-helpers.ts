@@ -191,7 +191,9 @@ export async function completeMollieTestPayment(page: Page, outcome: 'paid' | 'f
     // Method-selection page -> PayPal. When a specific method was already forced (the OPC inline
     // widget sends method=paypal), Mollie skips its method-selection page and lands directly on the
     // test-mode status screen, so the PayPal button is absent — click it only if it is shown.
-    const paypalBtn = page.getByRole('button', { name: /^paypal$/i }).first();
+    // Mollie labels the method tiles "<icon alt> <name>" - "PayPal PayPal" on the classic
+    // (no preselected method) page - so the match allows the doubled word.
+    const paypalBtn = page.getByRole('button', { name: /^paypal(\s+paypal)?$/i }).first();
     if (await paypalBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
         await paypalBtn.click();
     }

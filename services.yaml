@@ -139,6 +139,15 @@ services:
       - '@OxidEsales\PaymentBase\Checkout\PreviousCheckoutAttemptCleanerInterface'
     public: true
 
+  # MOL-18: "Order now" clicked twice - the second submission rejoins the attempt already in
+  # flight instead of starting another. payment-base decides; this only reads the live basket
+  # total for it. Public: MollieOrderController fetches it through the container at runtime.
+  OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplay:
+    arguments:
+      - '@OxidEsales\PaymentBase\Checkout\InFlightCheckoutAttemptResolverInterface'
+      - '@OxidEsales\PaymentBase\Adapter\SessionAdapterInterface'
+    public: true
+
   OxidEsales\PaymentBase\EventSystem\Handler\EarlyOrderCreationHandler:
     arguments:
       $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'

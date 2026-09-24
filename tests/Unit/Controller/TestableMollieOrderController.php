@@ -15,6 +15,7 @@ use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\Payments\Mollie\Service\AbandonedAttemptCleanup;
+use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplay;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\PaymentBase\Service\TokenServiceInterface;
 use OxidEsales\Payments\Mollie\Controller\MollieOrderController;
@@ -54,6 +55,7 @@ final class TestableMollieOrderController extends MollieOrderController
         private readonly bool $termsAccepted = true,
         private readonly bool $challengeValid = true,
         private readonly bool $basketEmpty = false,
+        private readonly ?InFlightCheckoutReplay $inFlightReplay = null,
     ) {
         // Intentionally does NOT call parent::__construct() — no OXID bootstrap needed.
     }
@@ -104,6 +106,7 @@ final class TestableMollieOrderController extends MollieOrderController
             MollieReturnResolver::class => $this->resolver,
             EventDispatcherInterface::class => $this->dispatcher,
             AbandonedAttemptCleanup::class => $this->attemptCleaner,
+            InFlightCheckoutReplay::class => $this->inFlightReplay,
             default => null,
         };
     }

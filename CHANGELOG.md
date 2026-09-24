@@ -6,6 +6,18 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Fixed
+- "Order now" clicked several times on the standard order page created several orders (MOL-18).
+  The clicks reach PHP one after the other; the second one used to start a second checkout
+  attempt, which retired the first (order storno'd) and - with core's `sess_challenge` still
+  naming that order - ended in a phantom order row without articles that the shopper then paid
+  for. `MollieOrderController::execute()` now asks payment-base whether an attempt is already in
+  flight (open contract, Mollie checkout URL, order still `NOT_FINISHED`, same basket total) and
+  answers every further submission with the same redirect to Mollie. Requires payment-base with
+  `InFlightCheckoutAttemptResolverInterface`; an older payment-base keeps the previous behaviour.
+- The order button submits once per click burst: the inline-components button and the classic
+  redirect button (new `mollie-place-order` Stimulus controller, apex's own markup and conditions)
+  disable themselves and show a loading state after the first click, and unlock again when the
+  page is restored from the back/forward cache or card tokenisation fails.
 - One-page-checkout footer, inline mode: with exactly one enabled Mollie method the widget opened
   with "Choose your payment method" and a single radio. It now names the method read-only, like the
   standard order page; the hidden, checked field still carries the method into processCheckout.
