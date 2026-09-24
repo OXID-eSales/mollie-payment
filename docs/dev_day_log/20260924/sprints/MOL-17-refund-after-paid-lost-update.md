@@ -1,11 +1,11 @@
 # Sprint: Refund action after a successful payment — no lost update between return leg and webhook
 
 **Date:** 2026-09-24
-**Ticket:** (id to be filled in) — paid Pay by Bank / EPS orders offer no refund in admin
-**Report:** `../reports/refund-availability-after-paid.md` (root cause: a lost update; not method-specific)
+**Ticket:** MOL-17 — paid Pay by Bank / EPS orders offer no refund in admin
+**Report:** `../reports/MOL-17-refund-after-paid-lost-update.md` (root cause: a lost update; not method-specific)
 **Repos:** payment-base (concurrency guard, return leg, reconciliation) and mollie-payment (webhook side,
-captured amount, e2e, docs). Branches on approval: `b-7.4.x-refund-after-paid-lost-update` in both repos.
-**Status:** PLANNED — **do not start without the product owner's approval.**
+captured amount, e2e, docs). Branches: `b-7.4.x-MOL-17-refund-after-paid-lost-update` in both repos.
+**Status:** APPROVED 2026-09-24 (ticket MOL-17; defaults taken: command only, Story 5 in this sprint) — IN PROGRESS.
 **Definition of Done (sprint-level):** an order paid through any Mollie method ends with contract state
 `fulfilled` and a Refund form in the admin Payment tab no matter whether Mollie's `paid` webhook arrives
 before, during or after the shopper's return; a newer contract state is never overwritten by an older
@@ -170,7 +170,6 @@ audit row as is. Purely additive; the refund gate does not read it, merchants do
 1 → 2 → 3 (e2e green) → 4 (repair this shop, evidence) → 5 → 6.
 
 ## Open questions for the approver (defaults in bold)
-- Ticket id for file names and commits: **fill in** (files currently use `refund-availability-after-paid`).
 - Stuck contracts on merchants' shops: **console command** (Story 4) vs. also a lazy self-heal when the admin
   opens the Payment tab (rejected by default: a read should not write).
 - Story 5 (captured amount cosmetics): **in this sprint** vs. separate ticket.

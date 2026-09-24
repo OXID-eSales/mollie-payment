@@ -1,10 +1,10 @@
 # Refund action missing after a successful Mollie payment — investigation report
 
 **Date:** 2026-09-24
-**Ticket:** (id to be filled in) — "For orders successfully paid using Mollie Pay by Bank / EPS, the OXID admin
+**Ticket:** MOL-17 — "For orders successfully paid using Mollie Pay by Bank / EPS, the OXID admin
 does not provide an option to refund the payment."
-**Branch:** mollie-payment `b-7.4.x-refund-availability-after-paid` (report, sprint plan, diagnostic spec only —
-no production change yet)
+**Branch:** mollie-payment `b-7.4.x-MOL-17-refund-after-paid-lost-update` (report, sprint plan, diagnostic specs;
+implementation follows on the same branch after approval, 2026-09-24)
 
 ## Result in one paragraph
 
@@ -128,7 +128,7 @@ and "Captured 0.00 EUR" (see *Not the cause*). Capture / cancel forms: none (aut
   `fulfilled` with a Refund form"); kept as a diagnostic for now, not part of the `mollie-standard` run
   (it is slow and creates one order per method).
 
-## Fix direction (detailed in `../sprints/refund-availability-after-paid.md`)
+## Fix direction (detailed in `../sprints/MOL-17-refund-after-paid-lost-update.md`)
 
 Coordinate the two writers instead of hoping they do not overlap: **optimistic concurrency on the contract
 row** in payment-base (`OXVERSION`, `UPDATE … WHERE OXVERSION = :loaded`, `StaleContractException`), with the
