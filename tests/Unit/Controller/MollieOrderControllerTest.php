@@ -332,6 +332,7 @@ final class MollieOrderControllerTest extends TestCase
         array $requestParams = [],
         bool $basketEmpty = false,
         ?InFlightCheckoutReplay $inFlightReplay = null,
+        array $userDataProblems = [],
     ): TestableMollieOrderController {
         return new TestableMollieOrderController(
             requestParams: $requestParams,
@@ -345,6 +346,7 @@ final class MollieOrderControllerTest extends TestCase
             challengeValid: $challengeValid,
             basketEmpty: $basketEmpty,
             inFlightReplay: $inFlightReplay,
+            userDataProblems: $userDataProblems,
         );
     }
 
@@ -380,6 +382,54 @@ final class MollieOrderControllerTest extends TestCase
         $session->method('getBasket')->willReturn($basket);
 
         return $session;
+    }
+
+    // ── MOL-15: user data is validated at the order step, exactly as the Stripe module does ─────
+
+    public function testExecuteWhenUserDataInvalidShowsFieldMessagesReturnsToAddressStepAndDispatchesNothing(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::never())->method('dispatch');
+
+        $controller = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            $dispatcher,
+            userDataProblems: ['The street field is not valid. Allowed symbols are: letters, digits, spaces'],
+        );
+
+        self::assertSame('user', $controller->execute());
+        self::assertSame(
+            ['The street field is not valid. Allowed symbols are: letters, digits, spaces'],
+            $controller->userDataProblemsShown,
+        );
+        self::assertSame([], $controller->redirectedTo);
+    }
+
+    public function testExecuteChecksUserDataOnlyAfterTheCoreGuardsPassed(): void
+    {
+        $controller = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            null,
+            termsAccepted: false,
+            userDataProblems: ['problem'],
+        );
+
+        self::assertNull($controller->execute());
+        self::assertSame([], $controller->userDataProblemsShown);
+    }
+
+    public function testExecuteWhenUserDataInvalidDoesNotReplayAnInFlightAttempt(): void
+    {
+        // The address went bad between two clicks: the shopper must fix it, not be sent to Mollie.
+        $controller = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            null,
+            inFlightReplay: $this->replayNeverAsked(),
+            userDataProblems: ['problem'],
+        );
+
+        self::assertSame('user', $controller->execute());
+        self::assertSame([], $controller->redirectedTo);
     }
 
     // ── MOL-18: a repeated "Order now" rejoins the attempt already in flight ──────────────────────

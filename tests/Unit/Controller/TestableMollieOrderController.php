@@ -40,6 +40,7 @@ final class TestableMollieOrderController extends MollieOrderController
 
     /** STRP-171 - the payment-base service that retires an abandoned attempt. */
     public ?AbandonedAttemptCleanup $attemptCleaner = null;
+    public array $userDataProblemsShown = [];
 
     /**
      * @param array<string, string> $requestParams
@@ -56,6 +57,7 @@ final class TestableMollieOrderController extends MollieOrderController
         private readonly bool $challengeValid = true,
         private readonly bool $basketEmpty = false,
         private readonly ?InFlightCheckoutReplay $inFlightReplay = null,
+        private readonly array $userDataProblems = [],
     ) {
         // Intentionally does NOT call parent::__construct() — no OXID bootstrap needed.
     }
@@ -131,6 +133,17 @@ final class TestableMollieOrderController extends MollieOrderController
     protected function redirect(string $url): void
     {
         $this->redirectedTo[] = $url;
+    }
+
+    protected function userDataProblems(): array
+    {
+        // The real seam asks CheckoutUserDataGate for the session user (Registry-backed).
+        return $this->userDataProblems;
+    }
+
+    protected function showUserDataProblems(array $messages): void
+    {
+        $this->userDataProblemsShown = $messages;
     }
 
     protected function onCheckoutUnavailable(): string
