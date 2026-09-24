@@ -21,6 +21,12 @@ interface AdminValidationFeedbackInterface
     public function reject(string $orderId, string $field, string $code): void;
 
     /**
+     * MOL-15: store an already formatted message (admin free text validated with the checkout rules
+     * is formatted by the tagged user-data formatter, not by the amount formatter this feedback owns).
+     */
+    public function rejectWithMessage(string $orderId, string $message): void;
+
+    /**
      * Reads and clears the stored messages for the order in one call so a subsequent render
      * never shows stale errors.
      *

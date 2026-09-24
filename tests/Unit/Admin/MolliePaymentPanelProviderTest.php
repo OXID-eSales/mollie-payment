@@ -20,7 +20,10 @@ use OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface;
 use OxidEsales\Payments\Mollie\Admin\MolliePanelOrderLoader;
 use OxidEsales\Payments\Mollie\Admin\MolliePanelViewDataBuilder;
 use OxidEsales\Payments\Mollie\Admin\MolliePaymentPanelProvider;
+use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
+use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
+use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -34,6 +37,8 @@ final class MolliePaymentPanelProviderTest extends TestCase
     private ContractRepositoryInterface&MockObject $contracts;
     private AdminActionBoundsInterface&MockObject $bounds;
     private AdminValidationFeedbackInterface&MockObject $validationFeedback;
+    private UserDataValidatorInterface&MockObject $userDataValidator;
+    private MessageFormatterInterface&MockObject $textMessageFormatter;
     private MolliePaymentPanelProvider $provider;
 
     protected function setUp(): void
@@ -44,6 +49,8 @@ final class MolliePaymentPanelProviderTest extends TestCase
         $this->contracts = $this->createMock(ContractRepositoryInterface::class);
         $this->bounds = $this->createMock(AdminActionBoundsInterface::class);
         $this->validationFeedback = $this->createMock(AdminValidationFeedbackInterface::class);
+        $this->userDataValidator = $this->createMock(UserDataValidatorInterface::class);
+        $this->textMessageFormatter = $this->createMock(MessageFormatterInterface::class);
 
         $this->provider = new MolliePaymentPanelProvider(
             $this->actionDispatcher,
@@ -53,7 +60,75 @@ final class MolliePaymentPanelProviderTest extends TestCase
             $this->bounds,
             new AdminAmountValidator(),
             $this->validationFeedback,
+            $this->userDataValidator,
+            $this->textMessageFormatter,
         );
+    }
+
+    // ── MOL-15: admin free text runs through the same character-level rules as the address ──────
+
+    public function testHandleAction_Refund_WithInvalidDescription_RejectsWithFormattedMessageWithoutDispatching(): void
+    {
+        $order = $this->stubOrder('order-7');
+        $this->orderLoader->order = $order;
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('refundBound')->willReturn(50.0);
+        $this->userDataValidator->method('validateFieldMap')
+            ->with(['refundDescription' => 'chargeback <x>'], FieldValidationFailure::KIND_ADMIN)
+            ->willReturn([new FieldValidationFailure('refundDescription', 'admin', 'blocked_character', '<', null)]);
+        $this->textMessageFormatter->method('format')
+            ->with('refundDescription', 'blocked_character', '<')
+            ->willReturn('The refund description field is not valid. Allowed symbols are: letters');
+
+        $this->actionDispatcher->expects(self::never())->method('refund');
+        $this->validationFeedback->expects(self::once())->method('rejectWithMessage')
+            ->with('order-7', 'The refund description field is not valid. Allowed symbols are: letters');
+
+        $this->provider->handleAction('refund', [
+            'refund_amount' => '25.00',
+            'refund_description' => 'chargeback <x>',
+        ], new PaymentPanelContext('order-7', MollieDefinitions::PAYMENT_ID, $contract));
+    }
+
+    public function testHandleAction_Capture_WithInvalidReason_RejectsWithoutDispatching(): void
+    {
+        $order = $this->stubOrder('order-8');
+        $this->orderLoader->order = $order;
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('captureBound')->willReturn(50.0);
+        $this->userDataValidator->method('validateFieldMap')
+            ->with(['captureReason' => 'ship; now'], FieldValidationFailure::KIND_ADMIN)
+            ->willReturn([new FieldValidationFailure('captureReason', 'admin', 'blocked_character', ';', null)]);
+        $this->textMessageFormatter->method('format')->willReturn('msg');
+
+        $this->actionDispatcher->expects(self::never())->method('capture');
+        $this->validationFeedback->expects(self::once())->method('rejectWithMessage')->with('order-8', 'msg');
+
+        $this->provider->handleAction('capture', ['capture_reason' => 'ship; now'], new PaymentPanelContext(
+            'order-8',
+            MollieDefinitions::PAYMENT_ID,
+            $contract,
+        ));
+    }
+
+    public function testHandleAction_Refund_WithValidDescription_DispatchesIt(): void
+    {
+        $order = $this->stubOrder('order-9');
+        $this->orderLoader->order = $order;
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('refundBound')->willReturn(50.0);
+
+        $this->validationFeedback->expects(self::never())->method('rejectWithMessage');
+        $this->actionDispatcher->expects(self::once())->method('refund')
+            ->with($order, 25.0, null, ['description' => 'Damaged on arrival, see ticket #42']);
+
+        $this->provider->handleAction('refund', [
+            'refund_amount' => '25.00',
+            'refund_description' => 'Damaged on arrival, see ticket #42',
+        ], new PaymentPanelContext('order-9', MollieDefinitions::PAYMENT_ID, $contract));
     }
 
     public function testGetProviderName_ReturnsMollie(): void

@@ -15,7 +15,10 @@ use OxidEsales\PaymentBase\Admin\Contract\PaymentPanelProviderInterface;
 use OxidEsales\PaymentBase\Admin\Panel\PaymentPanelContext;
 use OxidEsales\PaymentBase\Admin\Panel\PaymentPanelRenderable;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
+use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
+use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
 
 /**
  * Mollie's panel for payment-base's shared "Payment" admin tab.
@@ -42,6 +45,8 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
         private readonly AdminActionBoundsInterface $bounds,
         private readonly AdminAmountValidator $amountValidator,
         private readonly AdminValidationFeedbackInterface $validationFeedback,
+        private readonly UserDataValidatorInterface $userDataValidator,
+        private readonly MessageFormatterInterface $textMessageFormatter,
     ) {
     }
 
@@ -95,8 +100,10 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
 
         // Story 3 (Sprint 9): Optional admin description for audit trail.
         $description = $this->parseString($request['refund_description'] ?? null);
+        if ($this->refusesText($order, 'refundDescription', $description)) {
+            return;
+        }
         $extras = $description !== null ? ['description' => $description] : [];
-
 
         $this->actionDispatcher->refund(
             $order,
@@ -121,11 +128,11 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
             return;
         }
 
-        $this->actionDispatcher->capture(
-            $order,
-            $amountResult->amount,
-            $this->parseString($request['capture_reason'] ?? null),
-        );
+        $reason = $this->parseString($request['capture_reason'] ?? null);
+        if ($this->refusesText($order, 'captureReason', $reason)) {
+            return;
+        }
+        $this->actionDispatcher->capture($order, $amountResult->amount, $reason);
 
         // Story 2 (Sprint 9): Bust the per-request cache after capture.
         $this->viewDataBuilder->resetViewCache();
@@ -160,6 +167,28 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
         $bound = $action === 'capture' ? $this->bounds->captureBound($contract) : $this->bounds->refundBound($contract);
 
         return $this->amountValidator->validate($raw, $bound);
+    }
+
+    /**
+     * MOL-15: admin free text goes to Mollie with the capture / refund, so it runs through the same
+     * character-level rules as the shopper's address (rules file entries `captureReason` and
+     * `refundDescription`, address kind `admin`). Refused text is reported like a refused amount.
+     */
+    private function refusesText(Order $order, string $field, ?string $value): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+
+        $failures = $this->userDataValidator->validateFieldMap([$field => $value], FieldValidationFailure::KIND_ADMIN);
+        foreach ($failures as $failure) {
+            $this->validationFeedback->rejectWithMessage(
+                (string) $order->getId(),
+                $this->textMessageFormatter->format($failure->field, $failure->code, $failure->offendingChar),
+            );
+        }
+
+        return $failures !== [];
     }
 
     private function reject(Order $order, string $field, AmountValidationResult $result): void

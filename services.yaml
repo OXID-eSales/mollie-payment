@@ -571,6 +571,10 @@ services:
   OxidEsales\Payments\Mollie\Admin\MolliePaymentPanelProvider:
     arguments:
       $actionDispatcher: '@OxidEsales\Payments\Mollie\Controller\Admin\OrderActionDispatcher'
+      # MOL-15: capture reason / refund description validated with the checkout rules and formatted
+      # by the tagged user-data formatter (the amount formatter belongs to AdminValidationFeedback).
+      $userDataValidator: '@OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface'
+      $textMessageFormatter: '@OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter'
     tags:
       - { name: oe.payment.admin_panel }
     public: true
