@@ -11,7 +11,10 @@ env:
   TEMPLATE_ENGINE: 'twig'
   # Branch of OXID-eSales/payment-base to test against. Change in sync with
   # the mollie branch when the two repos co-evolve.
-  PAYMENT_BASE_BRANCH: 'b-7.4.x'
+  # MOL-18: the in-flight replay needs payment-base's InFlightCheckoutAttemptResolver,
+  # `order_exists` and the persisted provider redirect URL. Set back to 'b-7.4.x'
+  # once OXID-eSales/payment-base has merged that branch.
+  PAYMENT_BASE_BRANCH: 'b-7.4.x-MOL-18-single-order-per-checkout-attempt'
 
 jobs:
   install_shop_with_module:

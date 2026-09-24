@@ -4,7 +4,7 @@
 **Ticket:** MOL-18
 **Branches (to be created on approval):** `b-7.4.x-MOL-18-single-order-per-checkout-attempt` in
 **payment-base** (server-side fix) and **mollie-payment** (controller hook, frontend guard, e2e, docs).
-**Status:** PLANNED — awaiting approval.
+**Status:** DONE 2026-09-24 — see `../../20260924/done/MOL-18-single-order-per-checkout-attempt.md` and `../../20260924/reports/MOL-18-single-order-per-checkout-attempt.md` (deviations from this plan are listed there).
 **Definition of Done (sprint-level):** clicking "Order now" any number of times in quick succession on the
 standard order page creates exactly one contract, one order and one Mollie payment; every extra click is
 answered by the same redirect to Mollie; no order row without articles is ever written again.
