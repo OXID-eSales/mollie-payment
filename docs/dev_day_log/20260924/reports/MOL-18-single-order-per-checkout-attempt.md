@@ -99,8 +99,11 @@ clean; PHPStan "No errors"; PHPMD exit 0 after the controller refactor (see devi
   and counts order POSTs across delayed extra clicks.
 - **Orders are counted in the DB** (`fixtures/shop-db.ts`, `docker compose exec mysql`), not in the
   admin list: storno'd and payment-less rows render there like real orders.
-- **Mollie CI pinned** to payment-base `b-7.4.x-MOL-18-single-order-per-checkout-attempt`
-  (`PAYMENT_BASE_BRANCH` in both workflow files). Set back to `b-7.4.x` once payment-base merges.
+- **Mollie CI cannot be pinned to a payment-base feature branch.** The first attempt did that and
+  both full-test workflows failed in `composer update`: `composer.json` requires
+  `payment-base >=v1.2`, which `b-7.4.x` satisfies only through Packagist's `1.2.x-dev` alias — a
+  path repo of another branch has no alias. payment-base was merged into `b-7.4.x` (merge commit
+  `4b59482`, no fast-forward) and the pin set back to `b-7.4.x`.
 - **Cleaner rotates the challenge only when it names the retired order** — a newer challenge belongs
   to whatever attempt the shopper is on now (not spelled out in the plan).
 

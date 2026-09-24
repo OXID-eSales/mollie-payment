@@ -11,10 +11,10 @@ env:
   TEMPLATE_ENGINE: 'twig'
   # Branch of OXID-eSales/payment-base to test against. Change in sync with
   # the mollie branch when the two repos co-evolve.
-  # MOL-18: the in-flight replay needs payment-base's InFlightCheckoutAttemptResolver,
-  # `order_exists` and the persisted provider redirect URL. Set back to 'b-7.4.x'
-  # once OXID-eSales/payment-base has merged that branch.
-  PAYMENT_BASE_BRANCH: 'b-7.4.x-MOL-18-single-order-per-checkout-attempt'
+  # Note: a payment-base feature branch cannot be pinned here - composer.json requires
+  # `payment-base >=v1.2`, which only b-7.4.x satisfies (Packagist aliases it 1.2.x-dev);
+  # a path repo of another branch has no alias and the resolve fails (MOL-18, 2026-09-24).
+  PAYMENT_BASE_BRANCH: 'b-7.4.x'
 
 jobs:
   install_shop_with_module:
