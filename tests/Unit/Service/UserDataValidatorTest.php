@@ -82,6 +82,59 @@ final class UserDataValidatorTest extends TestCase
         self::assertNull($failures[0]->oxidColumn);
     }
 
+    // ── MOL-15: parity with the Stripe module's use of the payment-base validation system ──────
+
+    public function testValidatesTheDeliveryAddressWhenOneIsSelected(): void
+    {
+        $reader = $this->readerWith(
+            ['firstName' => 'Jane', 'street' => 'Main Street'],
+            ['firstName' => 'Jane', 'street' => 'Elm Street <script>'],
+        );
+
+        $failures = $this->validator()->validateForUser($reader);
+
+        self::assertCount(1, $failures);
+        self::assertSame('street', $failures[0]->field);
+        self::assertSame('delivery', $failures[0]->addressKind);
+        self::assertSame('oxstreet', $failures[0]->oxidColumn);
+    }
+
+    public function testReportsBillingFailuresWithTheBillingAddressKind(): void
+    {
+        $failures = $this->validator()->validateForUser($this->readerWith(['city' => 'Berlin;']));
+
+        self::assertCount(1, $failures);
+        self::assertSame('billing', $failures[0]->addressKind);
+    }
+
+    public function testSkipsTheDeliveryPassWhenNoDeliveryAddressIsSelected(): void
+    {
+        self::assertSame([], $this->validator()->validateForUser($this->readerWith(['firstName' => 'Jane'])));
+    }
+
+    public function testKnowsPostalCodeAndThePhoneTrio(): void
+    {
+        $reader = $this->readerWith([
+            'postalCode' => '10117<',
+            'cellPhone' => '+49 170 <1>',
+            'personalPhone' => '030 ; 1',
+            'fax' => '030 | 2',
+        ]);
+
+        $fields = array_map(static fn ($failure) => $failure->field, $this->validator()->validateForUser($reader));
+
+        self::assertSame(['postalCode', 'cellPhone', 'personalPhone', 'fax'], $fields);
+    }
+
+    public function testValidateFieldMapCarriesTheGivenAddressKind(): void
+    {
+        $failures = $this->validator()->validateFieldMap(['refundDescription' => 'chargeback <x>'], 'admin');
+
+        self::assertCount(1, $failures);
+        self::assertSame('admin', $failures[0]->addressKind);
+        self::assertSame('refundDescription', $failures[0]->field);
+    }
+
     private function validator(): UserDataValidator
     {
         $loader = new class implements ValidationRuleLoaderInterface {
@@ -107,17 +160,30 @@ final class UserDataValidatorTest extends TestCase
     /**
      * @param array<string, string> $values
      */
-    private function readerWith(array $values): UserFieldReaderInterface
+    /**
+     * @param array<string, string> $billing
+     * @param array<string, string>|null $delivery a selected delivery address, or null for none
+     */
+    private function readerWith(array $billing, ?array $delivery = null): UserFieldReaderInterface
     {
-        return new class ($values) implements UserFieldReaderInterface {
-            /** @param array<string, string> $values */
-            public function __construct(private readonly array $values)
+        return new class ($billing, $delivery) implements UserFieldReaderInterface {
+            public function __construct(private readonly array $billing, private readonly ?array $delivery)
             {
             }
 
             public function readBillingField(string $logicalName): string
             {
-                return $this->values[$logicalName] ?? '';
+                return $this->billing[$logicalName] ?? '';
+            }
+
+            public function hasDeliveryAddress(): bool
+            {
+                return $this->delivery !== null;
+            }
+
+            public function readDeliveryField(string $logicalName): string
+            {
+                return $this->delivery[$logicalName] ?? '';
             }
         };
     }

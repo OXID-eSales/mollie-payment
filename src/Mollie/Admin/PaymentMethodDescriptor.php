@@ -23,7 +23,7 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
  * "Unknown" is a real, expected state (no payment yet, or Mollie unreachable)
  * and renders as an em dash — never as a guess.
  *
- * Mirrors {@see \OxidEsales\Payments\Stripe\Admin\PaymentMethodDescriptor} by
+ * Mirrors the sibling PSP modules' payment-method descriptor by
  * contract, not by inheritance: the two modules ship independently and share no
  * code, only the wording in their lang files.
  */

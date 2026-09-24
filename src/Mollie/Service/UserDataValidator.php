@@ -10,21 +10,26 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Service;
 
 use OxidEsales\PaymentBase\Validation\ValidationBaseFactory;
-use OxidEsales\PaymentBase\Validation\ValidationBaseInterface;
+use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 
 /**
- * Maps OXID user fields to logical names and delegates character-level validation to
- * payment-base's shared ValidationBase.
+ * Runs the shopper's address data through payment-base's character-level validation engine, bound to
+ * Mollie's own rules file (`src/Resources/validation-rules.php`, module id {@see MollieDefinitions::MODULE_ID}).
  *
- * The reader is a method argument (not a constructor dependency) so this validator stays a
- * stateless DI singleton while the reader is bound to the request's live User object.
+ * MOL-15: the billing address is validated first; when the shopper selected a separate delivery
+ * address, that one is validated too - both are sent to the PSP. Admin free text goes through
+ * {@see validateFieldMap()} with {@see FieldValidationFailure::KIND_ADMIN}.
  */
 final class UserDataValidator implements UserDataValidatorInterface
 {
-    /** Logical field names collected/sent for Mollie's create-payment call. */
+    /**
+     * The logical fields the rules file declares for the shopper. `email` is Mollie-specific:
+     * Mollie receives the shopper's e-mail address with the payment.
+     */
     private const LOGICAL_FIELDS = [
-        'firstName', 'lastName', 'street', 'houseNumber', 'zip', 'city',
-        'company', 'vatId', 'additionalInfo', 'phone', 'email',
+        'firstName', 'lastName', 'additionalInfo', 'street', 'houseNumber',
+        'postalCode', 'city', 'company', 'vatId', 'phone', 'cellPhone',
+        'personalPhone', 'fax', 'email',
     ];
 
     public function __construct(
@@ -32,16 +37,32 @@ final class UserDataValidator implements UserDataValidatorInterface
     ) {
     }
 
+    /**
+     * @return list<FieldValidationFailure>
+     */
     public function validateForUser(UserFieldReaderInterface $reader): array
     {
-        $failures = [];
-
-        foreach (self::LOGICAL_FIELDS as $logicalName) {
-            $failure = $this->validateSingleField(
-                $logicalName,
-                $reader->readBillingField($logicalName),
-                OxidUserFieldReader::oxidColumn($logicalName),
+        $failures = $this->validateAddressPass($reader, FieldValidationFailure::KIND_BILLING);
+        if ($reader->hasDeliveryAddress()) {
+            $failures = array_merge(
+                $failures,
+                $this->validateAddressPass($reader, FieldValidationFailure::KIND_DELIVERY)
             );
+        }
+
+        return $failures;
+    }
+
+    /**
+     * @param array<string, string> $fields
+     *
+     * @return list<FieldValidationFailure>
+     */
+    public function validateFieldMap(array $fields, string $addressKind = FieldValidationFailure::KIND_BILLING): array
+    {
+        $failures = [];
+        foreach ($fields as $logicalName => $value) {
+            $failure = $this->validateSingleField($logicalName, $value, $addressKind, null);
             if ($failure !== null) {
                 $failures[] = $failure;
             }
@@ -50,12 +71,22 @@ final class UserDataValidator implements UserDataValidatorInterface
         return $failures;
     }
 
-    public function validateFieldMap(array $fields): array
+    /**
+     * @return list<FieldValidationFailure>
+     */
+    private function validateAddressPass(UserFieldReaderInterface $reader, string $addressKind): array
     {
         $failures = [];
-
-        foreach ($fields as $logicalName => $value) {
-            $failure = $this->validateSingleField($logicalName, $value, null);
+        foreach (self::LOGICAL_FIELDS as $logicalName) {
+            $value = $addressKind === FieldValidationFailure::KIND_BILLING
+                ? $reader->readBillingField($logicalName)
+                : $reader->readDeliveryField($logicalName);
+            $failure = $this->validateSingleField(
+                $logicalName,
+                $value,
+                $addressKind,
+                OxidUserFieldReader::oxidColumn($logicalName)
+            );
             if ($failure !== null) {
                 $failures[] = $failure;
             }
@@ -67,20 +98,21 @@ final class UserDataValidator implements UserDataValidatorInterface
     private function validateSingleField(
         string $logicalName,
         string $value,
+        string $addressKind,
         ?string $oxidColumn,
     ): ?FieldValidationFailure {
         if ($value === '') {
             return null;
         }
 
-        $validationBase = $this->factory->create('oe_payments_mollie');
-        $result = $validationBase->validateField($logicalName, $value);
+        $result = $this->factory->create(MollieDefinitions::MODULE_ID)->validateField($logicalName, $value);
         if ($result->valid) {
             return null;
         }
 
         return new FieldValidationFailure(
             field: $logicalName,
+            addressKind: $addressKind,
             code: (string) $result->code,
             offendingChar: $result->offendingChar,
             oxidColumn: $oxidColumn,

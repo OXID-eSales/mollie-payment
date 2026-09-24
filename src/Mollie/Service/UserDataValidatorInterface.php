@@ -31,5 +31,11 @@ interface UserDataValidatorInterface
      * @param array<string, string> $fields
      * @return FieldValidationFailure[]
      */
-    public function validateFieldMap(array $fields): array;
+    /**
+     * @param array<string, string> $fields logical field name => value
+     * @param string $addressKind reported on every failure ({@see FieldValidationFailure::KIND_*})
+     *
+     * @return list<FieldValidationFailure>
+     */
+    public function validateFieldMap(array $fields, string $addressKind = FieldValidationFailure::KIND_BILLING): array;
 }

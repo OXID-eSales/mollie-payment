@@ -16,9 +16,12 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ValidationRulesProvider::class)]
 final class ValidationRulesProviderTest extends TestCase
 {
+    // MOL-15: the same logical field set the Stripe module declares, plus Mollie's `email`
+    // (Mollie receives the shopper's e-mail) and the two admin free-text fields.
     private const EXPECTED_FIELDS = [
-        'firstName', 'lastName', 'street', 'houseNumber', 'zip', 'city',
-        'company', 'vatId', 'additionalInfo', 'phone', 'email',
+        'firstName', 'lastName', 'street', 'houseNumber', 'postalCode', 'city',
+        'company', 'vatId', 'additionalInfo', 'phone', 'cellPhone', 'personalPhone', 'fax',
+        'email', 'captureReason', 'refundDescription',
     ];
 
     public function testProvidesRulesForAllCollectedUserFields(): void
