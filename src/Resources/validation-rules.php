@@ -46,7 +46,7 @@ return [
             ],
         ],
         [
-            'field' => 'zip',
+            'field' => 'postalCode',
             'rules' => [
                 'allow' => 'UNICODE_LETTERS NUMBERS SPACES -',
             ],
@@ -88,10 +88,43 @@ return [
         // allowed literals (not class tokens) so a valid address can pass character-level
         // scrutiny; syntactic email validation stays OXID's own concern.
         [
+            'field' => 'cellPhone',
+            'rules' => [
+                'allow' => 'NUMBERS SPACES + - ( )',
+            ],
+        ],
+        [
+            'field' => 'personalPhone',
+            'rules' => [
+                'allow' => 'NUMBERS SPACES + - ( )',
+            ],
+        ],
+        [
+            'field' => 'fax',
+            'rules' => [
+                'allow' => 'NUMBERS SPACES + - ( )',
+            ],
+        ],
+        [
             'field' => 'email',
             'rules' => [
                 'allow' => 'UNICODE_LETTERS NUMBERS @ . - _ +',
                 'block' => ': ; < > { } [ ] ( ) | \\ / ~ ! # $ % ^ * = " ? , & \'',
+            ],
+        ],
+        // MOL-15: admin free text sent to Mollie with a capture / refund (description fields).
+        [
+            'field' => 'captureReason',
+            'rules' => [
+                'allow' => "UNICODE_LETTERS NUMBERS SPACES ' - . , / # ( ) :",
+                'block' => '< > { } [ ] | \\ ~ ! @ $ % ^ * = + "',
+            ],
+        ],
+        [
+            'field' => 'refundDescription',
+            'rules' => [
+                'allow' => "UNICODE_LETTERS NUMBERS SPACES ' - . , / # ( ) :",
+                'block' => '< > { } [ ] | \\ ~ ! @ $ % ^ * = + "',
             ],
         ],
     ],

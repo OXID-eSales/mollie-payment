@@ -27,22 +27,10 @@ final class UserDataValidationMessageFormatter implements MessageFormatterInterf
     private const TEMPLATE_KEY = 'MOLLIE_VALIDATION_FIELD_INVALID';
     private const LABEL_KEY_PREFIX = 'MOLLIE_VALIDATION_LABEL_';
 
-    /** Class token => translation key for its human-readable word. */
-    private const CLASS_WORD_KEYS = [
-        'UNICODE_LETTERS' => 'MOLLIE_VALIDATION_CLASS_LETTERS',
-        'LETTERS' => 'MOLLIE_VALIDATION_CLASS_LETTERS',
-        'NUMBERS' => 'MOLLIE_VALIDATION_CLASS_DIGITS',
-        'SPACES' => 'MOLLIE_VALIDATION_CLASS_SPACES',
-    ];
-
-    /** @var array<string, string> */
-    private readonly array $fieldAllowMap;
-
     public function __construct(
         private readonly LanguageTranslatorInterface $translator,
-        ValidationRulesProvider $rulesProvider,
+        private readonly AllowedSymbolsDescriber $allowedSymbolsDescriber,
     ) {
-        $this->fieldAllowMap = $rulesProvider->getFieldAllowMap();
     }
 
     public function getPluginModuleId(): string
@@ -50,11 +38,16 @@ final class UserDataValidationMessageFormatter implements MessageFormatterInterf
         return MollieDefinitions::MODULE_ID;
     }
 
+    /**
+     * "The <field> field is not valid. Allowed symbols are: <words>" - the same sentence for the
+     * checkout, the OPC footer and the admin panel; `$code` / `$offendingChar` are deliberately not
+     * echoed, the allowed set is what the shopper can act on.
+     */
     public function format(string $field, string $code, ?string $offendingChar): string
     {
         $template = $this->translator->translateString(self::TEMPLATE_KEY);
         $label = $this->resolveLabel($field);
-        $allowed = $this->describeAllowedSymbols($field);
+        $allowed = $this->allowedSymbolsDescriber->describe($field);
 
         return sprintf($template, $label, $allowed);
     }
@@ -65,52 +58,5 @@ final class UserDataValidationMessageFormatter implements MessageFormatterInterf
         $translation = $this->translator->translateString($key);
 
         return $translation === $key ? $field : $translation;
-    }
-
-    private function describeAllowedSymbols(string $field): string
-    {
-        $allow = $this->fieldAllowMap[$field] ?? '';
-        if ($allow === '') {
-            return '';
-        }
-
-        $words = [];
-        $literals = [];
-        foreach (explode(' ', $allow) as $token) {
-            if ($token === '') {
-                continue;
-            }
-            $this->classifyToken($token, $words, $literals);
-        }
-
-        return $this->joinParts(array_values(array_unique($words)), $literals);
-    }
-
-    /**
-     * @param list<string> $words
-     * @param list<string> $literals
-     */
-    private function classifyToken(string $token, array &$words, array &$literals): void
-    {
-        if (isset(self::CLASS_WORD_KEYS[$token])) {
-            $words[] = $this->translator->translateString(self::CLASS_WORD_KEYS[$token]);
-            return;
-        }
-
-        $literals[] = $token;
-    }
-
-    /**
-     * @param list<string> $words
-     * @param list<string> $literals
-     */
-    private function joinParts(array $words, array $literals): string
-    {
-        $parts = $words;
-        if ($literals !== []) {
-            $parts[] = implode(' ', $literals);
-        }
-
-        return implode(', ', $parts);
     }
 }

@@ -24,4 +24,15 @@ interface UserFieldReaderInterface
      * Returns an empty string when the field has no value or the logical name is unknown.
      */
     public function readBillingField(string $logicalName): string;
+
+    /**
+     * MOL-15: whether the shopper selected a separate delivery address. When they did, every
+     * logical field is validated a second time against that address - it is sent to the PSP too.
+     */
+    public function hasDeliveryAddress(): bool;
+
+    /**
+     * The delivery-address value of a logical field, '' when none is selected or the field is unknown.
+     */
+    public function readDeliveryField(string $logicalName): string;
 }

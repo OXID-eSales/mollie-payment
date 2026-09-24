@@ -9,24 +9,16 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Controller;
 
+use OxidEsales\Eshop\Application\Model\User;
 use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\EshopCommunity\Core\Di\ContainerFacade;
-use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
-use OxidEsales\PaymentBase\Controller\CheckoutReturnResponder;
 use OxidEsales\PaymentBase\Controller\HandlesCheckoutReturn;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
-use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
-use OxidEsales\PaymentBase\Controller\SessionWriterInterface;
-use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
-use OxidEsales\Payments\Mollie\Service\ContractTokenService;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-use OxidEsales\Payments\Mollie\Service\AbandonedAttemptCleanup;
+use OxidEsales\Payments\Mollie\Service\CheckoutUserDataGate;
 use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplay;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
-use OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver;
-use OxidEsales\Payments\Mollie\Service\Return\PendingReturnProbe;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -43,7 +35,7 @@ use Throwable;
  * JS Checkout like Stripe's), so `execute()` here dispatches the checkout-session event and
  * redirects directly — no PaymentController involvement.
  *
- * Also handles the single post-checkout return leg on this same class (`checkoutReturn()`):
+ * The single post-checkout return leg (`checkoutReturn()`) lives in {@see HandlesMollieCheckoutReturn}:
  * Mollie always redirects back to one `redirectUrl` regardless of outcome (there is no separate
  * cancel URL like PayPal's), so {@see MollieReturnResolver} maps every Mollie payment status onto
  * the shared ReturnResolution and this controller just reacts to success/failure. The webhook
@@ -54,6 +46,11 @@ use Throwable;
 class MollieOrderController extends MollieOrderController_parent
 {
     use HandlesCheckoutReturn;
+    // The Mollie leg fetches the return responder from the container at runtime (OXID controllers
+    // get no constructor injection); payment-base's default expects it to be set explicitly.
+    use HandlesMollieCheckoutReturn {
+        HandlesMollieCheckoutReturn::resolveCheckoutReturnResponder insteadof HandlesCheckoutReturn;
+    }
 
     public function execute(): ?string
     {
@@ -75,6 +72,17 @@ class MollieOrderController extends MollieOrderController_parent
         $basketRedirect = $this->validateBasketSummaryHash();
         if ($basketRedirect !== null) {
             return $basketRedirect;
+        }
+
+        // MOL-15: the point of no return. Address data is validated with payment-base's rules for
+        // Mollie right before the PSP is called - the payment step checked it too, but it can have
+        // changed since (account page, another tab). Comes BEFORE the in-flight replay: data that
+        // went bad between two clicks must be fixed, not replayed into Mollie.
+        $problems = $this->userDataProblems();
+        if ($problems !== []) {
+            $this->showUserDataProblems($problems);
+
+            return 'user';
         }
 
         // MOL-18: a repeated "Order now" rejoins the attempt already in flight instead of starting
@@ -120,57 +128,6 @@ class MollieOrderController extends MollieOrderController_parent
         }
 
         return $this->onCheckoutUnavailable();
-    }
-
-    public function checkoutReturn(): string
-    {
-        $contractId = $this->readRequestParameter('contract_id');
-        $contractToken = $this->readRequestParameter('contract_token');
-        if ($contractId === null || $contractToken === null) {
-            return $this->onReturnError('missing_token');
-        }
-
-        if (!$this->tokenIsValid($contractToken, $contractId)) {
-            return $this->onReturnError('invalid_token');
-        }
-
-        $contract = $this->loadContract($contractId);
-        if ($contract === null) {
-            return $this->onReturnError('unknown_contract');
-        }
-
-        $resolver = $this->resolveReturnResolver();
-        if ($resolver === null) {
-            return $this->onReturnError('return_service_unavailable');
-        }
-
-        $orderId = $this->dispatchCheckoutReturn(
-            providerName: MollieDefinitions::PROVIDER_NAME,
-            contract: $contract,
-            resolver: $resolver,
-        );
-
-        if ($orderId === null) {
-            // A null order id covers TWO cases the responder can't distinguish here: a hard failure,
-            // and a still-open/pending payment left for the webhook (common for PayPal / bank-style
-            // methods). Query Mollie once to tell them apart — a pending payment is NOT an error: the
-            // order was placed and the webhook will finalize it, so land on thank-you with a notice.
-            if ($this->returnIsPending($contract)) {
-                return $this->onReturnPending($contract);
-            }
-            $this->resolveService(AbandonedAttemptCleanup::class)?->retire($contractId);
-            return $this->onReturnError('return_not_finalised');
-        }
-
-        return 'thankyou';
-    }
-
-    protected function resolveCheckoutReturnResponder(): CheckoutReturnResponder
-    {
-        // resolveService() is generic (T|null) and the container id IS the class name — no
-        // instanceof re-check needed here or in the sibling resolvers below.
-        return $this->resolveService(CheckoutReturnResponder::class)
-            ?? throw new RuntimeException('CheckoutReturnResponder not available');
     }
 
     /**
@@ -315,6 +272,30 @@ class MollieOrderController extends MollieOrderController_parent
     }
 
     /**
+     * Testability seam: the translated messages for the session user's address problems, empty when
+     * the data may go to Mollie ({@see CheckoutUserDataGate}). Fail-open when the gate is unavailable.
+     *
+     * @return list<string>
+     */
+    protected function userDataProblems(): array
+    {
+        $user = Registry::getSession()->getUser();
+
+        return $this->resolveService(CheckoutUserDataGate::class)
+            ?->problemsFor($user instanceof User ? $user : null) ?? [];
+    }
+
+    /**
+     * @param list<string> $messages
+     */
+    protected function showUserDataProblems(array $messages): void
+    {
+        foreach ($messages as $message) {
+            Registry::getUtilsView()->addErrorToDisplay($message);
+        }
+    }
+
+    /**
      * Guard: either the dispatcher/event chain was unavailable, or it ran but produced no
      * checkout URL (MollieCheckoutSessionHandler already failed the contract in that case).
      * Surface a user-facing error and stay on the payment step — the order must NOT finalize
@@ -327,69 +308,12 @@ class MollieOrderController extends MollieOrderController_parent
         return 'payment';
     }
 
-    private function resolveReturnResolver(): ?ReturnResolverInterface
-    {
-        return $this->resolveService(MollieReturnResolver::class);
-    }
-
-    private function tokenIsValid(string $contractToken, string $contractId): bool
-    {
-        // Resolve Mollie's CONCRETE token service, not the shared
-        // PaymentBase\TokenServiceInterface: that interface is single-valued in the merged DI
-        // container and, when another PSP is active, resolves to the wrong provider's HMAC.
-        return (bool) $this->resolveService(ContractTokenService::class)
-            ?->validateToken($contractToken, $contractId);
-    }
-
-    private function loadContract(string $contractId): ?PaymentContractInterface
-    {
-        return $this->resolveService(ContractRepositoryInterface::class)?->findById($contractId);
-    }
-
     protected function readRequestParameter(string $name): ?string
     {
         $value = Registry::getRequest()->getRequestParameter($name);
         $value = is_scalar($value) ? (string) $value : '';
 
         return $value !== '' ? $value : null;
-    }
-
-    private function onReturnError(string $code): string
-    {
-        Registry::getLogger()->warning('MollieOrderController: checkout return failed', ['reason' => $code]);
-        Registry::getUtilsView()->addErrorToDisplay('MOLLIE_RETURN_' . strtoupper($code));
-
-        return 'payment';
-    }
-
-    /**
-     * True when the Mollie payment is still open/pending on return (not paid/authorized yet, but not
-     * failed) — the webhook will finalize it. Overridable seam; production delegates to
-     * {@see PendingReturnProbe}, fail-closed to false when the service is unavailable.
-     */
-    protected function returnIsPending(PaymentContractInterface $contract): bool
-    {
-        return (bool) $this->resolveService(PendingReturnProbe::class)?->isPending($contract);
-    }
-
-    /**
-     * Pending payment on return: the order is placed (NOT_FINISHED) and the webhook will confirm it.
-     * Show the thank-you page with a "payment is being processed" notice — never the error screen.
-     */
-    private function onReturnPending(PaymentContractInterface $contract): string
-    {
-        Registry::getLogger()->info(
-            'MollieOrderController: payment pending on return — order placed, awaiting webhook confirmation',
-        );
-
-        $orderId = (string) $contract->getOrderId();
-        if ($orderId !== '') {
-            $this->resolveService(SessionWriterInterface::class)?->writeSessChallenge($orderId);
-        }
-
-        Registry::getUtilsView()->addErrorToDisplay('MOLLIE_RETURN_PENDING');
-
-        return 'thankyou';
     }
 
     /**

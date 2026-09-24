@@ -13,9 +13,7 @@ use OxidEsales\Eshop\Application\Model\User;
 use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\EshopCommunity\Core\Di\ContainerFacade;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-use OxidEsales\Payments\Mollie\Service\OxidUserFieldReader;
-use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
-use OxidEsales\Payments\Mollie\Service\UserFieldReaderInterface;
+use OxidEsales\Payments\Mollie\Service\CheckoutUserDataGate;
 use Throwable;
 
 /**
@@ -43,8 +41,11 @@ class PaymentController extends PaymentController_parent
             return $result;
         }
 
-        if (!$this->userDataIsValid()) {
-            $this->showInvalidUserDataError();
+        // MOL-15: per-field messages from the shared gate, exactly as at the order step.
+        $problems = $this->userDataProblems();
+        if ($problems !== []) {
+            $this->showUserDataProblems($problems);
+
             return 'payment';
         }
 
@@ -68,56 +69,49 @@ class PaymentController extends PaymentController_parent
 
         return is_scalar($paymentId) ? (string) $paymentId : '';
     }
-
     /**
-     * Pre-progression gate (Story 6): rejects malformed customer data server-side, before the
-     * shopper can proceed to the order-confirmation step. Fails open (returns true) when the
-     * validator or a usable field reader is unavailable, so a wiring problem in the validation
-     * subsystem never blocks checkout entirely; the shared character-level rules are
-     * defense-in-depth, not the only gate against malformed data.
+     * Testability seam: the translated messages for the session user's address problems, empty when
+     * the data may go to Mollie ({@see CheckoutUserDataGate}). Fail-open when the gate is unavailable:
+     * this is defence in depth and must not be the thing that breaks checkout - but a wiring problem
+     * is logged, not swallowed, because CLAUDE.md makes adopting the shared validation a requirement.
+     *
+     * @return list<string>
      */
-    protected function userDataIsValid(): bool
+    protected function userDataProblems(): array
     {
-        $validator = $this->resolveUserDataValidator();
-        $reader = $this->buildUserFieldReader();
-        if ($validator === null || $reader === null) {
-            // Sprint 11 Story 8 (F13): the direction stays fail-open — this is defence-in-depth and
-            // must not be the thing that breaks checkout. What changes is that it is no longer
-            // invisible: CLAUDE.md makes adopting the shared validation subsystem a requirement for
-            // Mollie, so a wiring problem silently retiring it is worse here than in a module where
-            // it is optional.
+        $gate = $this->resolveGate();
+        if ($gate === null) {
             Registry::getLogger()->warning(
                 '[MolliePaymentController] user-data validation unavailable; allowing checkout to '
                 . 'proceed without the shared character-level rules',
-                ['hasValidator' => $validator !== null, 'hasFieldReader' => $reader !== null],
             );
 
-            return true;
+            return [];
         }
 
-        return $validator->validateForUser($reader) === [];
+        $user = Registry::getSession()->getUser();
+
+        return $gate->problemsFor($user instanceof User ? $user : null);
     }
 
-    protected function resolveUserDataValidator(): ?UserDataValidatorInterface
+    /**
+     * @param list<string> $messages
+     */
+    protected function showUserDataProblems(array $messages): void
+    {
+        foreach ($messages as $message) {
+            Registry::getUtilsView()->addErrorToDisplay($message);
+        }
+    }
+
+    private function resolveGate(): ?CheckoutUserDataGate
     {
         try {
-            $validator = ContainerFacade::get(UserDataValidatorInterface::class);
+            $gate = ContainerFacade::get(CheckoutUserDataGate::class);
         } catch (Throwable) {
             return null;
         }
 
-        return $validator instanceof UserDataValidatorInterface ? $validator : null;
-    }
-
-    protected function buildUserFieldReader(): ?UserFieldReaderInterface
-    {
-        $user = Registry::getSession()->getUser();
-
-        return $user instanceof User ? new OxidUserFieldReader($user) : null;
-    }
-
-    protected function showInvalidUserDataError(): void
-    {
-        Registry::getUtilsView()->addErrorToDisplay('MOLLIE_VALIDATION_INVALID_USER_DATA');
+        return $gate instanceof CheckoutUserDataGate ? $gate : null;
     }
 }

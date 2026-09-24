@@ -72,7 +72,12 @@ final class MollieFooterSingleMethodTemplateTest extends TestCase
             ],
         ]);
 
-        self::assertStringContainsString('data-controller="mollie-checkout-footer"', $output, 'the widget must render');
+        // MOL-15: the root element carries the footer controller AND the user-data validator.
+        self::assertMatchesRegularExpression(
+            '/data-controller="[^"]*\bmollie-checkout-footer\b[^"]*"/',
+            $output,
+            'the widget must render'
+        );
 
         return $output;
     }

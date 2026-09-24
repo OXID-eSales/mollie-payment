@@ -5,6 +5,20 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- User-data validation exactly as in the Stripe module (MOL-15), on payment-base's central
+  validation system with Mollie's own rules file and module id: the billing **and** the selected
+  delivery address are validated; the field set matches Stripe's (`postalCode`, `cellPhone`,
+  `personalPhone`, `fax` added) plus Mollie's `email`; the order step (`MollieOrderController::execute`)
+  refuses invalid data right before Mollie is called and sends the shopper back to the address step;
+  the payment step and the order step show one translated message per field ("The street field is
+  not valid. Allowed symbols are: …") plus a review notice; the one-page-checkout footer validates the
+  live address fields against `cl=oepaymentvalidationapi` before it posts `processCheckout`, marking
+  rejected fields inline; the admin capture reason and refund description run through the same rules.
+  All `MOLLIE_VALIDATION_*` translations (EN/DE, storefront and admin) are shipped - the module used to
+  render raw keys - and `MOLLIE_CHECKOUT_UNAVAILABLE` is translated as well. No code references the
+  Stripe module (pinned by a unit test); both modules depend on payment-base only.
+
 ### Fixed
 - "Order now" clicked several times on the standard order page created several orders (MOL-18).
   The clicks reach PHP one after the other; the second one used to start a second checkout

@@ -34,7 +34,10 @@ final class UserDataValidationMessageFormatterTest extends TestCase
             'MOLLIE_VALIDATION_CLASS_SPACES' => 'spaces',
         ]);
 
-        $formatter = new UserDataValidationMessageFormatter($translator, new ValidationRulesProvider());
+        $formatter = new UserDataValidationMessageFormatter(
+            $translator,
+            (new ValidationRulesProvider())->createDescriber($translator),
+        );
 
         $message = $formatter->format('firstName', 'blocked_character', '<');
 
@@ -47,6 +50,58 @@ final class UserDataValidationMessageFormatterTest extends TestCase
     /**
      * @param array<string, string> $translations
      */
+    public function testFormatUsesTheTranslatedLabelAndTheSameSentenceAsTheStripeModule(): void
+    {
+        $translator = $this->translatorStub([
+            'MOLLIE_VALIDATION_FIELD_INVALID' => 'The %1$s field is not valid. Allowed symbols are: %2$s',
+            'MOLLIE_VALIDATION_LABEL_STREET' => 'street',
+            'MOLLIE_VALIDATION_CLASS_LETTERS' => 'letters',
+            'MOLLIE_VALIDATION_CLASS_DIGITS' => 'digits',
+            'MOLLIE_VALIDATION_CLASS_SPACES' => 'spaces',
+        ]);
+        $formatter = new UserDataValidationMessageFormatter(
+            $translator,
+            (new ValidationRulesProvider())->createDescriber($translator),
+        );
+
+        self::assertSame(
+            "The street field is not valid. Allowed symbols are: letters, digits, spaces, ' - . , /",
+            $formatter->format('street', 'blocked_character', ':'),
+        );
+    }
+
+    public function testShipsATranslationForEveryLabelTheRulesFileNeeds(): void
+    {
+        $en = $this->langFile('translations/en/mollie_lang.php');
+        $de = $this->langFile('translations/de/mollie_lang.php');
+        $adminEn = $this->langFile('views/admin_twig/en/mollie_lang.php');
+
+        foreach (array_keys((new ValidationRulesProvider())->getFieldAllowMap()) as $field) {
+            $key = 'MOLLIE_VALIDATION_LABEL_' . strtoupper($field);
+            $isAdminField = in_array($field, ['captureReason', 'refundDescription'], true);
+            $target = $isAdminField ? $adminEn : $en;
+            self::assertArrayHasKey($key, $target, "missing label for $field");
+            if (!$isAdminField) {
+                self::assertArrayHasKey($key, $de, "missing German label for $field");
+            }
+        }
+        foreach (['MOLLIE_VALIDATION_FIELD_INVALID', 'MOLLIE_VALIDATION_REVIEW_ADDRESS', 'MOLLIE_VALIDATION_INVALID_USER_DATA', 'MOLLIE_CHECKOUT_UNAVAILABLE'] as $key) {
+            self::assertArrayHasKey($key, $en);
+            self::assertArrayHasKey($key, $de);
+        }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function langFile(string $relative): array
+    {
+        $aLang = [];
+        require dirname(__DIR__, 3) . '/' . $relative;
+
+        return $aLang;
+    }
+
     private function translatorStub(array $translations): LanguageTranslatorInterface
     {
         return new class ($translations) implements LanguageTranslatorInterface {
@@ -66,6 +121,9 @@ final class UserDataValidationMessageFormatterTest extends TestCase
     {
         $translator = $this->translatorStub(['MOLLIE_VALIDATION_FIELD_INVALID' => '%s / %s']);
 
-        return new UserDataValidationMessageFormatter($translator, new ValidationRulesProvider());
+        return new UserDataValidationMessageFormatter(
+            $translator,
+            (new ValidationRulesProvider())->createDescriber($translator),
+        );
     }
 }

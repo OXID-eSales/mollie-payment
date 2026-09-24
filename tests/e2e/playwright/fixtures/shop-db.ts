@@ -46,6 +46,25 @@ export function shopDbQuery(sql: string): string[][] {
         .map((line) => line.split('\t'));
 }
 
+/**
+ * Statement without a result set (UPDATE …). MOL-15 uses it to plant and repair an invalid
+ * character in the e2e user's address; specs restore the original in `finally`.
+ */
+export function shopDbExecute(sql: string): void {
+    shopDbQuery(sql);
+}
+
+/** The e2e user's billing street, read back for restoration. */
+export function billingStreetOf(email: string): string {
+    return shopDbQuery(`SELECT OXSTREET FROM oxuser WHERE OXUSERNAME = '${email.replace(/'/g, "''")}'`)[0]?.[0] ?? '';
+}
+
+export function setBillingStreetOf(email: string, street: string): void {
+    shopDbExecute(
+        `UPDATE oxuser SET OXSTREET = '${street.replace(/'/g, "''")}' WHERE OXUSERNAME = '${email.replace(/'/g, "''")}'`,
+    );
+}
+
 /** Every `oxorder.OXID` currently in the table — the baseline to diff a checkout against. */
 export function allOrderIds(): Set<string> {
     return new Set(shopDbQuery('SELECT OXID FROM oxorder').map((r) => r[0]));

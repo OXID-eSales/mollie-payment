@@ -79,4 +79,16 @@ final class AdminValidationFeedbackTest extends TestCase
         self::assertSame([], $this->feedback->consume('order-b'));
         self::assertSame(['boom'], $this->feedback->consume('order-a'));
     }
+
+    public function testRejectWithMessage_StoresTheMessageAsIs(): void
+    {
+        $this->messageFormatter->expects(self::never())->method('format');
+
+        $this->feedback->rejectWithMessage('order-3', 'The refund description field is not valid. Allowed symbols are: letters');
+
+        self::assertSame(
+            ['The refund description field is not valid. Allowed symbols are: letters'],
+            $this->feedback->consume('order-3'),
+        );
+    }
 }

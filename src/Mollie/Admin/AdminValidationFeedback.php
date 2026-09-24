@@ -33,9 +33,13 @@ final class AdminValidationFeedback implements AdminValidationFeedbackInterface
 
     public function reject(string $orderId, string $field, string $code): void
     {
-        $entries = $this->readEntries($orderId);
-        $entries[] = $this->messageFormatter->format($field, $code, null);
+        $this->rejectWithMessage($orderId, $this->messageFormatter->format($field, $code, null));
+    }
 
+    public function rejectWithMessage(string $orderId, string $message): void
+    {
+        $entries = $this->readEntries($orderId);
+        $entries[] = $message;
         $this->session->setVariable(self::sessionKey($orderId), $entries);
     }
 

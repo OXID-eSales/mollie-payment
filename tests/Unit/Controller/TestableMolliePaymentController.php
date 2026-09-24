@@ -17,12 +17,12 @@ use OxidEsales\Payments\Mollie\Controller\PaymentController;
  */
 final class TestableMolliePaymentController extends PaymentController
 {
-    public bool $invalidUserDataErrorShown = false;
+    public array $userDataProblemsShown = [];
     public bool $delegatedValidatePayment = false;
 
     public function __construct(
         private readonly string $paymentId,
-        private readonly bool $userDataValid = true,
+        private readonly array $userDataProblems = [],
         private readonly mixed $delegateResult = 'order',
     ) {
         // Intentionally does NOT call parent::__construct() — no OXID bootstrap needed.
@@ -33,14 +33,14 @@ final class TestableMolliePaymentController extends PaymentController
         return $this->paymentId;
     }
 
-    protected function userDataIsValid(): bool
+    protected function userDataProblems(): array
     {
-        return $this->userDataValid;
+        return $this->userDataProblems;
     }
 
-    protected function showInvalidUserDataError(): void
+    protected function showUserDataProblems(array $messages): void
     {
-        $this->invalidUserDataErrorShown = true;
+        $this->userDataProblemsShown = $messages;
     }
 
     protected function delegateValidatePayment(): mixed

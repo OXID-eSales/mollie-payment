@@ -41,43 +41,46 @@ final class MolliePaymentControllerTest extends TestCase
     {
         $controller = new TestableMolliePaymentController(
             'oxidcashondel',
-            userDataValid: false,
+            userDataProblems: ['The street field is not valid. Allowed symbols are: letters'],
             delegateResult: 'order',
         );
 
         self::assertSame('order', $controller->validatePayment());
-        self::assertFalse($controller->invalidUserDataErrorShown);
+        self::assertSame([], $controller->userDataProblemsShown);
     }
 
     public function testValidatePaymentWhenMollieSelectedAndUserDataValidReturnsParentResult(): void
     {
         $controller = new TestableMolliePaymentController(
             MollieDefinitions::PAYMENT_ID,
-            userDataValid: true,
+            userDataProblems: [],
             delegateResult: 'order',
         );
 
         self::assertSame('order', $controller->validatePayment());
-        self::assertFalse($controller->invalidUserDataErrorShown);
+        self::assertSame([], $controller->userDataProblemsShown);
     }
 
     public function testValidatePaymentWhenMollieSelectedAndUserDataInvalidBlocksProgression(): void
     {
         $controller = new TestableMolliePaymentController(
             MollieDefinitions::PAYMENT_ID,
-            userDataValid: false,
+            userDataProblems: ['The street field is not valid. Allowed symbols are: letters'],
             delegateResult: 'order',
         );
 
         self::assertSame('payment', $controller->validatePayment());
-        self::assertTrue($controller->invalidUserDataErrorShown);
+        self::assertSame(
+            ['The street field is not valid. Allowed symbols are: letters'],
+            $controller->userDataProblemsShown,
+        );
     }
 
     public function testValidatePaymentWhenParentRejectsAndMollieSelectedWithValidDataReturnsParentResult(): void
     {
         $controller = new TestableMolliePaymentController(
             MollieDefinitions::PAYMENT_ID,
-            userDataValid: true,
+            userDataProblems: [],
             delegateResult: null,
         );
 
