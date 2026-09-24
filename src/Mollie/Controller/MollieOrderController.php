@@ -22,6 +22,7 @@ use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\Payments\Mollie\Service\ContractTokenService;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\AbandonedAttemptCleanup;
+use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplay;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver;
 use OxidEsales\Payments\Mollie\Service\Return\PendingReturnProbe;
@@ -76,6 +77,25 @@ class MollieOrderController extends MollieOrderController_parent
             return $basketRedirect;
         }
 
+        // MOL-18: a repeated "Order now" rejoins the attempt already in flight instead of starting
+        // another ({@see InFlightCheckoutReplay}). Deliberately AFTER the CSRF / AGB / basket-hash
+        // guards - a replay is still an order submission. Fail-open to "nothing in flight" when
+        // payment-base predates the resolver: resolveService() answers null.
+        $replay = $this->resolveService(InFlightCheckoutReplay::class)?->checkoutUrl();
+        if ($replay !== null) {
+            $this->redirect($replay);
+
+            return null;
+        }
+
+        return $this->startCheckoutSession($paymentId);
+    }
+
+    /**
+     * A fresh attempt: dispatch the checkout-session event and leave for Mollie.
+     */
+    private function startCheckoutSession(string $paymentId): ?string
+    {
         $dispatcher = $this->resolveDispatcher();
         if ($dispatcher === null) {
             return $this->onCheckoutUnavailable();
@@ -92,8 +112,9 @@ class MollieOrderController extends MollieOrderController_parent
             return $this->onCheckoutUnavailable();
         }
 
-        $checkoutUrl = $context->get('checkoutUrl');
-        if (is_string($checkoutUrl) && $checkoutUrl !== '') {
+        // Set by MollieCheckoutSessionHandler as a string; anything else means "no checkout".
+        $checkoutUrl = (string) $context->get('checkoutUrl', '');
+        if ($checkoutUrl !== '') {
             $this->redirect($checkoutUrl);
             return null;
         }
@@ -316,8 +337,8 @@ class MollieOrderController extends MollieOrderController_parent
         // Resolve Mollie's CONCRETE token service, not the shared
         // PaymentBase\TokenServiceInterface: that interface is single-valued in the merged DI
         // container and, when another PSP is active, resolves to the wrong provider's HMAC.
-        return $this->resolveService(ContractTokenService::class)
-            ?->validateToken($contractToken, $contractId) ?? false;
+        return (bool) $this->resolveService(ContractTokenService::class)
+            ?->validateToken($contractToken, $contractId);
     }
 
     private function loadContract(string $contractId): ?PaymentContractInterface
@@ -348,7 +369,7 @@ class MollieOrderController extends MollieOrderController_parent
      */
     protected function returnIsPending(PaymentContractInterface $contract): bool
     {
-        return $this->resolveService(PendingReturnProbe::class)?->isPending($contract) ?? false;
+        return (bool) $this->resolveService(PendingReturnProbe::class)?->isPending($contract);
     }
 
     /**
@@ -362,9 +383,8 @@ class MollieOrderController extends MollieOrderController_parent
         );
 
         $orderId = (string) $contract->getOrderId();
-        $writer = $this->resolveService(SessionWriterInterface::class);
-        if ($writer !== null && $orderId !== '') {
-            $writer->writeSessChallenge($orderId);
+        if ($orderId !== '') {
+            $this->resolveService(SessionWriterInterface::class)?->writeSessChallenge($orderId);
         }
 
         Registry::getUtilsView()->addErrorToDisplay('MOLLIE_RETURN_PENDING');

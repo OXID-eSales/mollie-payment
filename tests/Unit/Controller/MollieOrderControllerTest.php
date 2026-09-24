@@ -9,6 +9,12 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller;
 
+use OxidEsales\PaymentBase\Adapter\Exception\ShopOrderException;
+use OxidEsales\Eshop\Application\Model\Basket;
+use OxidEsales\Eshop\Core\Price;
+use OxidEsales\PaymentBase\Adapter\SessionAdapterInterface;
+use OxidEsales\PaymentBase\Checkout\InFlightCheckoutAttemptResolverInterface;
+use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplay;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Controller\CheckoutReturnResponder;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
@@ -325,6 +331,7 @@ final class MollieOrderControllerTest extends TestCase
         bool $challengeValid = true,
         array $requestParams = [],
         bool $basketEmpty = false,
+        ?InFlightCheckoutReplay $inFlightReplay = null,
     ): TestableMollieOrderController {
         return new TestableMollieOrderController(
             requestParams: $requestParams,
@@ -337,7 +344,131 @@ final class MollieOrderControllerTest extends TestCase
             termsAccepted: $termsAccepted,
             challengeValid: $challengeValid,
             basketEmpty: $basketEmpty,
+            inFlightReplay: $inFlightReplay,
         );
+    }
+
+    private const LIVE_BASKET_TOTAL = 116.5;
+
+    /**
+     * The real service around a scripted payment-base resolver, reading a session basket worth
+     * LIVE_BASKET_TOTAL - the controller is exercised with the collaborator it really calls.
+     */
+    private function replayAnswering(?string $checkoutUrl): InFlightCheckoutReplay
+    {
+        $resolver = $this->createMock(InFlightCheckoutAttemptResolverInterface::class);
+        $resolver->expects(self::once())->method('resolve')->with(self::LIVE_BASKET_TOTAL)->willReturn($checkoutUrl);
+
+        return new InFlightCheckoutReplay($resolver, $this->sessionWithBasketWorth(self::LIVE_BASKET_TOTAL));
+    }
+
+    private function replayNeverAsked(): InFlightCheckoutReplay
+    {
+        $resolver = $this->createMock(InFlightCheckoutAttemptResolverInterface::class);
+        $resolver->expects(self::never())->method('resolve');
+
+        return new InFlightCheckoutReplay($resolver, $this->sessionWithBasketWorth(self::LIVE_BASKET_TOTAL));
+    }
+
+    private function sessionWithBasketWorth(float $gross): SessionAdapterInterface
+    {
+        $price = $this->createMock(Price::class);
+        $price->method('getBruttoPrice')->willReturn($gross);
+        $basket = $this->createMock(Basket::class);
+        $basket->method('getPrice')->willReturn($price);
+        $session = $this->createMock(SessionAdapterInterface::class);
+        $session->method('getBasket')->willReturn($basket);
+
+        return $session;
+    }
+
+    // ── MOL-18: a repeated "Order now" rejoins the attempt already in flight ──────────────────────
+
+    public function testExecuteWhenAttemptInFlightRedirectsToExistingCheckoutUrlWithoutDispatching(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::never())->method('dispatch');
+
+        $controller = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            $dispatcher,
+            inFlightReplay: $this->replayAnswering('https://mollie.test/checkout/tr_first'),
+        );
+
+        self::assertNull($controller->execute());
+        self::assertSame(['https://mollie.test/checkout/tr_first'], $controller->redirectedTo);
+        self::assertFalse($controller->unavailableErrorShown);
+    }
+
+    public function testExecuteWhenNoAttemptInFlightDispatchesCheckoutSessionEvent(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::once())
+            ->method('dispatch')
+            ->willReturnCallback(function (MollieCheckoutSessionRequestEvent $event) {
+                $event->getContext()->set('checkoutUrl', 'https://mollie.test/checkout/tr_new');
+                return $event;
+            });
+
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, $dispatcher, inFlightReplay: $this->replayAnswering(null));
+
+        self::assertNull($controller->execute());
+        self::assertSame(['https://mollie.test/checkout/tr_new'], $controller->redirectedTo);
+    }
+
+    public function testExecuteWhenResolverUnavailableProceedsAsBefore(): void
+    {
+        // payment-base older than the resolver: no behaviour change, a new attempt is started.
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::once())
+            ->method('dispatch')
+            ->willReturnCallback(function (MollieCheckoutSessionRequestEvent $event) {
+                $event->getContext()->set('checkoutUrl', 'https://mollie.test/checkout/tr_new');
+                return $event;
+            });
+
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, $dispatcher, inFlightReplay: null);
+
+        self::assertNull($controller->execute());
+        self::assertSame(['https://mollie.test/checkout/tr_new'], $controller->redirectedTo);
+    }
+
+    public function testExecuteAsksForTheInFlightAttemptOnlyAfterTheGuardsPassed(): void
+    {
+        // A replay is still an order submission: CSRF, AGB and basket-hash guards come first.
+        $inFlight = $this->replayNeverAsked();
+
+        $challengeFails = $this->executeController(MollieDefinitions::PAYMENT_ID, null, challengeValid: false, inFlightReplay: $inFlight);
+        self::assertNull($challengeFails->execute());
+
+        $agbFails = $this->executeController(MollieDefinitions::PAYMENT_ID, null, termsAccepted: false, inFlightReplay: $inFlight);
+        self::assertNull($agbFails->execute());
+
+        $basketChanged = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            null,
+            requestParams: ['basketSummaryHash' => 'stale'],
+            inFlightReplay: $inFlight,
+        );
+        self::assertSame('order', $basketChanged->execute());
+    }
+
+    public function testExecuteWhenOrderExistsErrorSurfacesShowsCheckoutUnavailableWithoutRedirect(): void
+    {
+        // Defensive: payment-base now refuses a second createOrder() for the same challenge. That
+        // only reaches this controller if the resolver missed - and then it is a clean error
+        // page, never a redirect to pay for a phantom order.
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willThrowException(new ShopOrderException(
+            message: 'An order for this checkout attempt already exists',
+            errorCode: 'order_exists',
+        ));
+
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, $dispatcher, inFlightReplay: $this->replayAnswering(null));
+
+        self::assertSame('payment', $controller->execute());
+        self::assertTrue($controller->unavailableErrorShown);
+        self::assertSame([], $controller->redirectedTo);
     }
 
     public function testCheckoutReturnWithValidTokenDispatchesReturnFlowAndGoesToThankyou(): void
