@@ -81,7 +81,7 @@ Across 2026-09-23/24: 10 of 24 paid Mollie contracts lost the race (all methods 
 `committed` rows with an `authorized` webhook and OXPAID `0000-00-00` are manual-capture card payments,
 correctly awaiting capture).
 
-### B. Matrix run (`tests/MollieStandard/RefundAvailabilityMatrix.spec.ts`, diagnostic, 2026-09-24 14:08)
+### B. Matrix run (`tests/MollieDiagnostic/RefundAvailabilityMatrix.spec.ts`, diagnostic, 2026-09-24 14:08)
 
 One order per method offered on the order page, paid with "Paid" on Mollie's test page; then DB, Mollie API
 (`GET /v2/payments/{id}`) and the admin Payment tab.
@@ -101,7 +101,7 @@ One order per method offered on the order page, paid with "Paid" on Mollie's tes
 
 Gate B was satisfied for **every** paid method (Mollie returned the full amount as `amountRemaining`). The
 only discriminator between "refund form" and "no refund form" is Gate A, the contract state: the admin
-inspection (`RefundAdminInspection.spec.ts`, 8 orders) shows the Refund form exactly on the five `fulfilled`
+inspection (`MollieDiagnostic/RefundAdminInspection.spec.ts`, 8 orders) shows the Refund form exactly on the five `fulfilled`
 contracts and on none of the three `committed` ones, while every panel shows the live Mollie row as `paid`
 and "Captured 0.00 EUR" (see *Not the cause*). Capture / cancel forms: none (auto-captured payments).
 
