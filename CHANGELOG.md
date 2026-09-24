@@ -22,6 +22,9 @@ All notable changes to this module are documented here. Format follows
   Stripe module (pinned by a unit test); both modules depend on payment-base only.
 
 ### Fixed
+- Mollie's retries of a webhook whose first delivery failed here are processed again instead of being
+  dropped as already processed (payment-base `claimEvent()` re-claims a `failed` row; requires the matching
+  payment-base version). Integration proof in `DoctrineIdempotencyClaimTest`.
 - Successfully paid orders (reported for Pay by Bank and EPS, in fact any method) offered no Refund
   action in the admin Payment tab (MOL-17). The admin gate needs contract state `fulfilled`, which only
   the `paid` webhook sets; the shopper's return leg overwrote it with its stale `committed` copy when the

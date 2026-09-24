@@ -55,6 +55,41 @@ final class DoctrineIdempotencyClaimTest extends TestCase
         self::assertFalse($secondClaim, 'replayed delivery must NOT re-claim the same event id');
     }
 
+    /**
+     * Follow-up of MOL-17: a delivery that ended `failed` (PSP answered 5xx, will retry) must not keep
+     * its claim, or the retry is dropped as "already processed" and the order stays where the failure
+     * left it. Processed and in-flight claims stay exclusive.
+     */
+    public function testClaimEvent_AFailedDeliveryCanBeClaimedAgainByTheRetry(): void
+    {
+        $repository = $this->webhookLogRepository();
+        $eventId = 'tr_retry_' . bin2hex(random_bytes(8));
+        $this->eventIdsToClean[] = $eventId;
+
+        self::assertTrue($repository->claimEvent($eventId, 'mollie', 'paid'));
+        $repository->updateStatus($eventId, 'failed', 'contract changed since it was loaded');
+
+        self::assertTrue($repository->claimEvent($eventId, 'mollie', 'paid'), 'the retry must be processed');
+        self::assertSame('claimed', $repository->findByEventId($eventId)?->getStatus());
+        self::assertNull($repository->findByEventId($eventId)?->getError(), 'the old failure text is cleared');
+    }
+
+    public function testClaimEvent_ProcessedAndInFlightDeliveriesStayExclusive(): void
+    {
+        $repository = $this->webhookLogRepository();
+        $processed = 'tr_done_' . bin2hex(random_bytes(8));
+        $inFlight = 'tr_busy_' . bin2hex(random_bytes(8));
+        $this->eventIdsToClean[] = $processed;
+        $this->eventIdsToClean[] = $inFlight;
+
+        self::assertTrue($repository->claimEvent($processed, 'mollie', 'paid'));
+        $repository->updateStatus($processed, 'processed');
+        self::assertTrue($repository->claimEvent($inFlight, 'mollie', 'paid'));
+
+        self::assertFalse($repository->claimEvent($processed, 'mollie', 'paid'), 'a processed delivery is final');
+        self::assertFalse($repository->claimEvent($inFlight, 'mollie', 'paid'), 'a delivery still being processed is not re-claimable');
+    }
+
     public function testClaimEvent_DifferentEventIdsBothClaim(): void
     {
         $repository = $this->webhookLogRepository();
