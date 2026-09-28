@@ -6,6 +6,15 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- "Order now" on the standard order step is inactive until the shopper ticks the AGB checkbox (MOL-11):
+  a `mollie-agb-gate` Stimulus controller on both Mollie order buttons (classic redirect and inline
+  Components) mirrors the state of every agreement checkbox Apex renders (`#checkAgbTop`, downloadable /
+  intangible product agreements) into the button; with `blConfirmAGB` off no checkbox renders and the
+  button is active at once; a button the server rendered disabled (low order price) is left alone. The
+  server-side guard in `MollieOrderController::execute()` stays the safety net. The one-page-checkout
+  footer behaves the same: its submit no longer enables itself on connect (OPC's checkout-footer-manager
+  owns that gate) and `processCheckout` now carries the real consent checkbox state (`confirmTerms` /
+  `confirmPrivacy`; the old `#confirmTermsCheckout` id no longer exists) instead of a constant `true`.
 - `mollie:reconcile-paid` console command (MOL-17): fulfils contracts stuck at `committed` whose Mollie
   payment is `paid`, running the webhook's own fulfilment; `--dry-run` lists, `--limit` bounds.
 - User-data validation exactly as in the Stripe module (MOL-15), on payment-base's central

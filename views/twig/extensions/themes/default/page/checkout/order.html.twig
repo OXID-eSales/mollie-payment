@@ -21,7 +21,9 @@
         {# MOL-18: classic redirect flow - apex's own button, apex's own conditions, plus a
            Stimulus controller that lets it submit once per click burst (the server rejoins an
            attempt already in flight, so this is UX). The inline onclick stays as the fallback
-           for a page where the bundle did not load; the controller removes it on connect. #}
+           for a page where the bundle did not load; the controller removes it on connect.
+           MOL-11: mollie-agb-gate keeps the button inactive until the AGB checkbox is ticked
+           (no checkbox rendered -> nothing to gate on); the server guard stays the safety net. #}
         {% if not oView.isLowOrderPrice() or (displayBasketOrderButton == 'show' or displayBasketOrderButton == 'disabled') %}
             <script>
                 window.oMollie = window.oMollie || {};
@@ -29,7 +31,7 @@
             </script>
             <script src="{{ oViewConf.getModuleUrl('oe_payments_mollie', oViewConf.getMollieJsPath()) }}?v={{ oViewConf.getMollieModuleVersion() }}"></script>
             <button type="button" class="btn btn-highlight btn-lg w-100"
-                    data-controller="mollie-place-order"
+                    data-controller="mollie-place-order mollie-agb-gate"
                     data-action="click->mollie-place-order#submit"
                     {% if oView.isLowOrderPrice() and displayBasketOrderButton == 'disabled' %}
                     disabled="disabled"
@@ -125,7 +127,9 @@
                 <input type="hidden" name="mollieCardToken" form="orderConfirmAgbBottom"
                        data-mollie-components-target="token">
 
+                {# MOL-11: same AGB gate as the classic button. #}
                 <button type="button" class="btn btn-highlight btn-lg w-100"
+                        data-controller="mollie-agb-gate"
                         data-action="click->mollie-components#placeOrder"
                         {% if oView.isLowOrderPrice() and displayBasketOrderButton == 'disabled' %}
                             disabled="disabled"

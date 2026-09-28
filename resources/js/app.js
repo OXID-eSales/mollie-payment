@@ -10,6 +10,7 @@ import { Application } from '@hotwired/stimulus'
 import MollieCheckoutController from './controllers/mollie_checkout_controller.js'
 import MollieComponentsController from './controllers/mollie_components_controller.js'
 import MolliePlaceOrderController from './controllers/mollie_place_order_controller.js'
+import MollieAgbGateController from './controllers/mollie_agb_gate_controller.js'
 import { createDebugLogger } from './debug.js'
 
 // Reuse an already-started Stimulus application if another payment module's bundle started one
@@ -19,6 +20,7 @@ window.Stimulus = window.Stimulus || Application.start()
 window.Stimulus.register('mollie-checkout', MollieCheckoutController)
 window.Stimulus.register('mollie-components', MollieComponentsController)
 window.Stimulus.register('mollie-place-order', MolliePlaceOrderController)
+window.Stimulus.register('mollie-agb-gate', MollieAgbGateController)
 
 const mollieDebugEnabled = () => window.oMollie?.debug === true
 const debug = createDebugLogger(mollieDebugEnabled)

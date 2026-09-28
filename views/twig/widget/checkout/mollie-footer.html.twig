@@ -145,13 +145,19 @@ class MollieCheckoutFooterController extends BaseController {
       this._connected = true;
       this._components = {};
       this._mdbg('[MollieCheckoutFooter] Connected');
-      if (this.hasSubmitButtonTarget) {
+      if (this.hasSubmitButtonTarget && MollieCheckoutFooterSubmitState.inFlight()) {
         // Never hand the button back while a checkout is still in flight.
         // OPC re-injects this footer and calls forceControllerReconnect(), so
         // connect() runs again mid-submit; re-enabling here let a second click
         // start a SECOND checkout, which is how one purchase ended up as two
         // orders a second apart (one cancelled, one live).
-        this.submitButtonTarget.disabled = MollieCheckoutFooterSubmitState.inFlight();
+        //
+        // MOL-11: and never ENABLE it here either. The button renders disabled
+        // and OPC's checkout-footer-manager owns the enabled state: it lifts the
+        // lock only once the consents (AGB / privacy) and the other requirements
+        // validate, and re-applies it when a consent is unticked — the same
+        // gate the standard order step applies with `mollie-agb-gate`.
+        this.submitButtonTarget.disabled = true;
       }
       this._syncCardMode();
     }
@@ -257,16 +263,26 @@ class MollieCheckoutFooterController extends BaseController {
       }
     }
 
-    async _processCheckout(method, cardToken) {
-      // The OPC CheckoutService rejects processCheckout unless both consent flags are true; forward
-      // the live checkbox state (missing checkbox → true, mirroring the Stripe footer).
-      var termsEl = document.getElementById('confirmTermsCheckout');
-      var privacyEl = document.getElementById('confirmPrivacyCheckout');
+    /**
+     * MOL-11: the live state of one OPC consent (`confirmTerms` / `confirmPrivacy`).
+     * OPC renders the checkboxes in its consents accordion (`#confirmTermsAccordion`) or the
+     * confirm step (`#opcConfirmTerms`), both by `name`; the old `#confirmTermsCheckout` id is
+     * gone, so the id lookup silently reported "accepted". No checkbox rendered
+     * (`blConfirmAGB` off) → nothing to consent to → true.
+     */
+    _consentAccepted(name) {
+      var boxes = document.querySelectorAll('input[type="checkbox"][name="' + name + '"]');
+      if (boxes.length === 0) return true;
+      return Array.prototype.every.call(boxes, function (box) { return box.checked; });
+    }
 
+    async _processCheckout(method, cardToken) {
+      // The OPC CheckoutService rejects processCheckout unless both consent flags are true;
+      // forward the real checkbox state so the server can refuse an order without consent.
       var body = {
         paymentMethodId: this.paymentMethodValue,
-        confirmTermsAndConditions: termsEl ? !!termsEl.checked : true,
-        confirmPrivacyPolicy: privacyEl ? !!privacyEl.checked : true
+        confirmTermsAndConditions: this._consentAccepted('confirmTerms'),
+        confirmPrivacyPolicy: this._consentAccepted('confirmPrivacy')
       };
       // Provider-specific fields — OPC forwards them into the PaymentContext metadata bag.
       if (method) { body.mollieMethod = method; }
