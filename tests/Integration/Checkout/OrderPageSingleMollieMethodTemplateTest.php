@@ -17,6 +17,8 @@ use OxidEsales\Payments\Mollie\Tests\Integration\Checkout\Probe\MollieOrderProbe
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/Probe/probes.php';
+
 /**
  * One enabled Mollie method is not a choice. The inline order block used to
  * open with "Choose your payment method" and a single radio; with exactly one

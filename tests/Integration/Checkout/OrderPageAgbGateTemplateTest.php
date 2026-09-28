@@ -17,6 +17,8 @@ use OxidEsales\Payments\Mollie\Tests\Integration\Checkout\Probe\MollieOrderProbe
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/Probe/probes.php';
+
 /**
  * MOL-11: both Mollie "Order now" buttons on the standard order step carry the
  * `mollie-agb-gate` Stimulus controller, which keeps the button inactive until
