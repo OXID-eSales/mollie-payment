@@ -13,5 +13,7 @@
     (green, also against the original footer), integration `OrderPageAgbGateTemplateTest` (red → green); the
     server-guard spec `AgbRequiredBlocksCheckout` now submits the form past the inactive button. `mollie-standard`
     18 + 3 green / 2 Klarna skips; `mollie-opc` 7 green, 1 precondition failure (PayPal inactive in `oxpayments`).
+  - CI: first push red on the integration jobs (probe classes not autoloadable under the shop bootstrap), fixed
+    with an explicit loader (`ea44cf0`).
   - Env: OPC yaml was rewritten from outside the session mid-run (flag → false) — re-enabled, re-run, restored to off.
     PHPStan shows 3 environmental findings in untouched `src/` (CI green on the same sources).

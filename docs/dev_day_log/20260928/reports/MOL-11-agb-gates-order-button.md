@@ -41,6 +41,13 @@ not the module's. The server guard stays: a page without the bundle still submit
 | `mollie-standard` suite | **18 passed, 2 Klarna skips, 1 failed** on the first run: `AgbRequiredBlocksCheckout` (the server-guard spec) clicked the now-inactive button and waited out its timeout — the intended consequence of the gate. The spec now asserts the button is inactive and submits the order form straight from the DOM (what a page without the bundle would do); the server still bounces with `READ_AND_CONFIRM_TERMS`. Re-run of the three AGB specs: **3 passed** → suite fully green. |
 | Gates | phpcs (CI form, warnings counted) clean · PHPMD clean · Unit 686 green · PHPStan: 3 findings in `src/` files this branch does not touch (`git diff origin/b-7.4.x -- src/` empty; CI green on `388ab27` with the same sources) — environmental |
 
+## CI
+
+- First push (`d4790a8`): unit + styles green; integration jobs red on all four matrix cells — the shared probe
+  classes were `not found`. CI runs the Integration suite with `--bootstrap=/var/www/source/bootstrap.php`,
+  whose autoloader does not map the module's `Tests\` namespace (locally the SDK's vendor does).
+  `ea44cf0`: `Probe/probes.php` requires the four probe files, both template tests include it.
+
 ## Environment notes
 
 - OPC flag flipped on for the OPC runs and restored to off (as found). Iframe flag flipped off for one classic-flow run and restored to on.
