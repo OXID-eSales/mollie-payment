@@ -46,7 +46,14 @@ test.describe('Mollie standard checkout — AGB enforcement', () => {
         const orderNowBtn = page.getByRole('button', {
             name: /zahlungspflichtig bestellen|place order|order now/i,
         });
-        await orderNowBtn.click();
+        // MOL-11: the button itself is inactive while the AGB box is unticked (see
+        // AgbGatesOrderButton.spec.ts), so the UI cannot reach the server without consent any
+        // more. This spec is about the SERVER guard: submit the order form the way a page without
+        // the bundle (or a tampered one) would — straight from the DOM, past the disabled button.
+        await expect(orderNowBtn.first()).toBeDisabled();
+        await page.evaluate(() => {
+            (document.getElementById('orderConfirmAgbBottom') as HTMLFormElement).submit();
+        });
         await page.waitForLoadState('domcontentloaded');
 
         // Must NOT leave the shop for Mollie's hosted checkout.

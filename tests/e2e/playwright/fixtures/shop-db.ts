@@ -94,3 +94,17 @@ export function ordersAddedSince(baseline: Set<string>): OrderRow[] {
 export function phantomOrderCount(): number {
     return Number(shopDbQuery("SELECT COUNT(*) FROM oxorder WHERE OXPAYMENTTYPE = ''")[0][0]);
 }
+
+/**
+ * MOL-11: the AGB confirmation switch (`blConfirmAGB`, shop 1). Specs that prove the "Order now"
+ * gate set it explicitly — on to see the checkbox, off to see the button active without one —
+ * and restore the original value in `finally`. OXID CE reads `oxconfig` on every request, so no
+ * cache clear is needed for the change to reach the storefront.
+ */
+export function confirmAgbEnabled(): boolean {
+    return (shopDbQuery(`SELECT OXVARVALUE FROM oxconfig WHERE OXSHOPID = '1' AND OXVARNAME = 'blConfirmAGB'`)[0]?.[0] ?? '') === '1';
+}
+
+export function setConfirmAgbEnabled(enabled: boolean): void {
+    shopDbExecute(`UPDATE oxconfig SET OXVARVALUE = '${enabled ? '1' : '0'}' WHERE OXSHOPID = '1' AND OXVARNAME = 'blConfirmAGB'`);
+}
