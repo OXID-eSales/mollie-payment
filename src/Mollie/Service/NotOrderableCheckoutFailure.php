@@ -42,7 +42,10 @@ final class NotOrderableCheckoutFailure
     public static function fromBuyabilityFailures(array $failures): self
     {
         return new self(
-            array_values(array_map(static fn (BuyabilityFailure $failure): string => $failure->productTitle, $failures)),
+            array_values(array_map(
+                static fn (BuyabilityFailure $failure): string => $failure->productTitle,
+                $failures
+            )),
             null
         );
     }
