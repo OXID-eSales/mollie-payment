@@ -31,6 +31,14 @@ All notable changes to this module are documented here. Format follows
   Stripe module (pinned by a unit test); both modules depend on payment-base only.
 
 ### Fixed
+- A basket item that is not orderable (turned unbuyable, out of stock for the ordered quantity, removed) no
+  longer surfaces as `MOLLIE_CHECKOUT_UNAVAILABLE` / "Mollie is not available right now" (MOL-22). The standard
+  order step and the one-page-checkout footer both tell the shopper that the order cannot be completed because
+  one or more items are currently not orderable, naming the item when it is known, translated (EN/DE); the
+  standard step returns to the basket and shows core's own stock message inline as for any other payment
+  method. Checked before the checkout-session event is dispatched (`BasketBuyabilityValidator`, no contract or
+  draft order is created) and recognised when core refuses inside `finalizeOrder()` (payment-base's
+  `article_not_buyable` code). The OPC handler used to pass core's raw translation key through to the footer.
 - Mollie's retries of a webhook whose first delivery failed here are processed again instead of being
   dropped as already processed (payment-base `claimEvent()` re-claims a `failed` row; requires the matching
   payment-base version). Integration proof in `DoctrineIdempotencyClaimTest`.

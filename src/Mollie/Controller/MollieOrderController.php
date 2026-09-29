@@ -10,14 +10,18 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Controller;
 
 use OxidEsales\Eshop\Application\Model\User;
+use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\EshopCommunity\Core\Di\ContainerFacade;
 use OxidEsales\PaymentBase\Controller\HandlesCheckoutReturn;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
+use OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator;
 use OxidEsales\Payments\Mollie\Service\CheckoutUserDataGate;
 use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplay;
+use OxidEsales\Payments\Mollie\Service\NotOrderableCheckoutFailure;
+use OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use Throwable;
 
@@ -74,6 +78,15 @@ class MollieOrderController extends MollieOrderController_parent
             return $basketRedirect;
         }
 
+        // MOL-22: an item that is not orderable any more (turned unbuyable since the page rendered)
+        // is named to the shopper before anything else - the basket has to be fixed first, and no
+        // contract or draft order is created for it. Core's finalizeOrder() stays the safety net for
+        // the race window (see startCheckoutSession()).
+        $notOrderable = $this->basketNotOrderableFailure();
+        if ($notOrderable !== null) {
+            return $this->showNotOrderable($notOrderable);
+        }
+
         // MOL-15: the point of no return. Address data is validated with payment-base's rules for
         // Mollie right before the PSP is called - the payment step checked it too, but it can have
         // changed since (account page, another tab). Comes BEFORE the in-flight replay: data that
@@ -117,6 +130,12 @@ class MollieOrderController extends MollieOrderController_parent
             Registry::getLogger()->error('MollieOrderController: checkout session event failed', [
                 'error' => $e->getMessage(),
             ]);
+            // MOL-22: core refused inside finalizeOrder() because an item is not orderable (out of
+            // stock for the ordered quantity, turned unbuyable, removed) - say so, not "unavailable".
+            $notOrderable = NotOrderableCheckoutFailure::fromThrowable($e);
+            if ($notOrderable !== null) {
+                return $this->showNotOrderable($notOrderable);
+            }
             return $this->onCheckoutUnavailable();
         }
 
@@ -306,6 +325,46 @@ class MollieOrderController extends MollieOrderController_parent
         Registry::getUtilsView()->addErrorToDisplay('MOLLIE_CHECKOUT_UNAVAILABLE');
 
         return 'payment';
+    }
+
+    /**
+     * MOL-22: which items of the session basket are not orderable right now (null = all fine).
+     * Fail-open when the basket cannot be read - core's finalizeOrder() refuses such an item anyway.
+     */
+    protected function basketNotOrderableFailure(): ?NotOrderableCheckoutFailure
+    {
+        $basket = Registry::getSession()->getBasket();
+        if (!$basket instanceof Basket) {
+            return null;
+        }
+        $failures = (new BasketBuyabilityValidator())->validate($basket);
+
+        return $failures === [] ? null : NotOrderableCheckoutFailure::fromBuyabilityFailures($failures);
+    }
+
+    /**
+     * MOL-22: the shopper reads why (translated, naming the item when known) and lands on the
+     * basket step - where core's own OrderController sends an out-of-stock order too. The sentences
+     * go to the default error slot (the layout renders it on every page; Apex renders the `basket`
+     * slot only for its own exception types), while core's own exception - when core was the one
+     * that refused - keeps the `basket` slot so Apex shows it inline at the item with the remaining
+     * stock, exactly as for any other payment method. Fails open to the raw lead key: it is
+     * translated at render (ExceptionToDisplay::getOxMessage()).
+     */
+    protected function showNotOrderable(NotOrderableCheckoutFailure $failure): string
+    {
+        $messages = $this->resolveService(NotOrderableItemsMessages::class)?->messagesFor($failure)
+            ?? [NotOrderableItemsMessages::LEAD];
+        $view = Registry::getUtilsView();
+        foreach ($messages as $message) {
+            $view->addErrorToDisplay($message);
+        }
+        $cause = $failure->cause();
+        if ($cause !== null) {
+            $view->addErrorToDisplay($cause, false, true, 'basket');
+        }
+
+        return 'basket';
     }
 
     protected function readRequestParameter(string $name): ?string

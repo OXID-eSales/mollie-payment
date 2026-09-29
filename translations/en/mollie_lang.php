@@ -51,4 +51,7 @@ $aLang = [
 
     // Shown when the Mollie checkout session cannot be started (was rendering as a raw key).
     'MOLLIE_CHECKOUT_UNAVAILABLE' => 'Payment via Mollie is not available right now. Please try again or choose another payment method.',
+    // MOL-22: an item in the basket is not orderable - the lead sentence, then one per item known by title.
+    'MOLLIE_CHECKOUT_ITEMS_NOT_ORDERABLE' => 'Your order cannot be completed because one or more items in your basket are currently not orderable. Please check your basket and remove the affected items or adjust the quantity.',
+    'MOLLIE_CHECKOUT_ITEM_NOT_ORDERABLE' => 'The item "%s" is currently not orderable.',
 ];

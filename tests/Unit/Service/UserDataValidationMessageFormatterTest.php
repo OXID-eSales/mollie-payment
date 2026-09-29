@@ -85,7 +85,17 @@ final class UserDataValidationMessageFormatterTest extends TestCase
                 self::assertArrayHasKey($key, $de, "missing German label for $field");
             }
         }
-        foreach (['MOLLIE_VALIDATION_FIELD_INVALID', 'MOLLIE_VALIDATION_REVIEW_ADDRESS', 'MOLLIE_VALIDATION_INVALID_USER_DATA', 'MOLLIE_CHECKOUT_UNAVAILABLE'] as $key) {
+        foreach (
+            [
+                'MOLLIE_VALIDATION_FIELD_INVALID',
+                'MOLLIE_VALIDATION_REVIEW_ADDRESS',
+                'MOLLIE_VALIDATION_INVALID_USER_DATA',
+                'MOLLIE_CHECKOUT_UNAVAILABLE',
+                // MOL-22: not-orderable item sentences (standard step + OPC footer)
+                'MOLLIE_CHECKOUT_ITEMS_NOT_ORDERABLE',
+                'MOLLIE_CHECKOUT_ITEM_NOT_ORDERABLE',
+            ] as $key
+        ) {
             self::assertArrayHasKey($key, $en);
             self::assertArrayHasKey($key, $de);
         }

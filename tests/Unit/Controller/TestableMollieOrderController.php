@@ -16,6 +16,7 @@ use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\Payments\Mollie\Service\AbandonedAttemptCleanup;
 use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplay;
+use OxidEsales\Payments\Mollie\Service\NotOrderableCheckoutFailure;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\PaymentBase\Service\TokenServiceInterface;
 use OxidEsales\Payments\Mollie\Controller\MollieOrderController;
@@ -41,6 +42,8 @@ final class TestableMollieOrderController extends MollieOrderController
     /** STRP-171 - the payment-base service that retires an abandoned attempt. */
     public ?AbandonedAttemptCleanup $attemptCleaner = null;
     public array $userDataProblemsShown = [];
+    /** MOL-22: the not-orderable failure the shopper was told about (null = never shown). */
+    public ?NotOrderableCheckoutFailure $notOrderableShown = null;
 
     /**
      * @param array<string, string> $requestParams
@@ -58,6 +61,7 @@ final class TestableMollieOrderController extends MollieOrderController
         private readonly bool $basketEmpty = false,
         private readonly ?InFlightCheckoutReplay $inFlightReplay = null,
         private readonly array $userDataProblems = [],
+        private readonly ?NotOrderableCheckoutFailure $notOrderable = null,
     ) {
         // Intentionally does NOT call parent::__construct() — no OXID bootstrap needed.
     }
@@ -144,6 +148,19 @@ final class TestableMollieOrderController extends MollieOrderController
     protected function showUserDataProblems(array $messages): void
     {
         $this->userDataProblemsShown = $messages;
+    }
+
+    protected function basketNotOrderableFailure(): ?NotOrderableCheckoutFailure
+    {
+        // The real seam runs BasketBuyabilityValidator over the session basket (Registry-backed).
+        return $this->notOrderable;
+    }
+
+    protected function showNotOrderable(NotOrderableCheckoutFailure $failure): string
+    {
+        $this->notOrderableShown = $failure;
+
+        return 'basket';
     }
 
     protected function onCheckoutUnavailable(): string
