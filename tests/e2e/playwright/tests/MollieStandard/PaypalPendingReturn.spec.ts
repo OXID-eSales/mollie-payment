@@ -73,8 +73,9 @@ test.describe('IFRAME-04 — Mollie pending payment lands on thank-you (not an e
         }
 
         await test.step('01 — pay with PayPal', async () => {
-            await paypal.check();
+            // MOL-9: the Mollie block is locked (inert) until the AGB box is ticked — tick first, then pick.
             await acceptTermsAndConditions(page);
+            await paypal.check();
             await page.getByRole('button', { name: /order now|zahlungspflichtig bestellen|place order/i })
                 .first().click();
             await expect(page, 'redirected to Mollie').toHaveURL(/mollie\.com\/checkout/i, { timeout: 45000 });

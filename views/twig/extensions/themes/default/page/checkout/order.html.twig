@@ -54,12 +54,16 @@
             </script>
             <script src="{{ oViewConf.getModuleUrl('oe_payments_mollie', oViewConf.getMollieJsPath()) }}?v={{ oViewConf.getMollieModuleVersion() }}"></script>
 
-            <div data-controller="mollie-components"
+            {# MOL-9: mollie-agb-gate on the block - the method selector and the card fields (its
+               `region`) are inert and dimmed, the button (its `button`) disabled, until every
+               agreement checkbox is ticked; nothing to gate on when none is rendered. #}
+            <div data-controller="mollie-components mollie-agb-gate"
                  data-mollie-components-profile-id-value="{{ oViewConf.getMollieProfileId() }}"
                  data-mollie-components-testmode-value="{{ oViewConf.isMollieTestMode() ? 'true' : 'false' }}"
                  data-mollie-components-locale-value="{{ oViewConf.getMollieComponentsLocale() }}"
                  data-mollie-components-debug-value="{{ oViewConf.isMollieDebugLoggingEnabled() ? 'true' : 'false' }}">
 
+              <div data-mollie-agb-gate-target="region">
                 {% if mollieMethods|length == 1 %}
                     {# One enabled method is not a choice (the rule payment-base applies to the
                        payment and shipping cards): name it, don't offer a selector. The field stays
@@ -119,6 +123,7 @@
                         </div>
                     </div>
                 </div>
+              </div>
 
                 <div class="alert alert-danger" role="alert" style="display: none;"
                      data-mollie-components-target="error"></div>
@@ -127,9 +132,9 @@
                 <input type="hidden" name="mollieCardToken" form="orderConfirmAgbBottom"
                        data-mollie-components-target="token">
 
-                {# MOL-11: same AGB gate as the classic button. #}
+                {# MOL-11 / MOL-9: the block's gate disables this button with the region. #}
                 <button type="button" class="btn btn-highlight btn-lg w-100"
-                        data-controller="mollie-agb-gate"
+                        data-mollie-agb-gate-target="button"
                         data-action="click->mollie-components#placeOrder"
                         {% if oView.isLowOrderPrice() and displayBasketOrderButton == 'disabled' %}
                             disabled="disabled"
@@ -141,6 +146,8 @@
             <style>
                 .mollie-field { min-height: 2.6rem; padding-top: .55rem; }
                 .mollie-method-icon { object-fit: contain; }
+                /* MOL-9: the region is `inert` while locked; this dims it and is the pointer fallback. */
+                .mollie-agb-locked { opacity: .5; pointer-events: none; }
             </style>
         {% endif %}
     {% endif %}
