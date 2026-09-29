@@ -114,6 +114,8 @@ test.describe('IFRAME-04 — Mollie Components inline card (end to end)', () => 
             // The inline selector lists the real Mollie methods (Card, PayPal, …). Choose Card.
             const card = page.locator('input[name="mollieMethod"][value="creditcard"]');
             await expect(card, 'the Card method must be offered').toHaveCount(1);
+            // MOL-9: the Mollie block is locked (inert) until the AGB box is ticked — tick first, then pick.
+            await acceptTermsAndConditions(page);
             await card.check();
             // The four card fields are Mollie-hosted iframes served from js.mollie.com.
             for (const field of Object.keys(FIELD_FRAMES)) {
@@ -133,7 +135,6 @@ test.describe('IFRAME-04 — Mollie Components inline card (end to end)', () => 
             }
             await shot(page, testInfo, '02a — test card entered in the inline fields');
 
-            await acceptTermsAndConditions(page);
             await page.getByRole('button', { name: /order now|zahlungspflichtig bestellen|place order/i })
                 .first().click();
 

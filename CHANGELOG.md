@@ -6,6 +6,12 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- The whole Mollie block on the standard order step — the payment-method selection and the inline card
+  fields, not only "Order now" — stays locked (`inert`, dimmed) until the AGB checkbox is ticked and locks
+  again when it is unticked (MOL-9); with `blConfirmAGB` off nothing is locked. The `mollie-agb-gate`
+  controller now sits on the inline block with `region` / `button` targets and still gates a lone button
+  in the classic redirect flow. The one-page checkout already keeps the whole footer inside OPC's inert
+  payment-execution body until the consents validate; pinned by a spec.
 - "Order now" on the standard order step is inactive until the shopper ticks the AGB checkbox (MOL-11):
   a `mollie-agb-gate` Stimulus controller on both Mollie order buttons (classic redirect and inline
   Components) mirrors the state of every agreement checkbox Apex renders (`#checkAgbTop`, downloadable /

@@ -34,12 +34,31 @@ final class OrderPageAgbGateTemplateTest extends TestCase
     private const CARD = ['id' => 'creditcard', 'name' => 'Card', 'image' => null];
     private const IDEAL = ['id' => 'ideal', 'name' => 'iDEAL', 'image' => null];
 
-    public function testInlineComponentsOrderButtonIsGatedByTheAgbCheckbox(): void
+    /**
+     * MOL-9: the gate sits on the inline block, not on the button alone - the method selector and the
+     * card fields are its `region` target (locked with `inert` while the AGB box is unticked) and the
+     * order button its `button` target.
+     */
+    public function testInlineComponentsBlockIsGatedByTheAgbCheckboxAsAWhole(): void
     {
         $output = $this->renderOrderPage(inlineCard: true);
 
+        self::assertSame(
+            1,
+            preg_match('/<div[^>]*data-controller="[^"]*\bmollie-components\b[^"]*\bmollie-agb-gate\b[^"]*"/', $output),
+            'the gate controller lives on the mollie-components wrapper'
+        );
+        self::assertSame(1, preg_match('/<div[^>]*data-mollie-agb-gate-target="region"[^>]*>/', $output, $region));
+        $regionStart = strpos($output, $region[0]);
+        self::assertNotFalse($regionStart);
+        $regionEnd = strpos($output, 'data-mollie-components-target="error"', $regionStart);
+        $regionMarkup = substr($output, $regionStart, (int) $regionEnd - $regionStart);
+        self::assertStringContainsString('name="mollieMethod"', $regionMarkup, 'the method selector is inside the region');
+        self::assertStringContainsString('data-mollie-components-target="fields"', $regionMarkup, 'the card fields are inside the region');
+
         $button = $this->orderButton($output, 'mollie-components#placeOrder');
-        self::assertMatchesRegularExpression('/data-controller="[^"]*\bmollie-agb-gate\b[^"]*"/', $button);
+        self::assertStringContainsString('data-mollie-agb-gate-target="button"', $button);
+        self::assertDoesNotMatchRegularExpression('/data-controller="[^"]*\bmollie-agb-gate\b/', $button, 'one gate per block, on the wrapper');
     }
 
     public function testClassicRedirectOrderButtonIsGatedByTheAgbCheckbox(): void

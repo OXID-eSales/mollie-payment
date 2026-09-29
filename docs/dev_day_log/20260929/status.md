@@ -18,3 +18,15 @@
     environmental PHPStan findings of 2026-09-28.
   - CI: first push red only on the styles job (one 121-char line, warnings count in CI), fixed in `65fa43a`.
   - Env: OPC flag flipped on for the OPC runs and restored to off; the demodata article's stock restored by the specs.
+- Sprint MOL-9 (the whole Mollie block — method selection and card fields — locked until the AGB checkbox is ticked)
+  — **IMPLEMENTED**, branch `b-7.4.x-MOL-9-agb-gates-mollie-block`, pushed; CI pending, merge on the product owner's
+  word. Plan `sprints/MOL-9-agb-gates-mollie-block.md`; `done/MOL-9-agb-gates-mollie-block.md`;
+  `reports/MOL-9-agb-gates-mollie-block.md`.
+  - `mollie-agb-gate` moved from the button to the inline block: `region` target (`inert` + `.mollie-agb-locked`,
+    dimmed, pointer fallback) and `button` target; a lone button (classic flow) keeps the MOL-11 shape. Template:
+    one region around selector + card fields. No PHP, no OPC change (OPC's section lock already makes the
+    payment-execution body inert; pinned by `MollieOpc/AgbGatesFooterBlock`).
+  - Proof: `OrderPageAgbGateTemplateTest` red → green; e2e `MollieStandard/AgbGatesMollieBlock` red → green (2),
+    classic flow keeps `AgbGatesOrderButton` green; `mollie-opc` 9 green + PayPal precondition failure;
+    `mollie-standard`: 7 specs that picked a method before ticking AGB failed as the lock intends → adapted (tick
+    first / DOM-level pick), all green on re-run.

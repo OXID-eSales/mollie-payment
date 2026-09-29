@@ -57,8 +57,9 @@ test.describe('Mollie manual capture — every method stays available', () => {
 
         const paypal = page.locator('input[name=mollieMethod][value=paypal]');
         const chosen = (await paypal.count()) ? 'paypal' : instant[0];
-        await page.locator(`input[name=mollieMethod][value=${chosen}]`).check({ force: true });
+        // MOL-9: the Mollie block is locked (inert) until the AGB box is ticked — tick first, then pick.
         await acceptTermsAndConditions(page);
+        await page.locator(`input[name=mollieMethod][value=${chosen}]`).check();
         await page.getByRole('button', { name: /zahlungspflichtig bestellen|place order|order now/i }).click();
         await page.waitForURL(/mollie\.com/i, { timeout: 45_000 });
         testInfo.annotations.push({ type: 'paid-with', description: chosen });

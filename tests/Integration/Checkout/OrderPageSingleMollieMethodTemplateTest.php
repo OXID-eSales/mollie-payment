@@ -76,7 +76,8 @@ final class OrderPageSingleMollieMethodTemplateTest extends TestCase
             trim($output),
             'the shop renderer returned the template name — no frontend theme in this environment'
         );
-        self::assertStringContainsString('data-controller="mollie-components"', $output, 'the inline block must render');
+        // MOL-9: the wrapper also carries the AGB gate controller.
+        self::assertMatchesRegularExpression('/data-controller="[^"]*\bmollie-components\b[^"]*"/', $output, 'the inline block must render');
 
         return $output;
     }

@@ -99,6 +99,8 @@ test.describe('IFRAME-04 — Mollie inline method selection (non-card redirect)'
         }
 
         await test.step('02 — automatic capture: pick PayPal → no card fields, redirects to Mollie', async () => {
+            // MOL-9: the Mollie block is locked (inert) until the AGB box is ticked — tick first, then pick.
+            await acceptTermsAndConditions(page);
             await paypal.check();
             await page.waitForTimeout(500);
             await expect(
@@ -106,7 +108,6 @@ test.describe('IFRAME-04 — Mollie inline method selection (non-card redirect)'
                 'card fields must be hidden for a non-card method',
             ).toBeHidden();
 
-            await acceptTermsAndConditions(page);
             await page.getByRole('button', { name: /order now|zahlungspflichtig bestellen|place order/i })
                 .first().click();
 

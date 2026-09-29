@@ -36,9 +36,10 @@ async function reachMollieOrderStep(page: Page, quantity: 1 | 2): Promise<void> 
     await selectMolliePaymentMethod(page);
     await continueToOrderReview(page);
     await expect(page).toHaveURL(/cl=order/);
-    // A redirect method keeps the submit a plain form POST (the card flow tokenizes client-side first).
-    await pickRedirectMollieMethod(page);
+    // MOL-9: the Mollie block is locked until the AGB box is ticked — tick first. A redirect method
+    // then keeps the submit a plain form POST (the card flow tokenizes client-side first).
     await acceptTermsAndConditions(page);
+    await pickRedirectMollieMethod(page);
 }
 
 async function orderNow(page: Page): Promise<void> {

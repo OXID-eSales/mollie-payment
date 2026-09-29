@@ -172,7 +172,10 @@ export async function pickRedirectMollieMethod(page: Page): Promise<'none' | 'pi
         return 'card-only';
     }
 
-    await ((await paypal.count()) ? paypal : nonCard).check({ force: true });
+    // MOL-9: the Mollie block is `inert` while the AGB box is unticked, so a real click cannot land;
+    // set the radio at DOM level (checked + change), which reaches the Components controller either
+    // way. Specs that drive the page as a shopper tick the AGB box before they pick a method.
+    await pickMollieMethodRadio((await paypal.count()) ? paypal : nonCard);
 
     return 'picked';
 }

@@ -70,12 +70,13 @@ test.describe('MOLLIE-ORDERS-API — Klarna full checkout (end to end)', () => {
         }
 
         await test.step('01 — order page: choose Klarna from the Mollie method selector', async () => {
+            // MOL-9: the Mollie block is locked (inert) until the AGB box is ticked — tick first, then pick.
+            await acceptTermsAndConditions(page);
             await klarna.check();
             await shot(page, testInfo, '01 — Klarna selected in the method selector');
         });
 
         await test.step('02 — place order → redirect to Klarna via Mollie (order data accepted)', async () => {
-            await acceptTermsAndConditions(page);
             await page.getByRole('button', { name: /order now|zahlungspflichtig bestellen|place order/i })
                 .first().click();
             await expect(page, 'must redirect to Mollie, not the unavailable error')

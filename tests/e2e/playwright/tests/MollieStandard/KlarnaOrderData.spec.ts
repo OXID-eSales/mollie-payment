@@ -77,8 +77,9 @@ test.describe('MOLLIE-ORDERS-API — Klarna inline via order data', () => {
         });
 
         await test.step('02 — select Klarna → redirect to the Klarna flow', async () => {
-            await klarna.check();
+            // MOL-9: the Mollie block is locked (inert) until the AGB box is ticked — tick first, then pick.
             await acceptTermsAndConditions(page);
+            await klarna.check();
             await page.getByRole('button', { name: /order now|zahlungspflichtig bestellen|place order/i })
                 .first().click();
 
