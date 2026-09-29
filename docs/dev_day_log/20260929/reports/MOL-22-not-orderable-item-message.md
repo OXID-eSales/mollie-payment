@@ -43,6 +43,12 @@ the controller's pre-dispatch buyability check". Mollie now has both.
 | `mollie-standard` suite | **21 passed, 2 Klarna skips**, fully green (incl. MOL-11 and MOL-18 specs) |
 | Gates | phpcs (CI form) clean · PHPMD clean · PHPStan: the 3 environmental findings of 2026-09-28 in untouched files, none new |
 
+## CI
+
+- `ed31369`: unit + integration green on every cell; the styles job red on one phpcs **warning** (a
+  121-character line in `NotOrderableCheckoutFailure.php`) — CI's `composer phpcs` counts warnings, the local
+  pre-commit form hides them (MOL-17 lesson, again). `65fa43a` wraps the line.
+
 ## Notes for the reviewer
 
 - "Not orderable" reaches the order step in two shapes and both are covered: `Article::isBuyable()` false (stock

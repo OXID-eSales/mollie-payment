@@ -16,4 +16,5 @@
     `MollieOpc/NotOrderableItemShowsClearMessage` (1, green); `mollie-standard` 21 green + 2 Klarna skips;
     `mollie-opc` 8 green + 1 precondition failure (PayPal inactive in `oxpayments`). Gates clean except the 3
     environmental PHPStan findings of 2026-09-28.
+  - CI: first push red only on the styles job (one 121-char line, warnings count in CI), fixed in `65fa43a`.
   - Env: OPC flag flipped on for the OPC runs and restored to off; the demodata article's stock restored by the specs.
