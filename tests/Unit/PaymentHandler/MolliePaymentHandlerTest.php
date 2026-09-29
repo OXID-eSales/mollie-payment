@@ -22,6 +22,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
+use OxidEsales\Eshop\Application\Model\Basket;
+use OxidEsales\Eshop\Core\Exception\OutOfStockException;
+use OxidEsales\PaymentBase\Adapter\Exception\ShopOrderException;
+use OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator;
+use OxidEsales\Payments\Mollie\Service\BuyabilityFailure;
+use OxidEsales\Payments\Mollie\Service\NotOrderableCheckoutFailure;
+use OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages;
 
 /**
  * MolliePaymentHandler bridges Mollie to one-page-checkout's PaymentHandlerInterface so OPC's
@@ -206,6 +213,62 @@ final class MolliePaymentHandlerTest extends TestCase
      * A dispatcher mock whose dispatch() lets the test mutate the checkout EventContext (as the
      * real handler chain would) and returns the event, matching EventDispatcherInterface.
      */
+    // ---- MOL-22: an item in the basket is not orderable (OPC footer path) -------------------
+
+    public function testProcessPaymentRefusesANotOrderableItemBeforeDispatchingWithTheShoppersSentences(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::never())->method('dispatch');
+        $basket = $this->createMock(Basket::class);
+        $context = $this->createMock(PaymentContextInterface::class);
+        $context->method('getBasket')->willReturn($basket);
+        $validator = $this->createMock(BasketBuyabilityValidator::class);
+        $validator->method('validate')->with($basket)->willReturn([new BuyabilityFailure('art-1', 'Ocean Eyes')]);
+
+        $result = (new TestableMolliePaymentHandler($dispatcher, null, null, $validator, $this->messages()))
+            ->processPayment($context);
+
+        self::assertFalse($result->isSuccess());
+        self::assertSame('MOLLIE_ITEMS_NOT_ORDERABLE', $result->getErrorCode());
+        self::assertSame('Order cannot be completed. The item "Ocean Eyes" is currently not orderable.', $result->getErrorMessage());
+    }
+
+    public function testProcessPaymentTellsTheShopperWhenTheDispatchFailsOnANotOrderableItem(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willThrowException(new ShopOrderException(
+            message: 'ERROR_MESSAGE_OUTOFSTOCK_OUTOFSTOCK',
+            errorCode: 'article_not_buyable',
+            previous: new OutOfStockException('ERROR_MESSAGE_OUTOFSTOCK_OUTOFSTOCK'),
+        ));
+        $validator = $this->createMock(BasketBuyabilityValidator::class);
+        $validator->method('validate')->willReturn([]);
+        $context = $this->createMock(PaymentContextInterface::class);
+        $context->method('getBasket')->willReturn($this->createMock(Basket::class));
+
+        $result = (new TestableMolliePaymentHandler($dispatcher, null, null, $validator, $this->messages()))
+            ->processPayment($context);
+
+        self::assertFalse($result->isSuccess());
+        self::assertSame('MOLLIE_ITEMS_NOT_ORDERABLE', $result->getErrorCode());
+        self::assertSame('Order cannot be completed.', $result->getErrorMessage());
+    }
+
+    private function messages(): NotOrderableItemsMessages
+    {
+        $messages = $this->createMock(NotOrderableItemsMessages::class);
+        $messages->method('messagesFor')->willReturnCallback(static function (NotOrderableCheckoutFailure $failure): array {
+            $sentences = ['Order cannot be completed.'];
+            foreach ($failure->productTitles() as $title) {
+                $sentences[] = sprintf('The item "%s" is currently not orderable.', $title);
+            }
+
+            return $sentences;
+        });
+
+        return $messages;
+    }
+
     private function dispatcherThatMutates(callable $mutate): EventDispatcherInterface
     {
         $dispatcher = $this->createMock(EventDispatcherInterface::class);

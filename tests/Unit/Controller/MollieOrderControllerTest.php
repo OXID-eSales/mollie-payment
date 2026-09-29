@@ -15,6 +15,9 @@ use OxidEsales\Eshop\Core\Price;
 use OxidEsales\PaymentBase\Adapter\SessionAdapterInterface;
 use OxidEsales\PaymentBase\Checkout\InFlightCheckoutAttemptResolverInterface;
 use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplay;
+use OxidEsales\Payments\Mollie\Service\BuyabilityFailure;
+use OxidEsales\Payments\Mollie\Service\NotOrderableCheckoutFailure;
+use OxidEsales\Eshop\Core\Exception\OutOfStockException;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Controller\CheckoutReturnResponder;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
@@ -333,6 +336,7 @@ final class MollieOrderControllerTest extends TestCase
         bool $basketEmpty = false,
         ?InFlightCheckoutReplay $inFlightReplay = null,
         array $userDataProblems = [],
+        ?NotOrderableCheckoutFailure $notOrderable = null,
     ): TestableMollieOrderController {
         return new TestableMollieOrderController(
             requestParams: $requestParams,
@@ -347,6 +351,7 @@ final class MollieOrderControllerTest extends TestCase
             basketEmpty: $basketEmpty,
             inFlightReplay: $inFlightReplay,
             userDataProblems: $userDataProblems,
+            notOrderable: $notOrderable,
         );
     }
 
@@ -518,6 +523,81 @@ final class MollieOrderControllerTest extends TestCase
 
         self::assertSame('payment', $controller->execute());
         self::assertTrue($controller->unavailableErrorShown);
+        self::assertSame([], $controller->redirectedTo);
+    }
+
+    // ---- MOL-22: an item in the basket is not orderable ------------------------------------
+
+    public function testExecuteWhenAnItemIsNotOrderableTellsTheShopperReturnsToBasketAndDispatchesNothing(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::never())->method('dispatch');
+        $failure = NotOrderableCheckoutFailure::fromBuyabilityFailures([new BuyabilityFailure('art-1', 'Ocean Eyes')]);
+
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, $dispatcher, notOrderable: $failure);
+
+        self::assertSame('basket', $controller->execute());
+        self::assertSame($failure, $controller->notOrderableShown);
+        self::assertFalse($controller->unavailableErrorShown);
+        self::assertSame([], $controller->redirectedTo);
+    }
+
+    public function testExecuteChecksOrderabilityAfterTheBasketHashGuardAndBeforeTheAddressCheck(): void
+    {
+        $failure = NotOrderableCheckoutFailure::fromBuyabilityFailures([new BuyabilityFailure('art-1', 'Ocean Eyes')]);
+
+        $staleHash = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            $this->createMock(EventDispatcherInterface::class),
+            requestParams: ['basketSummaryHash' => 'stale-hash'],
+            notOrderable: $failure,
+        );
+        self::assertSame('order', $staleHash->execute(), 'a changed basket is reported first');
+        self::assertNull($staleHash->notOrderableShown);
+
+        $badAddress = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            $this->createMock(EventDispatcherInterface::class),
+            userDataProblems: ['The street field is not valid.'],
+            notOrderable: $failure,
+        );
+        self::assertSame('basket', $badAddress->execute(), 'the basket has to be fixed before the address');
+        self::assertSame([], $badAddress->userDataProblemsShown);
+    }
+
+    public function testExecuteWhenAnItemIsNotOrderableDoesNotReplayAnInFlightAttempt(): void
+    {
+        $failure = NotOrderableCheckoutFailure::fromBuyabilityFailures([new BuyabilityFailure('art-1', 'Ocean Eyes')]);
+
+        $controller = $this->executeController(
+            MollieDefinitions::PAYMENT_ID,
+            $this->createMock(EventDispatcherInterface::class),
+            inFlightReplay: $this->replayNeverAsked(),
+            notOrderable: $failure,
+        );
+
+        self::assertSame('basket', $controller->execute());
+        self::assertSame([], $controller->redirectedTo);
+    }
+
+    public function testExecuteWhenTheDispatchFailsOnANotOrderableItemTellsTheShopperInsteadOfUnavailable(): void
+    {
+        // Race window: the item went out of stock between the guard and core's finalizeOrder();
+        // payment-base wraps core's exception as `article_not_buyable` and keeps it as `previous`.
+        $core = new OutOfStockException('ERROR_MESSAGE_OUTOFSTOCK_OUTOFSTOCK');
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willThrowException(new ShopOrderException(
+            message: 'ERROR_MESSAGE_OUTOFSTOCK_OUTOFSTOCK',
+            errorCode: 'article_not_buyable',
+            previous: $core,
+        ));
+
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, $dispatcher, inFlightReplay: $this->replayAnswering(null));
+
+        self::assertSame('basket', $controller->execute());
+        self::assertNotNull($controller->notOrderableShown);
+        self::assertSame($core, $controller->notOrderableShown->cause());
+        self::assertFalse($controller->unavailableErrorShown);
         self::assertSame([], $controller->redirectedTo);
     }
 

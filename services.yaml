@@ -28,6 +28,9 @@ services:
       - 'src/Mollie/Service/Factory/*'
       - 'src/Mollie/Service/Result/*'
       - 'src/Mollie/Service/ConfigurationValidationResult.php'
+      # MOL-22 value objects (built by the validator / from a throwable, never by the container)
+      - 'src/Mollie/Service/BuyabilityFailure.php'
+      - 'src/Mollie/Service/NotOrderableCheckoutFailure.php'
       - 'src/Mollie/Service/Return/*'
       # Sprint 4 (Story 6): VOs / narrow interfaces / OXID-model-bound readers excluded from
       # the autowire sweep for the same reasons Stripe excludes their counterparts — they either
@@ -179,6 +182,9 @@ services:
       # IFRAME-03: read the payment-base iframe flag so the handler can log the redirect
       # fallback once (Mollie's hosted page forbids framing — X-Frame-Options: DENY).
       $iframeSettings: '@OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface'
+      # MOL-22: a not-orderable basket item is named to the shopper instead of a raw core key.
+      $buyability: '@OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator'
+      $notOrderableMessages: '@OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages'
     tags:
       - { name: oe.payment.handler }
     public: true

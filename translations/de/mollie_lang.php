@@ -49,4 +49,7 @@ $aLang = [
     'MOLLIE_VALIDATION_LABEL_EMAIL' => 'E-Mail-Adresse',
 
     'MOLLIE_CHECKOUT_UNAVAILABLE' => 'Die Zahlung über Mollie ist derzeit nicht verfügbar. Bitte versuchen Sie es erneut oder wählen Sie eine andere Zahlungsart.',
+    // MOL-22: an item in the basket is not orderable - the lead sentence, then one per item known by title.
+    'MOLLIE_CHECKOUT_ITEMS_NOT_ORDERABLE' => 'Ihre Bestellung kann nicht abgeschlossen werden, da ein oder mehrere Artikel in Ihrem Warenkorb derzeit nicht bestellbar sind. Bitte prüfen Sie Ihren Warenkorb und entfernen Sie die betroffenen Artikel oder passen Sie die Menge an.',
+    'MOLLIE_CHECKOUT_ITEM_NOT_ORDERABLE' => 'Der Artikel "%s" ist derzeit nicht bestellbar.',
 ];

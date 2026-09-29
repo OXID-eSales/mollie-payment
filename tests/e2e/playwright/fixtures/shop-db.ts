@@ -108,3 +108,26 @@ export function confirmAgbEnabled(): boolean {
 export function setConfirmAgbEnabled(enabled: boolean): void {
     shopDbExecute(`UPDATE oxconfig SET OXVARVALUE = '${enabled ? '1' : '0'}' WHERE OXSHOPID = '1' AND OXVARNAME = 'blConfirmAGB'`);
 }
+
+/**
+ * MOL-22: an article's stock and stock flag (`oxarticles`, shop-wide). Specs make a basket item
+ * "not orderable" after the order step rendered (flag 3 = not orderable when out of stock; stock 0
+ * turns the item unbuyable, stock 1 with two ordered fails core's finalizeOrder() stock check) and
+ * restore the original values in `finally`.
+ */
+export interface ArticleStock {
+    stock: number;
+    flag: number;
+}
+
+export function articleStockOf(articleId: string): ArticleStock {
+    const row = shopDbQuery(`SELECT OXSTOCK, OXSTOCKFLAG FROM oxarticles WHERE OXID = '${articleId}'`)[0];
+    if (!row) {
+        throw new Error(`shop-db: no article ${articleId}`);
+    }
+    return { stock: Number(row[0]), flag: Number(row[1]) };
+}
+
+export function setArticleStock(articleId: string, stock: ArticleStock): void {
+    shopDbExecute(`UPDATE oxarticles SET OXSTOCK = ${stock.stock}, OXSTOCKFLAG = ${stock.flag} WHERE OXID = '${articleId}'`);
+}

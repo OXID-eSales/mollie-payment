@@ -20,6 +20,10 @@ use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
+use OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator;
+use OxidEsales\Payments\Mollie\Service\NotOrderableCheckoutFailure;
+use OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages;
+use OxidEsales\Payments\Mollie\Service\OxidLanguageTranslator;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -49,11 +53,22 @@ class MolliePaymentHandler implements PaymentHandlerInterface
      */
     private bool $iframeFallbackLogged = false;
 
+    /** Error code the footer receives when an item in the basket is not orderable (MOL-22). */
+    public const ERROR_ITEMS_NOT_ORDERABLE = 'MOLLIE_ITEMS_NOT_ORDERABLE';
+
+    private readonly BasketBuyabilityValidator $buyability;
+    private readonly NotOrderableItemsMessages $notOrderableMessages;
+
     public function __construct(
         private readonly EventDispatcherInterface $eventDispatcher,
         private readonly ?LoggerInterface $logger = null,
         private readonly ?IframeCheckoutSettingsInterface $iframeSettings = null,
+        ?BasketBuyabilityValidator $buyability = null,
+        ?NotOrderableItemsMessages $notOrderableMessages = null,
     ) {
+        $this->buyability = $buyability ?? new BasketBuyabilityValidator();
+        $this->notOrderableMessages = $notOrderableMessages
+            ?? new NotOrderableItemsMessages(new OxidLanguageTranslator());
     }
 
     public function getId(): string
@@ -75,6 +90,11 @@ class MolliePaymentHandler implements PaymentHandlerInterface
     {
         try {
             $this->prepareOxidBasket($context);
+            // MOL-22: name a not-orderable item before any contract exists (see the catch for the race).
+            $notOrderable = $this->notOrderableItems($context);
+            if ($notOrderable !== null) {
+                return $this->notOrderableResult($notOrderable);
+            }
 
             $eventContext = $this->buildEventContext($context);
             $this->eventDispatcher->dispatch(new MollieCheckoutSessionRequestEvent($eventContext));
@@ -106,12 +126,43 @@ class MolliePaymentHandler implements PaymentHandlerInterface
             $this->logger?->error('[MolliePaymentHandler] processPayment failed', [
                 'error' => $e->getMessage(),
             ]);
+            // MOL-22: core refused inside finalizeOrder() because an item is not orderable; the
+            // exception's text is a raw translation key - the footer would print it as is.
+            $notOrderable = NotOrderableCheckoutFailure::fromThrowable($e);
+            if ($notOrderable !== null) {
+                return $this->notOrderableResult($notOrderable);
+            }
 
             return PaymentHandlerResult::error(
                 'Mollie payment processing failed: ' . $e->getMessage(),
                 'MOLLIE_PAYMENT_FAILED',
             );
         }
+    }
+
+    /**
+     * MOL-22: which items of the basket being paid are not orderable right now (null = all fine).
+     */
+    private function notOrderableItems(PaymentContextInterface $context): ?NotOrderableCheckoutFailure
+    {
+        $basket = $context->getBasket();
+        if (!$basket instanceof Basket) {
+            return null;
+        }
+        $failures = $this->buyability->validate($basket);
+
+        return $failures === [] ? null : NotOrderableCheckoutFailure::fromBuyabilityFailures($failures);
+    }
+
+    /**
+     * The footer prints the error message verbatim, so it carries the translated sentences.
+     */
+    private function notOrderableResult(NotOrderableCheckoutFailure $failure): PaymentHandlerResult
+    {
+        return PaymentHandlerResult::error(
+            implode(' ', $this->notOrderableMessages->messagesFor($failure)),
+            self::ERROR_ITEMS_NOT_ORDERABLE,
+        );
     }
 
     /**
