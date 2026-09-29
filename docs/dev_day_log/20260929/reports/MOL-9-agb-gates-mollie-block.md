@@ -32,8 +32,13 @@ ticked.
 | Classic flow (iframe flag off for one run, restored) | `AgbGatesOrderButton` **green** (2) — the lone-button shape still gates; `AgbGatesMollieBlock` skips loudly (no block to lock) |
 | `MollieOpc/AgbGatesFooterBlock` | **green** (1) — the footer sits inside OPC's inert payment-execution body until the consents are ticked; a method click does not land while locked |
 | `mollie-opc` suite | **9 passed, 1 failed** — `CheckoutViaOpcPaysAndFinalizes` expects PayPal in the OPC payment select; `oe_payments_paypal` is inactive in `oxpayments` on this shop (precondition, same as the two previous sprints) |
-| `mollie-standard` suite | first run **16 passed, 7 failed, 2 Klarna skips**: every failure was a `check()` on a Mollie method radio picked BEFORE the AGB tick — the lock working as asked. Seven specs now tick the AGB box first (the real shopper order) and `pickRedirectMollieMethod()` picks at DOM level (the server-guard spec keeps the box unticked); re-run of the seven: **7 passed, 1 Klarna skip**; final full run: FINAL_RESULT |
+| `mollie-standard` suite | first run **16 passed, 7 failed, 2 Klarna skips**: every failure was a `check()` on a Mollie method radio picked BEFORE the AGB tick — the lock working as asked. Seven specs now tick the AGB box first (the real shopper order) and `pickRedirectMollieMethod()` picks at DOM level (the server-guard spec keeps the box unticked); re-run of the seven: **7 passed, 1 Klarna skip**; final full run **22 passed, 1 failed, 2 Klarna skips** — the failure was this sprint's own `AgbGatesMollieBlock`, a forced click on `#checkAgbTop` that "did not change its state" (1 of 5 runs). Both AGB gate specs now tick the box through its label with a state check (`setAgbChecked()`), re-run twice each: **8 passed** |
 | Gates | phpcs (CI form) clean · PHPMD clean · Unit 702 · PHPStan: 3 environmental findings, no PHP changed |
+
+## CI
+
+- `4c12e29`: Mollie full tests OXID CE 7.4 / 7.5 and Secret scan **green**. The follow-up commit changes e2e specs and
+  docs only.
 
 ## Notes
 

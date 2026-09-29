@@ -5,6 +5,7 @@ import {
     goToCheckoutPayment,
     selectMolliePaymentMethod,
     continueToOrderReview,
+    setAgbChecked,
 } from '../../fixtures/shop-helpers';
 import { confirmAgbEnabled, setConfirmAgbEnabled } from '../../fixtures/shop-db';
 
@@ -62,13 +63,13 @@ test.describe('MOL-9 — the AGB checkbox locks the whole Mollie block (standard
             const opacity = await region.evaluate((el) => Number(getComputedStyle(el).opacity));
             expect(opacity, 'the region is dimmed').toBeLessThan(1);
 
-            await agb.check({ force: true });
+            await setAgbChecked(page, true);
             await expect(region, 'ticked → the region is interactive').not.toHaveAttribute('inert', '');
             await expect(region).not.toHaveClass(/mollie-agb-locked/);
             await expect(page.getByRole('button', { name: ORDER_NOW }).first()).toBeEnabled();
             expect(await tryPickSecondMethod(block), 'a method can be picked once the AGB is ticked').toBe(true);
 
-            await agb.uncheck({ force: true });
+            await setAgbChecked(page, false);
             await expect(region, 'unticked again → locked again').toHaveAttribute('inert', '');
             await expect(page.getByRole('button', { name: ORDER_NOW }).first()).toBeDisabled();
         } finally {

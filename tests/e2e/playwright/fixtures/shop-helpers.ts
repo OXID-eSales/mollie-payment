@@ -151,6 +151,27 @@ export async function acceptTermsAndConditions(page: Page): Promise<void> {
 }
 
 /**
+ * Ticks or unticks the AGB checkbox the way a shopper does - a click on its label - and asserts the
+ * state. A forced click on the input itself occasionally reports "did not change its state" (seen
+ * once in five runs, MOL-9); the label click is realistic and lands, and a second attempt covers a
+ * click swallowed mid-render.
+ */
+export async function setAgbChecked(page: Page, checked: boolean): Promise<void> {
+    const agb = page.locator('#checkAgbTop');
+    const label = page.locator('label[for="checkAgbTop"]');
+    for (let attempt = 0; attempt < 2; attempt++) {
+        if ((await agb.isChecked()) === checked) {
+            return;
+        }
+        await label.click();
+        if ((await agb.isChecked()) === checked) {
+            return;
+        }
+    }
+    await expect(agb, `AGB checkbox ${checked ? 'ticked' : 'unticked'}`).toBeChecked({ checked });
+}
+
+/**
  * On inline-components shops the order page lists the Mollie methods; the CARD radio hands
  * submit to the Components JS (client-side tokenization), which never POSTs the form. Specs
  * that need the server-side `cl=order&fnc=execute` path pick a redirect method instead —

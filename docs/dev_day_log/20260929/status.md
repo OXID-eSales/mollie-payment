@@ -19,7 +19,7 @@
   - CI: first push red only on the styles job (one 121-char line, warnings count in CI), fixed in `65fa43a`.
   - Env: OPC flag flipped on for the OPC runs and restored to off; the demodata article's stock restored by the specs.
 - Sprint MOL-9 (the whole Mollie block — method selection and card fields — locked until the AGB checkbox is ticked)
-  — **IMPLEMENTED**, branch `b-7.4.x-MOL-9-agb-gates-mollie-block`, pushed; CI pending, merge on the product owner's
+  — **IMPLEMENTED**, branch `b-7.4.x-MOL-9-agb-gates-mollie-block`, pushed; CI green on `4c12e29`, merge on the product owner's
   word. Plan `sprints/MOL-9-agb-gates-mollie-block.md`; `done/MOL-9-agb-gates-mollie-block.md`;
   `reports/MOL-9-agb-gates-mollie-block.md`.
   - `mollie-agb-gate` moved from the button to the inline block: `region` target (`inert` + `.mollie-agb-locked`,
@@ -29,4 +29,5 @@
   - Proof: `OrderPageAgbGateTemplateTest` red → green; e2e `MollieStandard/AgbGatesMollieBlock` red → green (2),
     classic flow keeps `AgbGatesOrderButton` green; `mollie-opc` 9 green + PayPal precondition failure;
     `mollie-standard`: 7 specs that picked a method before ticking AGB failed as the lock intends → adapted (tick
-    first / DOM-level pick), all green on re-run.
+    first / DOM-level pick), all green on re-run; final full run 22 green + the AGB tick flake (forced click on the
+    box, 1 in 5) hardened via a label click with state check in both gate specs (8/8 on repeat).

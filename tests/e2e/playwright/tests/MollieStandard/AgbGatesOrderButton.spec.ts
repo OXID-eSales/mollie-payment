@@ -5,6 +5,7 @@ import {
     goToCheckoutPayment,
     selectMolliePaymentMethod,
     continueToOrderReview,
+    setAgbChecked,
 } from '../../fixtures/shop-helpers';
 import { confirmAgbEnabled, setConfirmAgbEnabled } from '../../fixtures/shop-db';
 
@@ -60,10 +61,10 @@ test.describe('MOL-11 — AGB checkbox gates the Mollie "Order now" button (stan
             expect(executePosts, 'a click on the inactive button must not POST fnc=execute').toEqual([]);
             expect(page.url()).toMatch(/cl=order/);
 
-            await agb.check({ force: true });
+            await setAgbChecked(page, true);
             await expect(orderNow, 'ticked AGB → button active').toBeEnabled();
 
-            await agb.uncheck({ force: true });
+            await setAgbChecked(page, false);
             await expect(orderNow, 'unticked again → button inactive again').toBeDisabled();
         } finally {
             setConfirmAgbEnabled(originalFlag);
