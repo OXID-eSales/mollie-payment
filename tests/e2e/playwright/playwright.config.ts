@@ -48,6 +48,12 @@ export default defineConfig({
             use: { ...devices['Desktop Chrome'] },
         },
         {
+            // Admin-side specs (module settings, order Payment tab) — need ADMIN_USER_EMAIL / _PASSWORD.
+            name: 'mollie-admin',
+            testMatch: 'tests/MollieAdmin/*.spec.ts',
+            use: { ...devices['Desktop Chrome'] },
+        },
+        {
             // Diagnostics: record and print (DB, Mollie API, admin panel), assert nothing, create one
             // paid order per method. Run on purpose, never as part of a regression project.
             name: 'mollie-diagnostic',

@@ -6,6 +6,16 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- A "Help" group at the end of the module Settings tab, after "Logging" (MOL-10): a translated table
+  (EN/DE by admin language) of every OXID contract state a Mollie checkout can reach, what it means, and the
+  Mollie payment status it corresponds to (`not_finished` → `open`, `pending` → `pending`, `authorized` →
+  `authorized`, `ready_to_commit` → `paid`, `committed`/`fulfilled` → shop-internal, `cancelled` → `canceled`,
+  `expired` → `expired`, `failed` → `failed`). The rows come from `Admin\ContractStateHelp`, tested against
+  payment-base's `ContractState`.
+
+### Changed
+- The admin order Payment tab labels the contract state "OXID Contract Status" ("OXID-Vertragsstatus") instead
+  of "State" (MOL-10); the Help table uses the same label.
 - The whole Mollie block on the standard order step — the payment-method selection and the inline card
   fields, not only "Order now" — stays locked (`inert`, dimmed) until the AGB checkbox is ticked and locks
   again when it is unticked (MOL-9); with `blConfirmAGB` off nothing is locked. The `mollie-agb-gate`
