@@ -68,6 +68,7 @@ final class AdminActionBoundsTest extends TestCase
     {
         $contract = $this->createMock(PaymentContractInterface::class);
         $contract->method('getProviderOrderId')->willReturn('tr_2');
+        $contract->method('getAmount')->willReturn(100.0);
         $this->paymentsAdapter->method('getPayment')->with('tr_2')->willReturn(new MolliePaymentDto(
             id: 'tr_2',
             status: 'authorized',
@@ -76,6 +77,57 @@ final class AdminActionBoundsTest extends TestCase
         ));
 
         self::assertSame(30.0, $this->bounds->captureBound($contract));
+    }
+
+    // ---- Capture section stale after a capture (2026-10-01): the contract knows what was captured ----
+
+    public function testCaptureBound_AfterAFullCaptureRecordedLocally_IsZeroWhileMollieStillShowsTheHold(): void
+    {
+        $contract = $this->capturedContract('tr_full', amount: 100.0, captured: 100.0);
+        $this->paymentsAdapter->method('getPayment')->with('tr_full')->willReturn(new MolliePaymentDto(
+            id: 'tr_full',
+            status: 'authorized',
+            amount: MollieAmountDto::fromComponents('EUR', 100.0),
+            amountRemaining: 100.0,
+        ));
+
+        self::assertSame(0.0, $this->bounds->captureBound($contract), 'what the shop captured is never offered again');
+    }
+
+    public function testCaptureBound_AfterAPartialCaptureRecordedLocally_IsTheLocalRemainder(): void
+    {
+        $contract = $this->capturedContract('tr_part', amount: 100.0, captured: 40.0);
+        $this->paymentsAdapter->method('getPayment')->with('tr_part')->willReturn(new MolliePaymentDto(
+            id: 'tr_part',
+            status: 'authorized',
+            amount: MollieAmountDto::fromComponents('EUR', 100.0),
+            amountRemaining: 100.0,
+        ));
+
+        self::assertSame(60.0, $this->bounds->captureBound($contract));
+    }
+
+    public function testCaptureBound_NeverExceedsWhatMollieSaysIsCapturable(): void
+    {
+        $contract = $this->capturedContract('tr_cap', amount: 100.0, captured: 0.0);
+        $this->paymentsAdapter->method('getPayment')->with('tr_cap')->willReturn(new MolliePaymentDto(
+            id: 'tr_cap',
+            status: 'authorized',
+            amount: MollieAmountDto::fromComponents('EUR', 100.0),
+            amountRemaining: 30.0,
+        ));
+
+        self::assertSame(30.0, $this->bounds->captureBound($contract));
+    }
+
+    private function capturedContract(string $providerOrderId, float $amount, float $captured): PaymentContractInterface
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getProviderOrderId')->willReturn($providerOrderId);
+        $contract->method('getAmount')->willReturn($amount);
+        $contract->method('getCapturedAmount')->willReturn($captured);
+
+        return $contract;
     }
 
     public function testRefundBound_WithoutProviderOrderId_IsZero(): void

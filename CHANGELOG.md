@@ -48,6 +48,11 @@ All notable changes to this module are documented here. Format follows
   Stripe module (pinned by a unit test); both modules depend on payment-base only.
 
 ### Fixed
+- The admin Payment tab offered a captured amount for capture again (and the Cancel action) right after a
+  successful manual capture: the Capture section was gated on Mollie's live payment, which still reads
+  `authorized` with the old remaining amount a moment after the capture. The capture bound is now capped by the
+  contract's own uncaptured remainder (what the shop captured is never offered twice; Mollie's figure still caps
+  it) and Cancel follows the bound, so the next render shows the updated captured and capturable amounts.
 - A basket item that is not orderable (turned unbuyable, out of stock for the ordered quantity, removed) no
   longer surfaces as `MOLLIE_CHECKOUT_UNAVAILABLE` / "Mollie is not available right now" (MOL-22). The standard
   order step and the one-page-checkout footer both tell the shopper that the order cannot be completed because

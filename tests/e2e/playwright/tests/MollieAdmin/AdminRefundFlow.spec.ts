@@ -12,6 +12,8 @@ import {
     continueToOrderReview,
     completeMollieTestPayment,
     loginShopAdmin,
+    acceptTermsAndConditions,
+    pickRedirectMollieMethod,
 } from '../../fixtures/shop-helpers';
 
 /**
@@ -53,6 +55,10 @@ test.describe('Mollie admin partial refund flow', () => {
         await goToCheckoutPayment(page);
         await selectMolliePaymentMethod(page, 'paypal');
         await continueToOrderReview(page);
+        // MOL-11 / MOL-9: the Mollie block and "Order now" are locked until the AGB box is ticked;
+        // then a redirect method (PayPal preferred) keeps the submit a plain form POST.
+        await acceptTermsAndConditions(page);
+        await pickRedirectMollieMethod(page);
 
         // Record stock before order (for later verification)
         // Note: In a real test, you would fetch stock from the product page before adding to cart
@@ -270,6 +276,8 @@ test.describe('Mollie checkout (standalone)', () => {
         await goToCheckoutPayment(page);
         await selectMolliePaymentMethod(page, 'paypal');
         await continueToOrderReview(page);
+        await acceptTermsAndConditions(page);
+        await pickRedirectMollieMethod(page);
 
         await page.getByRole('button', { name: /zahlungspflichtig bestellen|place order|order now/i }).click();
         await completeMollieTestPayment(page, 'paid');

@@ -33,9 +33,19 @@ final class AdminActionBounds implements AdminActionBoundsInterface
     ) {
     }
 
+    /**
+     * What may still be captured: never more than Mollie's live payment allows, and never what the
+     * shop has already captured. Right after "Execute capture" Mollie's payment resource still reads
+     * `authorized` with the old remaining amount (the capture is booked, the payment follows a moment
+     * later), so the live figure alone offered the same amount a second time; the contract knows
+     * better the moment CaptureService wrote the captured amount (2026-10-01).
+     */
     public function captureBound(PaymentContractInterface $contract): float
     {
-        return $this->snapshots->snapshot($contract)?->capturableAmount() ?? 0.0;
+        $live = $this->snapshots->snapshot($contract)?->capturableAmount() ?? 0.0;
+        $remainder = round($contract->getAmount() - ($contract->getCapturedAmount() ?? 0.0), 2);
+
+        return max(0.0, min($live, $remainder));
     }
 
     public function refundBound(PaymentContractInterface $contract): float
