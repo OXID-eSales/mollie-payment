@@ -63,7 +63,10 @@
                  data-mollie-components-locale-value="{{ oViewConf.getMollieComponentsLocale() }}"
                  data-mollie-components-debug-value="{{ oViewConf.isMollieDebugLoggingEnabled() ? 'true' : 'false' }}">
 
-              <div data-mollie-agb-gate-target="region">
+              {# The method list is a card like the Summary and the Agreements above it (2026-10-01):
+                 same `card mb-3`, same header classes as the order sections on the left. The AGB
+                 gate's `region` is the whole card, so the header dims with the list while locked. #}
+              <div class="card mb-3" data-mollie-agb-gate-target="region" data-testid="mollie-method-card">
                 {% if mollieMethods|length == 1 %}
                     {# One enabled method is not a choice (the rule payment-base applies to the
                        payment and shipping cards): name it, don't offer a selector. The field stays
@@ -71,58 +74,72 @@
                        with the core order form and the Components controller still reads
                        `input[name=mollieMethod]:checked` to decide on the card flow. #}
                     {% set m = mollieMethods|first %}
-                    <input type="radio" name="mollieMethod" id="mollieMethod_{{ m.id }}" value="{{ m.id }}"
-                           form="orderConfirmAgbBottom" checked hidden
-                           data-mollie-order-method="fixed">
-                    <p class="mb-3 d-flex align-items-center" data-mollie-order-card="method">
-                        <span class="fw-bold me-2">{{ translate({ ident: "PAYMENT_METHOD" }) }}:</span>
-                        {% if m.image %}
-                            <img src="{{ m.image }}" alt="" width="28" height="28" class="mollie-method-icon me-2">
-                        {% endif %}
-                        {{ m.name }}
-                    </p>
+                    <h2 class="h4 card-header card-title card-header-edit d-flex justify-content-between align-items-center">
+                        {{ translate({ ident: "PAYMENT_METHOD" }) }}
+                    </h2>
+                    <div class="card-body">
+                        <input type="radio" name="mollieMethod" id="mollieMethod_{{ m.id }}" value="{{ m.id }}"
+                               form="orderConfirmAgbBottom" checked hidden
+                               data-mollie-order-method="fixed">
+                        <p class="mb-0 d-flex align-items-center" data-mollie-order-card="method">
+                            {% if m.image %}
+                                <img src="{{ m.image }}" alt="" width="28" height="28" class="mollie-method-icon me-2">
+                            {% endif %}
+                            {{ m.name }}
+                        </p>
                 {% else %}
-                    <p class="mb-2 fw-bold">{{ translate({ ident: "MOLLIE_CHOOSE_METHOD" }) }}</p>
-                    <div class="mollie-methods mb-3">
-                        {% for m in mollieMethods %}
-                            <div class="form-check d-flex align-items-center py-1">
-                                {# name=mollieMethod + form= means the chosen method submits natively with
-                                   the core order form; no JS needed to carry it for redirect methods. #}
-                                <input class="form-check-input me-2" type="radio" name="mollieMethod"
-                                       id="mollieMethod_{{ m.id }}" value="{{ m.id }}"
-                                       form="orderConfirmAgbBottom"
-                                       {% if loop.first %}checked{% endif %}
-                                       data-action="change->mollie-components#flowChanged">
-                                <label class="form-check-label d-flex align-items-center" for="mollieMethod_{{ m.id }}">
-                                    {% if m.image %}
-                                        <img src="{{ m.image }}" alt="" width="28" height="28" class="mollie-method-icon me-2">
-                                    {% endif %}
-                                    {{ m.name }}
-                                </label>
-                            </div>
-                        {% endfor %}
-                    </div>
+                    <h2 class="h4 card-header card-title card-header-edit d-flex justify-content-between align-items-center">
+                        {{ translate({ ident: "MOLLIE_CHOOSE_METHOD" }) }}
+                    </h2>
+                    <div class="card-body">
+                        <div class="mollie-methods">
+                            {% for m in mollieMethods %}
+                                <div class="form-check d-flex align-items-center py-1">
+                                    {# name=mollieMethod + form= means the chosen method submits natively with
+                                       the core order form; no JS needed to carry it for redirect methods. #}
+                                    <input class="form-check-input me-2" type="radio" name="mollieMethod"
+                                           id="mollieMethod_{{ m.id }}" value="{{ m.id }}"
+                                           form="orderConfirmAgbBottom"
+                                           {% if loop.first %}checked{% endif %}
+                                           data-action="change->mollie-components#flowChanged">
+                                    <label class="form-check-label d-flex align-items-center" for="mollieMethod_{{ m.id }}">
+                                        {% if m.image %}
+                                            <img src="{{ m.image }}" alt="" width="28" height="28" class="mollie-method-icon me-2">
+                                        {% endif %}
+                                        {{ m.name }}
+                                    </label>
+                                </div>
+                            {% endfor %}
+                        </div>
                 {% endif %}
 
-                {# Inline card fields — shown by the controller only when "creditcard" is selected. #}
-                <div data-mollie-components-target="fields" class="mollie-card-fields mb-3" style="display: none;">
-                    <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_NUMBER" }) }}</label>
-                    <div data-mollie-components-target="cardNumber" class="mollie-field form-control mb-2"></div>
+                        {# Inline card fields — shown by the controller only when "creditcard" is selected.
+                           Mollie hosts the inputs in its iframes and ships them without a placeholder, so
+                           the card-number mount carries one (`data-placeholder`, drawn by CSS) that the
+                           controller hides while the field is focused or filled. #}
+                        <div data-mollie-components-target="fields" class="mollie-card-fields mt-3" style="display: none;">
+                            <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_NUMBER" }) }}</label>
+                            <div data-mollie-components-target="cardNumber" class="mollie-field form-control mb-2"
+                                 data-placeholder="{{ translate({ ident: "MOLLIE_CARD_NUMBER_PLACEHOLDER" }) }}"></div>
 
-                    <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_HOLDER" }) }}</label>
-                    <div data-mollie-components-target="cardHolder" class="mollie-field form-control mb-2"></div>
+                            {# Not "(optional)": Mollie Components refuse to tokenize without a card holder
+                               (measured 2026-10-01 — every other field valid, holder empty → "Ein oder
+                               mehrere Felder sind ungültig"). #}
+                            <label class="form-label" data-testid="mollie-card-holder-label">{{ translate({ ident: "MOLLIE_CARD_HOLDER" }) }}</label>
+                            <div data-mollie-components-target="cardHolder" class="mollie-field form-control mb-2"></div>
 
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_EXPIRY" }) }}</label>
-                            <div data-mollie-components-target="expiryDate" class="mollie-field form-control"></div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_CVC" }) }}</label>
-                            <div data-mollie-components-target="verificationCode" class="mollie-field form-control"></div>
+                            <div class="row">
+                                <div class="col">
+                                    <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_EXPIRY" }) }}</label>
+                                    <div data-mollie-components-target="expiryDate" class="mollie-field form-control"></div>
+                                </div>
+                                <div class="col">
+                                    <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_CVC" }) }}</label>
+                                    <div data-mollie-components-target="verificationCode" class="mollie-field form-control"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
               </div>
 
                 <div class="alert alert-danger" role="alert" style="display: none;"
@@ -144,7 +161,14 @@
             </div>
 
             <style>
-                .mollie-field { min-height: 2.6rem; padding-top: .55rem; }
+                .mollie-field { position: relative; min-height: 2.6rem; padding-top: .55rem; }
+                /* The shop's placeholder for Mollie's placeholder-less hosted input; the controller
+                   drops it (is-focused / is-filled) as soon as the shopper types. */
+                .mollie-field[data-placeholder]::before {
+                    content: attr(data-placeholder); position: absolute; left: .75rem; right: .75rem; top: .55rem;
+                    color: #6c757d; opacity: .65; pointer-events: none; white-space: nowrap; overflow: hidden;
+                }
+                .mollie-field.is-focused::before, .mollie-field.is-filled::before { content: none; }
                 .mollie-method-icon { object-fit: contain; }
                 /* MOL-9: the region is `inert` while locked; this dims it and is the pointer fallback. */
                 .mollie-agb-locked { opacity: .5; pointer-events: none; }

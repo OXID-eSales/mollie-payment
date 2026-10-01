@@ -16,6 +16,7 @@ $aLang = [
     'MOLLIE_CARD_HOLDER' => 'Karteninhaber',
     'MOLLIE_CARD_EXPIRY' => 'Ablaufdatum',
     'MOLLIE_CARD_CVC' => 'Prüfnummer (CVC)',
+    'MOLLIE_CARD_NUMBER_PLACEHOLDER' => '0000 0000 0000 0000',
 
     // Meldungen nach der Rückkehr von Mollie (Storefront).
     'MOLLIE_RETURN_PENDING' => 'Ihre Zahlung wird verarbeitet. Wir bestätigen Ihre Bestellung, sobald Mollie die Zahlung abgeschlossen hat.',

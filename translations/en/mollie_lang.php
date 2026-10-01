@@ -16,6 +16,7 @@ $aLang = [
     'MOLLIE_CARD_HOLDER' => 'Cardholder name',
     'MOLLIE_CARD_EXPIRY' => 'Expiry date',
     'MOLLIE_CARD_CVC' => 'CVC',
+    'MOLLIE_CARD_NUMBER_PLACEHOLDER' => '0000 0000 0000 0000',
 
     // Post-checkout return messages (shown on the storefront after returning from Mollie).
     'MOLLIE_RETURN_PENDING' => 'Your payment is being processed. We will confirm your order as soon as Mollie completes the payment.',

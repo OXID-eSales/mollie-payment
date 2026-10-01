@@ -13,3 +13,10 @@
     remaining amount right after a capture. Fix: capture bound capped by the contract's uncaptured remainder; Cancel
     follows the bound. Red → green unit (+4) and e2e `MollieAdmin/CaptureSectionAfterCapture` (new inline-card fixture).
   - Stripe not affected (synchronous capture, cache reset).
+- Sprint "Order page: Mollie method list as a card, card-number placeholder, card holder (optional?)" — **IMPLEMENTED**,
+  branch `b-7.4.x-order-page-method-card`, pushed; CI pending, merge on the product owner's word. Plan
+  `sprints/order-page-method-card.md`; `done/…`; `reports/…`.
+  - Method list + card fields are a `card` with the order sections' header classes, same layer as Summary/AGB;
+    `0000 0000 0000 0000` placeholder (shop-side; Mollie has no placeholder-text option), digits grouped by Mollie
+    itself. Card holder NOT labelled optional: Mollie refuses to tokenize without it (measured). e2e
+    `MollieStandard/OrderPageMethodCard` + 4 regression specs green.

@@ -28,6 +28,16 @@ const MOLLIE_JS = 'https://js.mollie.com/v1/mollie.js'
 
 const FIELDS = ['cardNumber', 'cardHolder', 'expiryDate', 'verificationCode']
 
+// Text inside Mollie's iframes follows the theme's form controls (apex: 1rem body text, #212529);
+// everything around the iframe (border, padding, background) is the host's `.form-control`.
+const COMPONENT_STYLES = {
+  base: {
+    fontSize: '16px',
+    color: '#212529',
+    '::placeholder': { color: '#6c757d' },
+  },
+}
+
 export default class extends Controller {
   static targets = ['cardNumber', 'cardHolder', 'expiryDate', 'verificationCode', 'error', 'token', 'fields']
   static values = {
@@ -146,9 +156,11 @@ export default class extends Controller {
       if (!mount) {
         continue
       }
-      const component = this._mollie.createComponent(name)
+      const component = this._mollie.createComponent(name, { styles: COMPONENT_STYLES })
       component.mount(mount)
-      component.addEventListener('change', (event) => this._fieldChanged(name, event))
+      component.addEventListener('focus', () => mount.classList.add('is-focused'))
+      component.addEventListener('blur', () => mount.classList.remove('is-focused'))
+      component.addEventListener('change', (event) => this._fieldChanged(name, event, mount))
       this._components[name] = component
     }
     this._debug('Mollie Components mounted', Object.keys(this._components))
@@ -232,7 +244,15 @@ export default class extends Controller {
     form.requestSubmit ? form.requestSubmit() : form.submit()
   }
 
-  _fieldChanged(name, event) {
+  /**
+   * Mollie ships its hosted inputs without a placeholder; the mount carries the shop's own
+   * (`data-placeholder`, drawn by CSS). `is-filled` / `is-focused` on the mount hide it while the
+   * shopper is in the field or has typed into it (`dirty` is Mollie's "has content").
+   */
+  _fieldChanged(name, event, mount) {
+    if (mount) {
+      mount.classList.toggle('is-filled', !!(event && event.dirty))
+    }
     if (event && event.error && event.touched) {
       this._showError(event.error)
       return

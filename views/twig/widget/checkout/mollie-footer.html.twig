@@ -66,7 +66,8 @@
         {# Inline card fields — shown by the controller only when "creditcard" is selected. #}
         <div data-mollie-checkout-footer-target="cardFields" class="mollie-card-fields mb-3" style="display: none;">
             <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_NUMBER" }) }}</label>
-            <div data-mollie-checkout-footer-target="cardNumber" class="mollie-field form-control mb-2"></div>
+            <div data-mollie-checkout-footer-target="cardNumber" class="mollie-field form-control mb-2"
+                 data-placeholder="{{ translate({ ident: "MOLLIE_CARD_NUMBER_PLACEHOLDER" }) }}"></div>
 
             <label class="form-label">{{ translate({ ident: "MOLLIE_CARD_HOLDER" }) }}</label>
             <div data-mollie-checkout-footer-target="cardHolder" class="mollie-field form-control mb-2"></div>
@@ -111,6 +112,8 @@
 
   var MOLLIE_JS = 'https://js.mollie.com/v1/mollie.js';
   var FIELDS = ['cardNumber', 'cardHolder', 'expiryDate', 'verificationCode'];
+  // Match the theme's form controls inside Mollie's iframes (same values as the order page).
+  var MOLLIE_COMPONENT_STYLES = { base: { fontSize: '16px', color: '#212529', '::placeholder': { color: '#6c757d' } } };
   var BaseController = opc.Controller;
 
   // Kept on window, not on the controller: OPC re-injects this footer via
@@ -304,6 +307,15 @@ class MollieCheckoutFooterController extends BaseController {
       }
     }
 
+    /** is-focused / is-filled on the mount drive the shop-side placeholder (CSS) of the card number. */
+    _bindFieldState(mount, component) {
+      component.addEventListener('focus', function () { mount.classList.add('is-focused'); });
+      component.addEventListener('blur', function () { mount.classList.remove('is-focused'); });
+      component.addEventListener('change', function (event) {
+        mount.classList.toggle('is-filled', !!(event && event.dirty));
+      });
+    }
+
     async _tokenize() {
       await this._ensureComponents();
       if (!this._mollie) {
@@ -362,8 +374,9 @@ class MollieCheckoutFooterController extends BaseController {
           var mount = this[name + 'Target'] ? this[name + 'Target'] : null;
           if (!mount) continue;
           mount.innerHTML = ''; // drop any leftover component before mounting (belt-and-suspenders)
-          var component = this._mollie.createComponent(name);
+          var component = this._mollie.createComponent(name, { styles: MOLLIE_COMPONENT_STYLES });
           component.mount(mount);
+          this._bindFieldState(mount, component);
           this._components[name] = component;
         }
         this._mdbg('[MollieCheckoutFooter] Components mounted', Object.keys(this._components));
@@ -609,7 +622,14 @@ class MollieCheckoutFooterController extends BaseController {
 </script>
 
 <style>
-  .checkout-footer-mollie .mollie-field { min-height: 2.6rem; padding-top: .55rem; }
+  .checkout-footer-mollie .mollie-field { position: relative; min-height: 2.6rem; padding-top: .55rem; }
+  /* The shop's placeholder for Mollie's placeholder-less hosted input (same rules as the order page). */
+  .checkout-footer-mollie .mollie-field[data-placeholder]::before {
+    content: attr(data-placeholder); position: absolute; left: .75rem; right: .75rem; top: .55rem;
+    color: #6c757d; opacity: .65; pointer-events: none; white-space: nowrap; overflow: hidden;
+  }
+  .checkout-footer-mollie .mollie-field.is-focused::before,
+  .checkout-footer-mollie .mollie-field.is-filled::before { content: none; }
   .checkout-footer-mollie .mollie-method-icon { object-fit: contain; }
   .checkout-footer-mollie button[disabled] { opacity: 0.6; cursor: not-allowed; }
   .checkout-footer-mollie button.processing { opacity: 0.8; }
