@@ -139,6 +139,23 @@ final class MolliePanelViewDataBuilderTest extends TestCase
         self::assertTrue($viewData['isCancellable']);
     }
 
+    /** Capture section stale after a capture (2026-10-01): bound 0 hides cancel too, hold or not. */
+    public function testBuild_FullyCapturedHoldStillAuthorizedAtMollie_NeitherCapturableNorCancellable(): void
+    {
+        $order = $this->stubOrder('order-captured');
+        $contract = $this->committedContract();
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('captureBound')->willReturn(0.0);
+        $this->bounds->method('refundBound')->willReturn(0.0);
+        $this->bounds->method('isAuthorizedHold')->willReturn(true);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+
+        $viewData = $this->builder->build($order);
+
+        self::assertFalse($viewData['isCapturable']);
+        self::assertFalse($viewData['isCancellable'], 'nothing left to capture, nothing left to cancel');
+    }
+
     public function testBuild_WhenNotAuthorizedHold_NotCapturableOrCancellable(): void
     {
         // No live authorized hold (e.g. already captured/paid): buttons hidden even if a stale

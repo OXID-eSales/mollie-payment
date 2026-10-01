@@ -93,7 +93,9 @@ class MolliePanelViewDataBuilder
             'refundBoundFormatted' => $this->money($refundBound),
             'isCapturable' => $authorizedHold && $captureBound > 0.0,
             'isRefundable' => $contract->getState()->isFulfilled() && $refundBound > 0.0,
-            'isCancellable' => $authorizedHold,
+            // Nothing left to capture means nothing left to cancel either - a hold the shop fully
+            // captured a moment ago still reads `authorized` at Mollie (2026-10-01).
+            'isCancellable' => $authorizedHold && $captureBound > 0.0,
             'dashboardUrl' => $this->dashboardUrl($providerOrderId),
             'transactions' => $transactions,
             'errorMessage' => null,
