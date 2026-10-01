@@ -44,6 +44,8 @@ $aLang = [
     'MOLLIE_CAPTURE_REASON' => 'Reason',
     'MOLLIE_CAPTURE_SUBMIT' => 'Execute capture',
     'MOLLIE_CAPTURE_CONFIRM' => 'Capture the authorized amount via Mollie?',
+    'MOLLIE_CAPTURE_PARTIAL_HINT' => 'A partial capture settles only the entered amount. Depending on the payment method, Mollie releases the remainder to the customer at once or keeps it authorized for further captures until you cancel the authorization.',
+    'MOLLIE_ADMIN_CAPTURE_FAILED' => 'The capture was not executed: %s',
 
     'MOLLIE_REFUND' => 'Refund',
     'MOLLIE_REFUNDABLE_AMOUNT' => 'Refundable amount',
@@ -56,7 +58,10 @@ $aLang = [
     'MOLLIE_CANCEL' => 'Cancel authorization',
     'MOLLIE_CANCEL_REASON' => 'Reason',
     'MOLLIE_CANCEL_SUBMIT' => 'Cancel authorization',
-    'MOLLIE_CANCEL_CONFIRM' => 'Cancel the uncaptured authorization via Mollie?',
+    'MOLLIE_CANCEL_CONFIRM' => 'Release the uncaptured authorization via Mollie?',
+    'MOLLIE_CANCEL_RELEASE_AMOUNT' => 'Uncaptured amount to release',
+    'MOLLIE_CANCEL_PARTIAL_NOTE' => 'A part of the authorization has already been captured. Cancelling releases only the uncaptured remainder; the captured amount stays booked and can be refunded.',
+    'MOLLIE_ADMIN_CANCEL_FAILED' => 'The authorization was not released: %s',
 
     // Sprint 7 Story 3 — admin amount validation messages
     // (AdminAmountValidationMessageFormatter).

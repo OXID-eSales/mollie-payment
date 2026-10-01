@@ -228,6 +228,23 @@ final class MollieAdapterTest extends TestCase
         self::assertSame('canceled', $dto->status);
     }
 
+    public function testReleaseAuthorization_DelegatesToSdk(): void
+    {
+        $this->payments->expects(self::once())->method('releaseAuthorization')->with('tr_abc');
+
+        (new MollieAdapter($this->client))->releaseAuthorization('tr_abc');
+    }
+
+    public function testReleaseAuthorization_ConvertsSdkExceptions(): void
+    {
+        $this->payments->method('releaseAuthorization')
+            ->willThrowException(new ApiException('Payment can no longer be released'));
+
+        $this->expectException(MollieAdapterException::class);
+
+        (new MollieAdapter($this->client))->releaseAuthorization('tr_abc');
+    }
+
     public function testCreateCapture_OnNonCapturableMethod_ThrowsCaptureNotSupported(): void
     {
         $this->payments->method('get')->willReturn($this->payment(['id' => 'tr_abc', 'status' => 'paid']));

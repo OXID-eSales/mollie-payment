@@ -57,6 +57,11 @@ final class LazyMollieAdapter implements
         return $this->adapter()->cancelPayment($paymentId);
     }
 
+    public function releaseAuthorization(string $paymentId): void
+    {
+        $this->adapter()->releaseAuthorization($paymentId);
+    }
+
     public function fetchByWebhookId(string $paymentId): MolliePaymentDto
     {
         return $this->adapter()->fetchByWebhookId($paymentId);

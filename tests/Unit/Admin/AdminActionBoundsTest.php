@@ -9,12 +9,14 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Admin;
 
+use OxidEsales\PaymentBase\Contract\ContractState;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminActionBounds;
 use OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
+use OxidEsales\Payments\Mollie\Service\AuthorizationReleaseMarker;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -120,12 +122,34 @@ final class AdminActionBoundsTest extends TestCase
         self::assertSame(30.0, $this->bounds->captureBound($contract));
     }
 
-    private function capturedContract(string $providerOrderId, float $amount, float $captured): PaymentContractInterface
+    // ---- a released or cancelled hold is gone on the shop's say-so (release is asynchronous) ----
+
+    public function testCaptureBound_AfterTheRemainderWasReleased_IsZeroWhileMollieStillShowsTheHold(): void
+    {
+        $contract = $this->capturedContract('tr_rel', amount: 100.0, captured: 40.0);
+        $contract->method('getMetadata')->with(AuthorizationReleaseMarker::METADATA_KEY)->willReturn(['amount' => 60.0]);
+        $this->paymentsAdapter->expects(self::never())->method('getPayment');
+
+        self::assertSame(0.0, $this->bounds->captureBound($contract));
+    }
+
+    public function testCaptureBound_OfACancelledContract_IsZeroWhileMollieStillShowsTheHold(): void
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getProviderOrderId')->willReturn('tr_can');
+        $contract->method('getState')->willReturn(ContractState::cancelled());
+        $this->paymentsAdapter->expects(self::never())->method('getPayment');
+
+        self::assertSame(0.0, $this->bounds->captureBound($contract));
+    }
+
+    private function capturedContract(string $providerOrderId, float $amount, float $captured): PaymentContractInterface&MockObject
     {
         $contract = $this->createMock(PaymentContractInterface::class);
         $contract->method('getProviderOrderId')->willReturn($providerOrderId);
         $contract->method('getAmount')->willReturn($amount);
         $contract->method('getCapturedAmount')->willReturn($captured);
+        $contract->method('getState')->willReturn(ContractState::committed());
 
         return $contract;
     }

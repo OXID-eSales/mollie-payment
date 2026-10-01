@@ -11,18 +11,22 @@ namespace OxidEsales\Payments\Mollie\EventSystem\Handler;
 
 use DomainException;
 use OxidEsales\PaymentBase\EventSystem\Handler\HandlerInterface;
+use OxidEsales\Payments\Mollie\Admin\AdminActionFailureReporter;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCancelAuthorizationRequestEvent;
 use OxidEsales\Payments\Mollie\Service\CancelAuthorizationServiceInterface;
 use Throwable;
 
 /**
  * Delegates an admin-initiated cancel-authorization request to
- * {@see CancelAuthorizationServiceInterface}.
+ * {@see CancelAuthorizationServiceInterface}; a refusal is reported to the operator through
+ * {@see AdminActionFailureReporter} (the broker hands the agnostic event back, never this one).
  */
 final class MollieCancelAuthorizationRequestHandler implements HandlerInterface
 {
-    public function __construct(private readonly CancelAuthorizationServiceInterface $cancelService)
-    {
+    public function __construct(
+        private readonly CancelAuthorizationServiceInterface $cancelService,
+        private readonly AdminActionFailureReporter $failures,
+    ) {
     }
 
     public static function getHandledEventClass(): string
@@ -46,8 +50,10 @@ final class MollieCancelAuthorizationRequestHandler implements HandlerInterface
             $event->setResult(true);
         } catch (DomainException $e) {
             $event->setResult(false, 'state_error', $e->getMessage());
+            $this->failures->report($event->contract, AdminActionFailureReporter::ACTION_CANCEL, $e->getMessage());
         } catch (Throwable $e) {
             $event->setResult(false, 'cancel_failed', $e->getMessage());
+            $this->failures->report($event->contract, AdminActionFailureReporter::ACTION_CANCEL, $e->getMessage());
         }
     }
 }

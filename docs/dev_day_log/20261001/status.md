@@ -13,3 +13,10 @@
     remaining amount right after a capture. Fix: capture bound capped by the contract's uncaptured remainder; Cancel
     follows the bound. Red → green unit (+4) and e2e `MollieAdmin/CaptureSectionAfterCapture` (new inline-card fixture).
   - Stripe not affected (synchronous capture, cache reset).
+- Sprint "Payment tab: capture for authorized-only holds, cancel authorization full or partial" (Mollie admin) —
+  **IMPLEMENTED**, branch `b-7.4.x-admin-capture-release-authorization`, pushed; CI pending, merge on the product
+  owner's word. Plan `sprints/admin-capture-release-authorization.md`; `done/…`; `reports/…`.
+  - Cancel = Mollie `release-authorization` (was the open-payment cancel): whole hold → contract cancelled + order
+    CANCELLED; after a partial capture only the remainder, contract stays fulfilled, captured amount booked. Further
+    captures after a partial one work. A refused capture/release is shown to the operator. Unit 736; e2e
+    `MollieAdmin/CancelReleasesAuthorization` (2) green.

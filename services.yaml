@@ -45,6 +45,8 @@ services:
       - 'src/Mollie/Service/MollieOrderDataProviderInterface.php'
       # Pure static utility (no service) — Mollie order-line reconciliation.
       - 'src/Mollie/Service/MollieLinesBuilder.php'
+      # Pure static utility (no service) — the contract-side record of a released authorization.
+      - 'src/Mollie/Service/AuthorizationReleaseMarker.php'
     public: true
 
   # Interface aliases (DIP) — config foundation.
@@ -581,6 +583,10 @@ services:
 
   # Pure read-model helper: the panel's "Refunded" figure from the live refund rows (2026-09-17).
   OxidEsales\Payments\Mollie\Admin\RefundedAmountResolver:
+    public: false
+
+  # Capture / cancel handlers report a refused action to the operator through the feedback channel.
+  OxidEsales\Payments\Mollie\Admin\AdminActionFailureReporter:
     public: false
 
   OxidEsales\Payments\Mollie\Admin\MolliePanelViewDataBuilder:

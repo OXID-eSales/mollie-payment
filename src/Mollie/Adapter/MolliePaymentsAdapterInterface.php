@@ -23,4 +23,12 @@ interface MolliePaymentsAdapterInterface
     public function getPayment(string $paymentId): MolliePaymentDto;
 
     public function cancelPayment(string $paymentId): MolliePaymentDto;
+
+    /**
+     * Release the uncaptured remainder of an `authorized` payment (Mollie's
+     * `release-authorization` endpoint). Releases the whole hold when nothing was captured yet,
+     * and only what is left after partial captures otherwise. Mollie accepts the release
+     * asynchronously; the payment resource follows a moment later.
+     */
+    public function releaseAuthorization(string $paymentId): void;
 }

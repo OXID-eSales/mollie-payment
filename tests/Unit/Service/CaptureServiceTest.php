@@ -150,6 +150,55 @@ final class CaptureServiceTest extends TestCase
         self::assertSame('cp_c', $dto->id);
     }
 
+    // ---- follow-up captures after a partial capture (multi-capture methods) ----
+
+    public function testCapture_FulfilledAfterPartialCapture_CapturesMore_NoTransition(): void
+    {
+        // Klarna / PayPal / multi-capture cards keep the remainder authorized after a partial
+        // capture; the contract is already FULFILLED for the first part. The second capture
+        // books on top of it — no transition is left to make.
+        $contract = $this->fulfilledContract('tr_m', captured: 40.0);
+        $this->paymentsAdapter->method('getPayment')->with('tr_m')->willReturn(
+            $this->payment('tr_m', 100.0, 60.0),
+        );
+        $this->captureAdapter->expects(self::once())->method('createCapture')
+            ->willReturn($this->captureDto('cp_m2', 'tr_m', 25.0));
+
+        $contract->expects(self::once())->method('setCapturedAmount')->with(65.0);
+        $contract->expects(self::never())->method('captureAuthorization');
+        $this->fulfillmentService->expects(self::never())->method('fulfill');
+        $this->contractRepository->expects(self::once())->method('save')->with($contract);
+
+        $dto = $this->service->capture($contract, 25.0);
+
+        self::assertSame('cp_m2', $dto->id);
+    }
+
+    public function testCapture_FulfilledWithoutAnyCapture_Rejected(): void
+    {
+        // Settled by an instant method: nothing was ever authorized for later capture.
+        $contract = $this->fulfilledContract('tr_i', captured: null);
+
+        $this->captureAdapter->expects(self::never())->method('createCapture');
+
+        $this->expectException(\DomainException::class);
+
+        $this->service->capture($contract);
+    }
+
+    public function testCapture_AfterTheRemainderWasReleased_Rejected(): void
+    {
+        $contract = $this->fulfilledContract('tr_r', captured: 40.0);
+        $contract->method('getMetadata')->willReturn(['amount' => 60.0]);
+
+        $this->paymentsAdapter->expects(self::never())->method('getPayment');
+        $this->captureAdapter->expects(self::never())->method('createCapture');
+
+        $this->expectException(\DomainException::class);
+
+        $this->service->capture($contract, 10.0);
+    }
+
     public function testCapture_WhenNotInCapturableState_Rejected(): void
     {
         $state = $this->createMock(ContractState::class);
@@ -192,6 +241,17 @@ final class CaptureServiceTest extends TestCase
         $contract->method('getProviderOrderId')->willReturn($providerOrderId);
         $contract->method('getId')->willReturn('7');
         $contract->method('getCapturedAmount')->willReturn(null);
+
+        return $contract;
+    }
+
+    private function fulfilledContract(string $providerOrderId, ?float $captured): PaymentContractInterface&MockObject
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getState')->willReturn(ContractState::fulfilled());
+        $contract->method('getProviderOrderId')->willReturn($providerOrderId);
+        $contract->method('getId')->willReturn('9');
+        $contract->method('getCapturedAmount')->willReturn($captured);
 
         return $contract;
     }

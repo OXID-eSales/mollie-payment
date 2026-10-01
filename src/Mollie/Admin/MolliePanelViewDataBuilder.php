@@ -96,6 +96,9 @@ class MolliePanelViewDataBuilder
             // Nothing left to capture means nothing left to cancel either - a hold the shop fully
             // captured a moment ago still reads `authorized` at Mollie (2026-10-01).
             'isCancellable' => $authorizedHold && $captureBound > 0.0,
+            // Cancel releases exactly what is still capturable; after a partial capture the
+            // captured part stays booked and the panel says so (2026-10-01).
+            'hasPartialCapture' => ($contract->getCapturedAmount() ?? 0.0) > 0.0 && $captureBound > 0.0,
             'dashboardUrl' => $this->dashboardUrl($providerOrderId),
             'transactions' => $transactions,
             'errorMessage' => null,
@@ -139,6 +142,7 @@ class MolliePanelViewDataBuilder
             'isCapturable' => false,
             'isRefundable' => false,
             'isCancellable' => false,
+            'hasPartialCapture' => false,
             'dashboardUrl' => null,
             'transactions' => [],
             'errorMessage' => $message,

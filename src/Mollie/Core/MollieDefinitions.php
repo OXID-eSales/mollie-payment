@@ -43,6 +43,7 @@ final class MollieDefinitions
     public const TRANSACTION_TYPE_CANCELLATION = 'cancellation';
     public const TRANSACTION_TYPE_CHARGEBACK = 'chargeback';
     public const TRANSACTION_TYPE_AUTHORIZATION = 'authorization';
+    public const TRANSACTION_TYPE_AUTHORIZATION_RELEASE = 'authorization_release';
 
     // Transaction statuses recorded via TransactionRepositoryInterface.
     public const TRANSACTION_STATUS_COMPLETED = 'completed';

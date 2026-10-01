@@ -43,6 +43,8 @@ $aLang = [
     'MOLLIE_CAPTURE_REASON' => 'Grund',
     'MOLLIE_CAPTURE_SUBMIT' => 'Erfassung ausführen',
     'MOLLIE_CAPTURE_CONFIRM' => 'Den autorisierten Betrag über Mollie erfassen?',
+    'MOLLIE_CAPTURE_PARTIAL_HINT' => 'Eine Teilerfassung bucht nur den eingegebenen Betrag. Je nach Zahlungsart gibt Mollie den Rest sofort an den Kunden frei oder hält ihn für weitere Erfassungen autorisiert, bis Sie die Autorisierung stornieren.',
+    'MOLLIE_ADMIN_CAPTURE_FAILED' => 'Die Erfassung wurde nicht ausgeführt: %s',
 
     'MOLLIE_REFUND' => 'Erstattung',
     'MOLLIE_REFUNDABLE_AMOUNT' => 'Erstattbarer Betrag',
@@ -55,7 +57,10 @@ $aLang = [
     'MOLLIE_CANCEL' => 'Autorisierung stornieren',
     'MOLLIE_CANCEL_REASON' => 'Grund',
     'MOLLIE_CANCEL_SUBMIT' => 'Autorisierung stornieren',
-    'MOLLIE_CANCEL_CONFIRM' => 'Die nicht erfasste Autorisierung über Mollie stornieren?',
+    'MOLLIE_CANCEL_CONFIRM' => 'Die nicht erfasste Autorisierung über Mollie freigeben?',
+    'MOLLIE_CANCEL_RELEASE_AMOUNT' => 'Freizugebender, nicht erfasster Betrag',
+    'MOLLIE_CANCEL_PARTIAL_NOTE' => 'Ein Teil der Autorisierung wurde bereits erfasst. Das Stornieren gibt nur den nicht erfassten Rest frei; der erfasste Betrag bleibt gebucht und kann erstattet werden.',
+    'MOLLIE_ADMIN_CANCEL_FAILED' => 'Die Autorisierung wurde nicht freigegeben: %s',
 
     'MOLLIE_ADMIN_AMOUNT_MALFORMED' => 'Der Betrag ist keine gültige Zahl.',
     'MOLLIE_ADMIN_AMOUNT_NOT_POSITIVE' => 'Der Betrag muss größer als null sein.',

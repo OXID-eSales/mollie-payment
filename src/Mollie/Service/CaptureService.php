@@ -29,7 +29,9 @@ use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
  * extending payment-base's `AbstractPaymentCaptureService`.
  *
  * Capturable-state policy (mirrors Stripe's STRP-118 fix): both AUTHORIZED and COMMITTED
- * contracts may be captured. A manual-capture order is driven to COMMITTED by the shared
+ * contracts may be captured, and a FULFILLED one again after a partial capture (multi-capture
+ * methods keep the remainder authorized; a released remainder — {@see AuthorizationReleaseMarker}
+ * — is refused). A manual-capture order is driven to COMMITTED by the shared
  * checkout-return chain (it never visits AUTHORIZED when Stripe/PayPal/OPC are co-active), so
  * the live Mollie payment status — re-validated by the adapter, which throws
  * `CaptureNotSupportedException` when the payment isn't in `authorized` status — is the real
@@ -75,7 +77,21 @@ final class CaptureService implements CaptureServiceInterface
 
     private function assertCapturable(PaymentContractInterface $contract): void
     {
-        if ($contract->getState()->isAuthorized() || $contract->getState()->isCommitted()) {
+        if (AuthorizationReleaseMarker::isReleased($contract)) {
+            throw new DomainException(sprintf(
+                'Cannot capture contract "%s": the remainder of the authorization was released.',
+                $contract->getId() ?? 'unknown',
+            ));
+        }
+
+        $state = $contract->getState();
+        if ($state->isAuthorized() || $state->isCommitted()) {
+            return;
+        }
+        // A follow-up capture on a multi-capture method (cards with multi-capture, Klarna,
+        // PayPal, …): the first partial capture fulfilled the contract, the hold is still open
+        // for the rest. Mollie re-validates the live status via the adapter.
+        if ($state->isFulfilled() && ($contract->getCapturedAmount() ?? 0.0) > 0.0) {
             return;
         }
 
@@ -126,6 +142,13 @@ final class CaptureService implements CaptureServiceInterface
 
         if ($contract->getState()->isAuthorized()) {
             $contract->captureAuthorization();
+            $this->contractRepository->save($contract);
+
+            return;
+        }
+
+        // FULFILLED by an earlier partial capture: book the further capture, no transition left.
+        if ($contract->getState()->isFulfilled()) {
             $this->contractRepository->save($contract);
 
             return;

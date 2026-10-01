@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\Admin;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
+use OxidEsales\Payments\Mollie\Service\AuthorizationReleaseMarker;
 
 /**
  * Derives admin capture/refund bounds from the live Mollie payment via
@@ -42,6 +43,12 @@ final class AdminActionBounds implements AdminActionBoundsInterface
      */
     public function captureBound(PaymentContractInterface $contract): float
     {
+        // A cancelled contract or a released remainder: the hold is gone on the shop's say-so,
+        // even while Mollie's resource still reads `authorized` (the release is asynchronous).
+        if ($contract->getState()->isCancelled() || AuthorizationReleaseMarker::isReleased($contract)) {
+            return 0.0;
+        }
+
         $live = $this->snapshots->snapshot($contract)?->capturableAmount() ?? 0.0;
         $remainder = round($contract->getAmount() - ($contract->getCapturedAmount() ?? 0.0), 2);
 

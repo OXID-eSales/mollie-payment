@@ -8,7 +8,7 @@
    - orderId, orderNumber, paymentType, paymentMethod, contractId, providerOrderId, contractState, currency
    - capturedAmount, refundedAmount (formatted strings)
    - captureBound/captureBoundFormatted, refundBound/refundBoundFormatted
-   - isCapturable, isRefundable, isCancellable
+   - isCapturable, isRefundable, isCancellable, hasPartialCapture
    - dashboardUrl (optional), errorMessage (optional)
    - transactions: list<TransactionRow> (type/id/amount/currency/status/createdAt/badgeTone())
    - validationErrors: list<string> (Story 3 — consumed once per render)
@@ -154,7 +154,8 @@
                     <input type="hidden" name="payment_admin_action" value="capture">
 
                     <p>{{ "MOLLIE_CAPTURABLE_AMOUNT"|translate }}:
-                        <strong>{{ captureBoundFormatted }} {{ currency }}</strong></p>
+                        <strong data-testid="capture-bound">{{ captureBoundFormatted }} {{ currency }}</strong></p>
+                    <p class="pc-muted" data-testid="capture-partial-hint">{{ "MOLLIE_CAPTURE_PARTIAL_HINT"|translate }}</p>
 
                     <div class="pc-form-row">
                         <div class="pc-form-group">
@@ -239,6 +240,15 @@
                     <input type="hidden" name="oxid" value="{{ orderId }}">
                     <input type="hidden" name="fnc" value="dispatchAction">
                     <input type="hidden" name="payment_admin_action" value="cancel">
+
+                    {# Cancel = Mollie's release-authorization: what is still capturable goes back to
+                       the customer. After a partial capture (multi-capture methods) that is only the
+                       remainder — the captured part stays booked (2026-10-01). #}
+                    <p>{{ "MOLLIE_CANCEL_RELEASE_AMOUNT"|translate }}:
+                        <strong data-testid="cancel-release-amount">{{ captureBoundFormatted }} {{ currency }}</strong></p>
+                    {% if hasPartialCapture is defined and hasPartialCapture %}
+                        <div class="pc-alert pc-alert-info" data-testid="cancel-partial-note">{{ "MOLLIE_CANCEL_PARTIAL_NOTE"|translate }}</div>
+                    {% endif %}
 
                     <div class="pc-form-row">
                         <div class="pc-form-group">

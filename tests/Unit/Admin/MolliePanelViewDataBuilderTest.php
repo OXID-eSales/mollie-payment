@@ -156,6 +156,44 @@ final class MolliePanelViewDataBuilderTest extends TestCase
         self::assertFalse($viewData['isCancellable'], 'nothing left to capture, nothing left to cancel');
     }
 
+    public function testBuild_PartiallyCapturedHold_FlagsThePartialCaptureForTheCancelSection(): void
+    {
+        // Multi-capture method after a first partial capture: the contract is FULFILLED for the
+        // captured part, Mollie still holds the rest. Capture more or release the remainder.
+        $order = $this->stubOrder('order-partial');
+        $contract = $this->fulfilledContract();
+        $contract->method('getCapturedAmount')->willReturn(40.0);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('captureBound')->willReturn(60.0);
+        $this->bounds->method('refundBound')->willReturn(40.0);
+        $this->bounds->method('isAuthorizedHold')->willReturn(true);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+
+        $viewData = $this->builder->build($order);
+
+        self::assertTrue($viewData['isCapturable']);
+        self::assertTrue($viewData['isCancellable']);
+        self::assertTrue($viewData['isRefundable']);
+        self::assertTrue($viewData['hasPartialCapture']);
+        self::assertSame('60.00', $viewData['captureBoundFormatted'], 'what a cancel would release');
+    }
+
+    public function testBuild_UncapturedHold_IsNotAPartialCapture(): void
+    {
+        $order = $this->stubOrder('order-uncaptured');
+        $contract = $this->committedContract();
+        $contract->method('getCapturedAmount')->willReturn(null);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('captureBound')->willReturn(100.0);
+        $this->bounds->method('refundBound')->willReturn(0.0);
+        $this->bounds->method('isAuthorizedHold')->willReturn(true);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+
+        $viewData = $this->builder->build($order);
+
+        self::assertFalse($viewData['hasPartialCapture']);
+    }
+
     public function testBuild_WhenNotAuthorizedHold_NotCapturableOrCancellable(): void
     {
         // No live authorized hold (e.g. already captured/paid): buttons hidden even if a stale

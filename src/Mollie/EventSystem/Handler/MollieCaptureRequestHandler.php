@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\EventSystem\Handler;
 use DomainException;
 use InvalidArgumentException;
 use OxidEsales\PaymentBase\EventSystem\Handler\HandlerInterface;
+use OxidEsales\Payments\Mollie\Admin\AdminActionFailureReporter;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCaptureRequestEvent;
 use OxidEsales\Payments\Mollie\Service\CaptureServiceInterface;
 use Throwable;
@@ -19,12 +20,15 @@ use Throwable;
 /**
  * Delegates an admin-initiated capture request to {@see CaptureServiceInterface}. Any failure
  * (including the adapter's `CaptureNotSupportedException` for auto-capture methods) surfaces on
- * the event as errorCode/errorMessage — never propagates to the dispatcher.
+ * the event as errorCode/errorMessage — never propagates to the dispatcher — and is reported to
+ * the operator through {@see AdminActionFailureReporter}.
  */
 final class MollieCaptureRequestHandler implements HandlerInterface
 {
-    public function __construct(private readonly CaptureServiceInterface $captureService)
-    {
+    public function __construct(
+        private readonly CaptureServiceInterface $captureService,
+        private readonly AdminActionFailureReporter $failures,
+    ) {
     }
 
     public static function getHandledEventClass(): string
@@ -51,11 +55,17 @@ final class MollieCaptureRequestHandler implements HandlerInterface
             );
             $event->setResult($capture->id);
         } catch (InvalidArgumentException $e) {
-            $event->setResult(null, 'validation_error', $e->getMessage());
+            $this->fail($event, 'validation_error', $e);
         } catch (DomainException $e) {
-            $event->setResult(null, 'state_error', $e->getMessage());
+            $this->fail($event, 'state_error', $e);
         } catch (Throwable $e) {
-            $event->setResult(null, 'capture_failed', $e->getMessage());
+            $this->fail($event, 'capture_failed', $e);
         }
+    }
+
+    private function fail(MollieCaptureRequestEvent $event, string $code, Throwable $e): void
+    {
+        $event->setResult(null, $code, $e->getMessage());
+        $this->failures->report($event->contract, AdminActionFailureReporter::ACTION_CAPTURE, $e->getMessage());
     }
 }

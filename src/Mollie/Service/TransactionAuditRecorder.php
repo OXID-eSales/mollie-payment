@@ -16,7 +16,8 @@ use OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 
 /**
- * Writes an audit row to `oe_payments_transaction` for a webhook-driven contract event.
+ * Writes an audit row to `oe_payments_transaction` for a contract event — webhook-driven ones
+ * and the admin's release of an authorization remainder ({@see CancelAuthorizationService}).
  *
  * Extracted as its own service (rather than inlined per handler) so both the webhook
  * fulfillment ladder (capture/failure/expiration/cancellation) and the chargeback handler
