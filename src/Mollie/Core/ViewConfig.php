@@ -13,8 +13,7 @@ use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
 use OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface;
 use OxidEsales\Payments\Mollie\Adapter\OxidCurrencyReader;
-use OxidEsales\Payments\Mollie\Admin\ContractStateHelp;
-use OxidEsales\Payments\Mollie\Admin\ContractStateHelpRow;
+use OxidEsales\Payments\Mollie\Admin\MollieContractStateHelp;
 use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use OxidEsales\Payments\Mollie\Service\PaymentMethodListServiceInterface;
 use Throwable;
@@ -211,14 +210,12 @@ class ViewConfig extends ViewConfig_parent
     }
 
     /**
-     * MOL-10: the rows of the "Help" table on the module Settings tab (OXID Contract Status · Meaning ·
-     * Mollie payment status). Admin templates see the shop's oViewConf and no Mollie view, so the
-     * table is handed out here; the rows live in one PHP class (see ContractStateHelp).
-     *
-     * @return list<ContractStateHelpRow>
+     * MOL-10: Mollie's column of the shared contract-state Help (payment-base owns the rows, the
+     * meanings and the markup). Admin templates see the shop's oViewConf and no Mollie view, so the
+     * Settings tab and the order panel take it from here.
      */
-    public function getMollieContractStateHelp(): array
+    public function getMollieContractStateHelp(): MollieContractStateHelp
     {
-        return (new ContractStateHelp())->rows();
+        return new MollieContractStateHelp();
     }
 }

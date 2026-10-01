@@ -6,12 +6,13 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Added
-- A "Help" group at the end of the module Settings tab, after "Logging" (MOL-10): a translated table
-  (EN/DE by admin language) of every OXID contract state a Mollie checkout can reach, what it means, and the
-  Mollie payment status it corresponds to (`not_finished` → `open`, `pending` → `pending`, `authorized` →
-  `authorized`, `ready_to_commit` → `paid`, `committed`/`fulfilled` → shop-internal, `cancelled` → `canceled`,
-  `expired` → `expired`, `failed` → `failed`). The rows come from `Admin\ContractStateHelp`, tested against
-  payment-base's `ContractState`.
+- A "Help" group at the end of the module Settings tab, after "Logging" (MOL-10): payment-base's contract-state
+  table (OXID Contract Status · Meaning) with Mollie's third column, the Mollie payment status each state corresponds
+  to (`not_finished` → `open`, `pending` → `pending`, `authorized` → `authorized`, `ready_to_commit` → `paid`,
+  `committed`/`fulfilled` → none, `cancelled` → `canceled`, `expired` → `expired`, `failed` → `failed`). Rows, meanings
+  and markup come from payment-base (`@oe_payment_base/admin/help/*`); Mollie contributes `Admin\MollieContractStateHelp`.
+- A "?" next to "OXID Contract Status" on the admin order Payment tab opens payment-base's Help layer with Mollie's
+  description and the three-column table (MOL-10).
 
 ### Changed
 - The admin order Payment tab labels the contract state "OXID Contract Status" ("OXID-Vertragsstatus") instead

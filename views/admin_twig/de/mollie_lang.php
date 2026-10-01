@@ -137,19 +137,7 @@ $aLang = [
     'MOLLIE_VALIDATION_LABEL_CAPTUREREASON' => 'Capture-Grund',
     'MOLLIE_VALIDATION_LABEL_REFUNDDESCRIPTION' => 'Refund-Beschreibung',
 
-    // MOL-10: Gruppe "Hilfe" am Ende der Moduleinstellungen — Vertragsstatus ↔ Mollie-Zahlungsstatus.
-    'MOLLIE_HELP' => 'Hilfe',
-    'MOLLIE_HELP_CONTRACT_STATES_INTRO' => 'Der Tab „Zahlung“ einer Bestellung zeigt den OXID-Vertragsstatus: den Zustand des Zahlungsvertrags, den das Modul zu dieser Bestellung führt. Diese Tabelle erklärt jeden Status und den Mollie-Zahlungsstatus, der ihm entspricht.',
-    'MOLLIE_HELP_COL_CONTRACT_STATE' => 'OXID-Vertragsstatus',
-    'MOLLIE_HELP_COL_MEANING' => 'Bedeutung',
+    // MOL-10: Mollie's part of the shared contract-state Help (payment-base owns rows, meanings, markup).
+    'MOLLIE_HELP_CONTRACT_STATES_INTRO' => 'Der Tab „Zahlung“ einer Bestellung zeigt den OXID-Vertragsstatus: den Zustand des Zahlungsvertrags, den der Shop zur Bestellung führt. Diese Tabelle erklärt jeden Status und den Mollie-Zahlungsstatus, der ihm entspricht.',
     'MOLLIE_HELP_COL_MOLLIE_STATUS' => 'Mollie-Zahlungsstatus',
-    'MOLLIE_HELP_MOLLIE_NONE' => 'keiner (nur shopintern)',
-    'MOLLIE_HELP_STATE_NOT_FINISHED' => 'Die Bestellung ist angelegt und der Kunde wurde zu Mollie weitergeleitet; noch nichts ist verbindlich.',
-    'MOLLIE_HELP_STATE_PENDING' => 'Der Kunde hat sich festgelegt; das Zahlungsnetz hat noch nicht bestätigt.',
-    'MOLLIE_HELP_STATE_AUTHORIZED' => 'Der Betrag ist reserviert; der Händler muss ihn noch einziehen (Capture).',
-    'MOLLIE_HELP_STATE_READY_TO_COMMIT' => 'Das Geld ist eingezogen; die Bestellung ist im Shop noch nicht abgeschlossen.',
-    'MOLLIE_HELP_STATE_COMMITTED_FULFILLED' => 'Nur shopintern: die Bestellung ist abgeschlossen (bezahlt) und schließlich erfüllt.',
-    'MOLLIE_HELP_STATE_CANCELLED' => 'Jemand hat die Zahlung abgebrochen (Kunde, Händler oder Mollie).',
-    'MOLLIE_HELP_STATE_EXPIRED' => 'Das Zahlungsfenster ist abgelaufen, bevor der Kunde die Zahlung abgeschlossen hat.',
-    'MOLLIE_HELP_STATE_FAILED' => 'Der Zahlungsversuch wurde abgelehnt.',
 ];

@@ -63,40 +63,27 @@
 {% endblock %}
 
 {#
-    MOL-10 — a "Help" group after the last settings group ("Logging"): the OXID contract states a Mollie
-    checkout can reach, what each means, and the Mollie payment status it corresponds to. Rows come from
-    ContractStateHelp through oViewConf (one PHP table, tested against payment-base's ContractState);
-    every word is translated with the admin language. Same collapsible markup as the stock groups, and
-    the stock group itself still renders through {{ parent() }} for every module.
+    MOL-10 — a "Help" group after the last settings group ("Logging"): payment-base's contract-state
+    table (OXID Contract Status · Meaning) with Mollie's third column (Mollie payment status). The
+    rows, meanings and markup are payment-base's (`@oe_payment_base/admin/help/contract_state_table`);
+    Mollie adds only its column through oViewConf.getMollieContractStateHelp(). Same collapsible markup
+    as the stock groups, and the stock group itself still renders through {{ parent() }} for every module.
 #}
 {% block admin_module_config_group %}
     {{ parent() }}
 
     {% if loop.last and oView.getEditObjectId() == 'oe_payments_mollie' %}
+        {% set help = oViewConf.getMollieContractStateHelp() %}
         <div class="groupExp">
             <div class="">
-                <a href="#" onclick="_groupExp(this);return false;" class="rc"><b>{{ translate({ ident: 'MOLLIE_HELP' }) }}</b></a>
+                <a href="#" onclick="_groupExp(this);return false;" class="rc"><b>{{ translate({ ident: 'PAYMENT_ADMIN_HELP' }) }}</b></a>
                 <dl>
                     <dd class="mollie-help">
-                        <p>{{ translate({ ident: 'MOLLIE_HELP_CONTRACT_STATES_INTRO' }) }}</p>
-                        <table class="mollie-help-table">
-                            <thead>
-                                <tr>
-                                    <th>{{ translate({ ident: 'MOLLIE_HELP_COL_CONTRACT_STATE' }) }}</th>
-                                    <th>{{ translate({ ident: 'MOLLIE_HELP_COL_MEANING' }) }}</th>
-                                    <th>{{ translate({ ident: 'MOLLIE_HELP_COL_MOLLIE_STATUS' }) }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for row in oViewConf.getMollieContractStateHelp() %}
-                                    <tr>
-                                        <td>{% for state in row.states %}<code>{{ state }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</td>
-                                        <td>{{ translate({ ident: row.meaningIdent }) }}</td>
-                                        <td>{% if row.mollieStatus %}<code>{{ row.mollieStatus }}</code>{% else %}{{ translate({ ident: 'MOLLIE_HELP_MOLLIE_NONE' }) }}{% endif %}</td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                        <p class="pc-help-intro">{{ translate({ ident: help.introIdent }) }}</p>
+                        {% include "@oe_payment_base/admin/help/contract_state_table.html.twig" with {
+                            providerLabel: help.columnIdent,
+                            providerStatuses: help.providerStatuses
+                        } %}
                     </dd>
                 </dl>
                 <div class="spacer"></div>
@@ -153,12 +140,8 @@
                 color: #0b5563;
             }
 
-            /* MOL-10: the Help table (contract state ↔ Mollie status). */
-            .mollie-help p { margin: 6px 0 10px; max-width: 720px; }
-            .mollie-help-table { border-collapse: collapse; margin-bottom: 8px; }
-            .mollie-help-table th, .mollie-help-table td { text-align: left; vertical-align: top; padding: 4px 14px 4px 0; border-bottom: 1px solid #e5e7eb; }
-            .mollie-help-table th { font-weight: bold; color: #374151; }
-            .mollie-help-table code { font-family: monospace; white-space: nowrap; }
+            /* MOL-10: the Help group's intro; the table styles come with payment-base's partial. */
+            .mollie-help .pc-help-intro { margin: 6px 0 10px; max-width: 720px; }
 
             .mollie-label {
                 display: inline-block;

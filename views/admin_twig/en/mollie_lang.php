@@ -143,19 +143,7 @@ $aLang = [
     'MOLLIE_VALIDATION_LABEL_CAPTUREREASON' => 'capture reason',
     'MOLLIE_VALIDATION_LABEL_REFUNDDESCRIPTION' => 'refund description',
 
-    // MOL-10: "Help" group at the end of the module settings — contract state ↔ Mollie payment status.
-    'MOLLIE_HELP' => 'Help',
-    'MOLLIE_HELP_CONTRACT_STATES_INTRO' => 'The Payment tab of an order shows the OXID Contract Status: the state of the payment contract the module keeps for that order. This table explains each state and the Mollie payment status it corresponds to.',
-    'MOLLIE_HELP_COL_CONTRACT_STATE' => 'OXID Contract Status',
-    'MOLLIE_HELP_COL_MEANING' => 'Meaning',
+    // MOL-10: Mollie's part of the shared contract-state Help (payment-base owns rows, meanings, markup).
+    'MOLLIE_HELP_CONTRACT_STATES_INTRO' => 'The Payment tab of an order shows the OXID Contract Status: the state of the payment contract the shop keeps for the order. This table explains each state and the Mollie payment status it corresponds to.',
     'MOLLIE_HELP_COL_MOLLIE_STATUS' => 'Mollie payment status',
-    'MOLLIE_HELP_MOLLIE_NONE' => 'none (shop-internal)',
-    'MOLLIE_HELP_STATE_NOT_FINISHED' => 'The order row exists and the customer was redirected to Mollie; nothing has been committed yet.',
-    'MOLLIE_HELP_STATE_PENDING' => 'The customer has committed; the payment network has not confirmed yet.',
-    'MOLLIE_HELP_STATE_AUTHORIZED' => 'Funds are reserved; the merchant still has to capture them.',
-    'MOLLIE_HELP_STATE_READY_TO_COMMIT' => 'The money has been taken; the order is not committed in the shop yet.',
-    'MOLLIE_HELP_STATE_COMMITTED_FULFILLED' => 'Shop-internal only: the order is committed (paid) and finally fulfilled.',
-    'MOLLIE_HELP_STATE_CANCELLED' => 'Someone stopped the payment (customer, merchant or Mollie).',
-    'MOLLIE_HELP_STATE_EXPIRED' => 'The payment window ran out before the customer completed the payment.',
-    'MOLLIE_HELP_STATE_FAILED' => 'The payment attempt was rejected.',
 ];

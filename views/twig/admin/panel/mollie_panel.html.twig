@@ -86,7 +86,16 @@
             </td>
         </tr>
         <tr>
-            <th class="pc-label">{{ "MOLLIE_CONTRACT_STATE"|translate }}</th>
+            {# MOL-10: payment-base's "?" opens the contract-state Help with Mollie's column. #}
+            {% set help = oViewConf.getMollieContractStateHelp() %}
+            <th class="pc-label">{{ "MOLLIE_CONTRACT_STATE"|translate }}
+                {% include "@oe_payment_base/admin/help/contract_state_hint.html.twig" with {
+                    intro: help.introIdent,
+                    providerLabel: help.columnIdent,
+                    providerStatuses: help.providerStatuses,
+                    id: 'mollie-contract-state'
+                } %}
+            </th>
             <td class="pc-value">{{ contractState|default('—') }}</td>
         </tr>
         <tr>
