@@ -60,6 +60,8 @@ test.describe('MOL-10 — Help group in the Mollie module settings, panel label'
         const text = (await table.textContent()) ?? '';
         expect(text).toMatch(LABEL_RE);
         expect(text).toMatch(/Meaning|Bedeutung/);
+        expect(text, 'the third column is Mollie\'s').toMatch(/Mollie payment status|Mollie-Zahlungsstatus/);
+        await expect(table.locator('thead th'), 'two shared columns + Mollie\'s').toHaveCount(3);
         for (const state of ['not_finished', 'pending', 'authorized', 'ready_to_commit', 'committed', 'fulfilled', 'cancelled', 'expired', 'failed']) {
             expect(text, `state ${state} explained`).toContain(state);
         }
@@ -85,5 +87,23 @@ test.describe('MOL-10 — Help group in the Mollie module settings, panel label'
         const label = page.locator('th.pc-label').filter({ hasText: LABEL_RE });
         await expect(label, 'the contract state row is labelled OXID Contract Status').toHaveCount(1);
         await expect(page.locator('th.pc-label').filter({ hasText: /^(State|Status)$/ })).toHaveCount(0);
+
+        // The "?" next to the label opens payment-base's Help layer with the description and the
+        // three-column table (OXID Contract Status · Meaning · Mollie payment status).
+        const hint = label.locator('button[data-pc-help-toggle]');
+        await expect(hint, 'a "?" sits next to the label').toHaveCount(1);
+        const layer = page.locator('#pc-help-mollie-contract-state');
+        await expect(layer).toBeHidden();
+        await hint.click();
+        await expect(layer, 'the Help layer opens').toBeVisible();
+        await expect(hint).toHaveAttribute('aria-expanded', 'true');
+        const layerText = (await layer.textContent()) ?? '';
+        expect(layerText).toMatch(/Mollie payment status|Mollie-Zahlungsstatus/);
+        for (const needle of ['not_finished', 'ready_to_commit', 'open', 'paid']) {
+            expect(layerText, `${needle} in the layer`).toContain(needle);
+        }
+        expect(layerText, 'no raw translation key').not.toMatch(/PAYMENT_ADMIN_HELP|MOLLIE_HELP/);
+        await page.keyboard.press('Escape');
+        await expect(layer, 'Escape closes it').toBeHidden();
     });
 });

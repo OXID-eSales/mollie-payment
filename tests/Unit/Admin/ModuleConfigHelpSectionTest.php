@@ -12,9 +12,8 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Admin;
 use PHPUnit\Framework\TestCase;
 
 /**
- * MOL-10 — the module Settings tab ends with a "Help" group (after "Logging") that explains the OXID
- * contract states and their Mollie payment status. Asserted on the template source, as the masking
- * test does: the Unit suite renders no admin templates.
+ * MOL-10 — the module Settings tab ends with a "Help" group (after "Logging") showing payment-base's
+ * contract-state table with Mollie's column. Asserted on the template source, as the masking test does.
  */
 final class ModuleConfigHelpSectionTest extends TestCase
 {
@@ -24,26 +23,25 @@ final class ModuleConfigHelpSectionTest extends TestCase
     {
         $template = $this->templateSource();
 
-        self::assertSame(1, preg_match('/{% block admin_module_config_group %}(.*?){% endblock %}/s', $template, $m), 'the group block is overridden');
+        self::assertSame(1, preg_match('/{% block admin_module_config_group %}(.*?){% endblock %}/s', $template, $m));
         $block = $m[1];
         self::assertStringContainsString('{{ parent() }}', $block, 'every settings group still renders through the stock chain');
         self::assertStringContainsString('loop.last', $block, 'the Help group follows the last settings group (Logging)');
-        self::assertStringContainsString("getEditObjectId() == 'oe_payments_mollie'", $block, 'other modules\' settings pages stay untouched');
-        self::assertStringContainsString('class="groupExp"', $block, 'same collapsible markup as the stock groups');
-        self::assertStringContainsString('_groupExp(this)', $block);
+        self::assertStringContainsString("getEditObjectId() == 'oe_payments_mollie'", $block);
+        self::assertStringContainsString('class="groupExp"', $block);
+        self::assertStringContainsString("'PAYMENT_ADMIN_HELP'", $block, 'the title is the shared one');
     }
 
-    public function testHelpTableIsDrivenByTheViewConfigRowsAndTranslatedIdents(): void
+    public function testHelpTableIsTheSharedOneWithMolliesColumn(): void
     {
         $template = $this->templateSource();
 
-        self::assertStringContainsString('oViewConf.getMollieContractStateHelp()', $template, 'rows come from one PHP source, not a second table in Twig');
-        foreach (['MOLLIE_HELP', 'MOLLIE_HELP_CONTRACT_STATES_INTRO', 'MOLLIE_HELP_COL_CONTRACT_STATE', 'MOLLIE_HELP_COL_MEANING', 'MOLLIE_HELP_COL_MOLLIE_STATUS', 'MOLLIE_HELP_MOLLIE_NONE'] as $ident) {
-            self::assertStringContainsString("'$ident'", $template, "$ident is translated in the template");
-        }
-        self::assertStringContainsString('row.meaningIdent', $template, 'the meaning is translated per row');
-        self::assertStringContainsString('row.mollieStatus', $template);
-        self::assertStringContainsString('row.states', $template);
+        self::assertStringContainsString('@oe_payment_base/admin/help/contract_state_table.html.twig', $template, 'payment-base owns the table');
+        self::assertStringContainsString('oViewConf.getMollieContractStateHelp()', $template);
+        self::assertStringContainsString('providerLabel: help.columnIdent', $template);
+        self::assertStringContainsString('providerStatuses: help.providerStatuses', $template);
+        self::assertStringContainsString('help.introIdent', $template, 'the description above the table is Mollie\'s');
+        self::assertStringNotContainsString('row.meaningIdent', $template, 'no second table in Twig');
     }
 
     private function templateSource(): string
