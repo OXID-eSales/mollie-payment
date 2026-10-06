@@ -4,6 +4,30 @@ services:
     autoconfigure: true
     public: false
 
+  # ===========================================
+  # GRAPH-QL / MS4 — GraphQL Storefront mutations
+  # ===========================================
+  # Neither autowired nor autoconfigured: the controller takes graphql-base's
+  # Authentication, optional for this module. `@?` keeps the container compiling
+  # without graphql-base (the controller then throws a clear error if it is ever
+  # invoked, which it cannot be without graphql-base).
+  OxidEsales\Payments\Mollie\GraphQL\Controller\MollieCheckout:
+    autowire: false
+    autoconfigure: false
+    arguments:
+      $checkout: '@OxidEsales\PaymentBase\Checkout\Headless\HeadlessCheckoutServiceInterface'
+      $authentication: '@?OxidEsales\GraphQL\Base\Service\Authentication'
+    public: true
+
+  # graphql-base is optional: the mapper mirrors NamespaceMapperInterface
+  # without implementing it, because the container reflects every service
+  # class at module activation and the interface is absent on a shop without
+  # GraphQL. The tag is inert until graphql-base is installed.
+  OxidEsales\Payments\Mollie\GraphQL\Service\NamespaceMapper:
+    autowire: false
+    autoconfigure: false
+    tags: [ 'graphql_namespace_mapper' ]
+
   # ===========================================================================
   # Sprint 1: scaffold. Concrete services are appended by later sprints:
   #   - Sprint 2 registers the adapter factory + LazyMollieAdapter and aliases
