@@ -14,7 +14,11 @@ env:
   # Note: a payment-base feature branch cannot be pinned here - composer.json requires
   # `payment-base >=v1.2`, which only b-7.4.x satisfies (Packagist aliases it 1.2.x-dev);
   # a path repo of another branch has no alias and the resolve fails (MOL-18, 2026-09-24).
-  PAYMENT_BASE_BRANCH: 'b-7.4.x'
+  # TEMPORARY (GRAPH-QL): payment-base's headless checkout lives on its b-7.4.x-GRAPH-QL
+  # branch until it is merged; the alias satisfies composer.json's `>=v1.2` for a branch
+  # without a Packagist alias. Revert to 'b-7.4.x' and an empty alias after the merge.
+  PAYMENT_BASE_BRANCH: 'b-7.4.x-GRAPH-QL'
+  PAYMENT_BASE_VERSION_ALIAS: ' as 1.2.x-dev'
 
 jobs:
   install_shop_with_module:
@@ -117,7 +121,7 @@ jobs:
 
       - name: Install payment-base at shop level
         run: |
-          docker compose exec -T php composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH}" --no-interaction --no-update
+          docker compose exec -T php composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH}${PAYMENT_BASE_VERSION_ALIAS}" --no-interaction --no-update
 
       - name: Install module
         run: |
@@ -280,7 +284,7 @@ jobs:
 
       - name: Pin payment-base
         working-directory: source/test-module
-        run: composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH}" --no-update --no-interaction
+        run: composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH}${PAYMENT_BASE_VERSION_ALIAS}" --no-update --no-interaction
 
       - name: Install module dependencies
         id: dependencies
@@ -348,7 +352,7 @@ jobs:
 
       - name: Pin payment-base
         run: |
-          docker compose exec -T php bash -c "cd /var/www/test-module && composer require 'oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH}' --no-update --no-interaction"
+          docker compose exec -T php bash -c "cd /var/www/test-module && composer require 'oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH}${PAYMENT_BASE_VERSION_ALIAS}' --no-update --no-interaction"
 
       - name: Install module dependencies
         run: |
@@ -412,7 +416,7 @@ jobs:
 
       - name: Install payment-base at shop level
         run: |
-          docker compose exec -T php composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH}" --no-interaction --no-update
+          docker compose exec -T php composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH}${PAYMENT_BASE_VERSION_ALIAS}" --no-interaction --no-update
 
       - name: Install testing dependencies
         run: |

@@ -7,8 +7,8 @@
 | Story | State | Notes |
 |---|---|---|
 | MS1 Headless-ready handler | **DONE** 2026-10-06 | [done/GRAPH-QL-MS1-headless-ready-handler.md](done/GRAPH-QL-MS1-headless-ready-handler.md) — Unit 725, gates green (CI-form phpcs); payment-base `providerOptions` |
-| MS2 Wiring + CI pin | IN PROGRESS | |
-| MS3 Webhooks end the order | open | |
+| MS2 Wiring + CI pin | **DONE** 2026-10-06 | [done/GRAPH-QL-MS2-wiring.md](done/GRAPH-QL-MS2-wiring.md) — resolver tag, open-attempt finder; CI pinned to payment-base `b-7.4.x-GRAPH-QL` (TEMPORARY, alias) |
+| MS3 Webhooks end the order | IN PROGRESS | |
 | MS4 GraphQL mutations | open | |
 | MS5 ACP service | open | |
 | MS6 Proof | open | |
