@@ -28,6 +28,36 @@ services:
     autoconfigure: false
     tags: [ 'graphql_namespace_mapper' ]
 
+  # ===========================================
+  # GRAPH-QL / MS5 — ACP checkout service (payment-base MCP layer)
+  # ===========================================
+  # The provider half of the agentic-commerce layer: create_checkout on the
+  # headless path; complete_checkout refused (Mollie has no server-side token
+  # charge - the buyer pays on Mollie's page, the webhook ends the order). The
+  # MCP / UCP transport is a separate feature and wires
+  # AcpCheckoutServiceInterface to this service. In a shop running several
+  # providers the last merged services.yaml decides these two shared ids.
+  OxidEsales\PaymentBase\Mcp\Acp\AcpResponseFormatterInterface:
+    class: OxidEsales\PaymentBase\Mcp\Acp\AcpResponseFormatter
+    arguments:
+      $paymentProviders: [ 'mollie' ]
+
+  OxidEsales\Payments\Mollie\Mcp\MollieAcpCheckoutService:
+    arguments:
+      $contractService: '@OxidEsales\PaymentBase\Service\ContractServiceInterface'
+      $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
+      $eventDispatcher: '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
+      $formatter: '@OxidEsales\PaymentBase\Mcp\Acp\AcpResponseFormatterInterface'
+      $contractOpening: '@OxidEsales\PaymentBase\Checkout\Headless\ContractOpeningServiceInterface'
+      $userBaskets: '@OxidEsales\PaymentBase\Checkout\Headless\UserBasketFactoryInterface'
+      $buyers: '@OxidEsales\PaymentBase\Checkout\Headless\GuestUserResolverInterface'
+      $contractCommit: '@OxidEsales\PaymentBase\Service\Commit\ContractCommitServiceInterface'
+    public: true
+
+  OxidEsales\PaymentBase\Mcp\Acp\AcpCheckoutServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Mcp\MollieAcpCheckoutService
+    public: true
+
   # ===========================================================================
   # Sprint 1: scaffold. Concrete services are appended by later sprints:
   #   - Sprint 2 registers the adapter factory + LazyMollieAdapter and aliases
