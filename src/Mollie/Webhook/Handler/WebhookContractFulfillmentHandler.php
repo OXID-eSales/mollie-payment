@@ -14,6 +14,9 @@ use OxidEsales\PaymentBase\Contract\ContractCondition;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Repository\StaleContractException;
+use OxidEsales\PaymentBase\Service\Commit\CommitOutcome;
+use OxidEsales\PaymentBase\Service\Commit\ContractCommitServiceInterface;
+use OxidEsales\PaymentBase\Service\Commit\PaymentConfirmation;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface;
@@ -47,6 +50,9 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         private readonly ContractLinkedOrderUpdaterInterface $orderUpdater,
         private readonly TransactionAuditRecorder $auditRecorder,
         private readonly LoggerInterface $logger,
+        // GRAPH-QL / MS3: optional so a consumer whose services.yaml predates it keeps the
+        // AUTHORIZED-only behaviour; autowired from payment-base otherwise.
+        private readonly ?ContractCommitServiceInterface $contractCommit = null,
     ) {
     }
 
@@ -251,6 +257,10 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             return FulfillmentOutcome::NoOp;
         }
 
+        if ($this->contractCommit !== null) {
+            return $this->commitAuthorization($contract, $providerOrderId);
+        }
+
         $this->advanceToAuthorized($contract);
         $this->contractRepository->save($contract);
         $this->auditRecorder->record(
@@ -261,6 +271,65 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         );
 
         return FulfillmentOutcome::Acted;
+    }
+
+    /**
+     * GRAPH-QL / MS3 — an authorization ends the order. With manual capture the shopper's
+     * payment comes back `authorized`, not `paid`; until now that only moved the contract to
+     * AUTHORIZED and the order stayed NOT_FINISHED until the merchant captured. A headless
+     * shopper who never returns would leave the money reserved on an unfinished order, so the
+     * authorization now commits the open contract through payment-base's ContractCommitService
+     * with `requiresCapture`: the order is committed, not marked paid; the capture (CaptureService
+     * accepts COMMITTED) and the following `paid` webhook fulfil it as before. Same semantics as
+     * Stripe's `payment_intent.amount_capturable_updated` handler.
+     *
+     * The commit service saves its own copy of the contract, so the one loaded here is NOT saved
+     * afterwards (it would overwrite the committed state with PENDING). The confirmed amount is the
+     * contract's: this handler only knows the Mollie payment id, and Mollie's amount was checked
+     * when the payment was created from the contract.
+     */
+    private function commitAuthorization(
+        PaymentContractInterface $contract,
+        string $providerOrderId,
+    ): FulfillmentOutcome {
+        $outcome = $this->contractCommit->commit(new PaymentConfirmation(
+            contractId: (string) $contract->getId(),
+            providerName: MollieDefinitions::PROVIDER_NAME,
+            authorizationId: $providerOrderId,
+            providerOrderId: $providerOrderId,
+            amount: $contract->getAmount(),
+            currency: $contract->getCurrency(),
+            requiresCapture: true,
+            source: 'webhook',
+            extraContext: ['molliePaymentId' => $providerOrderId],
+        ));
+
+        $this->logger->info('[WebhookContractFulfillmentHandler] authorization committed the open contract', [
+            'contractId' => $contract->getId(),
+            'outcome' => $outcome->outcome,
+            'orderId' => $outcome->orderId,
+            'reason' => $outcome->reason,
+        ]);
+
+        if ($outcome->isSettled()) {
+            $this->auditRecorder->record(
+                $contract,
+                MollieDefinitions::TRANSACTION_TYPE_AUTHORIZATION,
+                MollieDefinitions::TRANSACTION_STATUS_COMPLETED,
+                $contract->getAmount(),
+            );
+
+            return FulfillmentOutcome::Acted;
+        }
+
+        if ($outcome->outcome === CommitOutcome::PENDING) {
+            // Another condition is still open; the commit will follow when it closes.
+            return FulfillmentOutcome::NoOp;
+        }
+
+        // Refused (amount mismatch, closed contract): a 5xx, so Mollie retries and the
+        // merchant sees it in the webhook log instead of a silent 200.
+        return FulfillmentOutcome::Failed;
     }
 
     /**
