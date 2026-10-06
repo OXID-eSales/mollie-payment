@@ -1,0 +1,22 @@
+# 2026-10-06 — GRAPH-QL Mollie provider story (P-Mollie)
+
+**Branch:** `b-7.4.x-GRAPH-QL` (mollie-payment), on payment-base `b-7.4.x-GRAPH-QL` (Sprint 15 done; Stripe PS1–PS7 done).
+**Sprint:** [sprints/GRAPH-QL-mollie-provider-story.md](sprints/GRAPH-QL-mollie-provider-story.md)
+**Ritual per story:** this file updated · report in `done/` · sound played.
+
+| Story | State | Notes |
+|---|---|---|
+| MS1 Headless-ready handler | **DONE** 2026-10-06 | [done/GRAPH-QL-MS1-headless-ready-handler.md](done/GRAPH-QL-MS1-headless-ready-handler.md) — Unit 725, gates green (CI-form phpcs); payment-base `providerOptions` |
+| MS2 Wiring + CI pin | IN PROGRESS | |
+| MS3 Webhooks end the order | open | |
+| MS4 GraphQL mutations | open | |
+| MS5 ACP service | open | |
+| MS6 Proof | open | |
+
+## How to run (dev shop)
+
+- Unit (standalone, what CI runs): `docker compose exec -T php bash -c 'cd extensions/mollie-payment && vendor/bin/phpunit -c tests/phpunit-unit.xml'`
+  — needs the module's own `vendor/` (`composer install` in the module) with `vendor/oxid-esales/payment-base` symlinked to
+  `../../../payment-base` (the GraphQL branch), as Stripe's is. Baseline 2026-10-06: **714** green.
+- Integration (shop PHPUnit): `docker compose exec -T php php vendor/bin/phpunit -c extensions/mollie-payment/tests/phpunit.xml --testsuite Integration`
+- Gates (CI form, warnings count for phpcs!): `cd extensions/mollie-payment && composer phpcs && composer phpstan && composer phpmd`

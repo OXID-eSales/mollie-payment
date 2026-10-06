@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\PaymentHandler;
 use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\Eshop\Application\Model\User;
 use OxidEsales\Eshop\Core\Registry;
+use OxidEsales\PaymentBase\Adapter\ContractFirstPaymentHandlerInterface;
 use OxidEsales\PaymentBase\Adapter\PaymentContextInterface;
 use OxidEsales\PaymentBase\Adapter\PaymentHandlerInterface;
 use OxidEsales\PaymentBase\Adapter\PaymentHandlerResult;
@@ -45,8 +46,13 @@ use Throwable;
  * Mirrors PayPal's `PayPalPaymentHandler` at the OPC boundary — both are redirect PSPs driven by a
  * checkout-session event; neither module inherits from the other.
  */
-class MolliePaymentHandler implements PaymentHandlerInterface
+class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
 {
+    /** GRAPH-QL / MS1: the only way a headless client may render Mollie - its hosted page refuses framing. */
+    public const UI_MODE_HOSTED = 'hosted';
+    /** Error code when a headless client asks for `embedded` / `custom`: nothing is created. */
+    public const ERROR_UI_MODE_UNSUPPORTED = 'MOLLIE_UI_MODE_UNSUPPORTED';
+
     /**
      * Guards the one-time "iframe requested but Mollie cannot be framed" log so it is not emitted
      * on every checkout render (the handler is a DI singleton, so once per process).
@@ -89,7 +95,24 @@ class MolliePaymentHandler implements PaymentHandlerInterface
     public function processPayment(PaymentContextInterface $context): PaymentHandlerResult
     {
         try {
-            $this->prepareOxidBasket($context);
+            if ($this->isHeadless($context)) {
+                // GRAPH-QL / MS1: no PHP session on this path. Basket and user come with the
+                // PaymentContext (payment-base built them from the persisted user basket), and
+                // the ui mode is checked before anything is created.
+                $uiMode = $context->getMetadataValue('uiMode') ?? self::UI_MODE_HOSTED;
+                if ($uiMode !== self::UI_MODE_HOSTED) {
+                    return PaymentHandlerResult::error(
+                        sprintf(
+                            'Mollie supports uiMode "%s" only, "%s" requested',
+                            self::UI_MODE_HOSTED,
+                            (string) $uiMode,
+                        ),
+                        self::ERROR_UI_MODE_UNSUPPORTED,
+                    );
+                }
+            } else {
+                $this->prepareOxidBasket($context);
+            }
             // MOL-22: name a not-orderable item before any contract exists (see the catch for the race).
             $notOrderable = $this->notOrderableItems($context);
             if ($notOrderable !== null) {
@@ -290,27 +313,53 @@ class MolliePaymentHandler implements PaymentHandlerInterface
      * {@see \OxidEsales\Payments\Mollie\Controller\MollieOrderController::buildCheckoutContext()}
      * assembles in the standard flow.
      *
+     * GRAPH-QL / MS1: a headless context (payment-base HeadlessCheckoutService) carries its own
+     * session id (`headless:<basketId>`), the persisted basket's id and the client's return URL;
+     * `EarlyOrderCreationHandler` builds the order from `basketId`, `MollieCheckoutSessionHandler`
+     * sends the shopper back to `returnUrl`. Nothing is read from the PHP session then.
+     *
      * Overridable seam — unit tests stub it to avoid the OXID Registry.
      */
     protected function buildEventContext(PaymentContextInterface $context): EventContext
     {
-        $session = Registry::getSession();
         $user = $context->getUser();
         $userId = $user instanceof User ? (string) $user->getId() : '';
         $params = $this->mollieParamsFromContext($context);
+        $headless = $this->isHeadless($context);
 
-        return new EventContext([
+        $data = [
             'paymentId' => MollieDefinitions::PAYMENT_ID,
             'userId' => $userId,
             'basket' => $context->getBasket(),
             'user' => $user,
-            'sessionId' => (string) $session->getId(),
+            'sessionId' => $headless ? (string) $context->getMetadataValue('sessionId') : $this->sessionId(),
             'conditionTypes' => ['payment_authorized'],
             // Same keys the standard cl=order flow sets (MollieOrderController::buildCheckoutContext):
             // MollieCheckoutSessionHandler consumes them to pin the chosen method / tokenize a card.
             'selectedMethod' => $params['selectedMethod'],
             'cardToken' => $params['cardToken'],
-        ]);
+        ];
+        if ($headless) {
+            $data['headless'] = true;
+            $data['basketId'] = $context->getMetadataValue('basketId');
+            $data['returnUrl'] = $context->getReturnUrl();
+        }
+
+        return new EventContext($data);
+    }
+
+    /**
+     * The PHP session id of the Twig / OPC checkout. Overridable seam — never called on the
+     * headless path.
+     */
+    protected function sessionId(): string
+    {
+        return (string) Registry::getSession()->getId();
+    }
+
+    private function isHeadless(PaymentContextInterface $context): bool
+    {
+        return $context->getMetadataValue('headless') === true;
     }
 
     /**
