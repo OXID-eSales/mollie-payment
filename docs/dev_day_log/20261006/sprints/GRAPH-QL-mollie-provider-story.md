@@ -54,3 +54,13 @@ session, webhooks that end the order (paid **and** authorized), and the Twig / O
   the same ids; clean-up when both branches are merged — same as Stripe).
 - Mollie's `paid` ladder is kept rather than routed through `ContractCommitService`: it already commits and fulfils, and
   changing it would touch every Twig order for no headless gain.
+
+## Done (2026-10-06, mollie-payment `b-7.4.x-GRAPH-QL`)
+
+MS1–MS6 delivered; reports in `../done/GRAPH-QL-MS*.md`, status in `../status.md`. The proof is the Playwright spec
+`tests/e2e/playwright/tests/GraphQL/mollie-headless-checkout.spec.ts` (project `mollie-graphql`): 4/4 against the dev
+shop, the order ended by Mollie's webhook (paid and failed), plus `bin/graph-ql-cli-test.sh` for the CLI. Found on the
+way: nothing broke; a failed webhook leaves the order `FAILED` (not stornoed) as in Twig. payment-base gained
+`HeadlessStartRequest::$providerOptions` (`56dbb6c`). Deferred: inline Components (card token) on the headless path, an
+ACP flow that hands the buyer Mollie's hosted URL, the module-local session bindings clean-up after both branches merge,
+and the CI pin revert.

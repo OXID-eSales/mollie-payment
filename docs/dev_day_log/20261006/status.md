@@ -4,6 +4,8 @@
 **Sprint:** [sprints/GRAPH-QL-mollie-provider-story.md](sprints/GRAPH-QL-mollie-provider-story.md)
 **Ritual per story:** this file updated · report in `done/` · sound played.
 
+**P-Mollie is DONE (MS1–MS6).** CI pinned to payment-base `b-7.4.x-GRAPH-QL` (TEMPORARY, MS2). Next: P-PayPal; then merge payment-base → providers and revert the pins.
+
 | Story | State | Notes |
 |---|---|---|
 | MS1 Headless-ready handler | **DONE** 2026-10-06 | [done/GRAPH-QL-MS1-headless-ready-handler.md](done/GRAPH-QL-MS1-headless-ready-handler.md) — Unit 725, gates green (CI-form phpcs); payment-base `providerOptions` |
@@ -11,7 +13,7 @@
 | MS3 Webhooks end the order | **DONE** 2026-10-06 | [done/GRAPH-QL-MS3-webhooks-end-the-order.md](done/GRAPH-QL-MS3-webhooks-end-the-order.md) — `authorized` commits with `requiresCapture` via payment-base; Unit 730, gates green |
 | MS4 GraphQL mutations | **DONE** 2026-10-06 | [done/GRAPH-QL-MS4-graphql-mutations.md](done/GRAPH-QL-MS4-graphql-mutations.md) — Unit 740, schema proof green, live start/return/cancel on the dev shop |
 | MS5 ACP service | **DONE** 2026-10-06 | [done/GRAPH-QL-MS5-acp-checkout-service.md](done/GRAPH-QL-MS5-acp-checkout-service.md) — create_checkout default, complete_checkout refused (no server-side token charge at Mollie); Unit 743 |
-| MS6 Proof | IN PROGRESS | |
+| MS6 Proof | **DONE** 2026-10-06 | [done/GRAPH-QL-MS6-proof.md](done/GRAPH-QL-MS6-proof.md) — Playwright 4/4: the webhook ends the order (paid / failed), cancel, wrong token, guard; `bin/graph-ql-cli-test.sh` + docs |
 
 ## How to run (dev shop)
 

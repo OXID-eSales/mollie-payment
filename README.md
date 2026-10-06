@@ -64,3 +64,15 @@ docker compose exec -w /var/www/extensions/mollie-payment php \
 All Mollie SDK imports are confined to `src/Mollie/Adapter/`; the contract is never mutated via a
 generic `setState()` — only through the named transitions on the `payment-base` contract. Both
 rules are enforced by regression tests.
+
+## GraphQL / headless checkout
+
+The module exposes `mollieCheckoutStart / mollieCheckoutReturn / mollieCheckoutCancel` to the GraphQL Storefront
+(payment-base's headless checkout, GRAPH-QL epic); Mollie's webhook ends the order. Try it from the command line:
+
+```bash
+SHOP_URL=https://<your shop>/ bin/graph-ql-cli-test.sh demo
+```
+
+How it works, every command and example output: [bin/graph-ql-cli-test.md](bin/graph-ql-cli-test.md).
+
