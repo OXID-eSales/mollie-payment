@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Service;
 
+use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\CreatePaymentRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAddressDto;
@@ -40,12 +41,13 @@ final class CheckoutPaymentService implements CheckoutPaymentServiceInterface
         ?string $method,
         string $redirectUrl,
         ?string $cardToken = null,
+        ?Basket $basket = null,
     ): CreatePaymentRequest {
         $hasCardToken = $cardToken !== null && $cardToken !== '';
         // A card token pins the method to creditcard; otherwise the caller's method is passed through.
         $effectiveMethod = $hasCardToken ? 'creditcard' : $method;
 
-        [$billingAddress, $lines] = $this->orderDataFor($effectiveMethod, $contract);
+        [$billingAddress, $lines] = $this->orderDataFor($effectiveMethod, $contract, $basket);
 
         // Safety: a pay-later method without the required order data would 422. Rather than fail the
         // shopper, drop the forced method so Mollie presents its hosted page (which collects the
@@ -109,20 +111,20 @@ final class CheckoutPaymentService implements CheckoutPaymentServiceInterface
      *
      * @return array{0: MollieAddressDto|null, 1: list<\OxidEsales\Payments\Mollie\Adapter\Dto\MollieLineDto>}
      */
-    private function orderDataFor(?string $method, PaymentContractInterface $contract): array
+    private function orderDataFor(?string $method, PaymentContractInterface $contract, ?Basket $basket): array
     {
         if ($method === null || !MollieDefinitions::requiresOrderData($method)) {
             return [null, []];
         }
 
-        $address = $this->orderData->billingAddress();
+        $address = $this->orderData->billingAddress($basket);
         if ($address === null || !$address->isComplete()) {
             return [null, []];
         }
 
         return [
             $address,
-            $this->orderData->lines($contract->getCurrency(), $contract->getAmount()),
+            $this->orderData->lines($contract->getCurrency(), $contract->getAmount(), $basket),
         ];
     }
 

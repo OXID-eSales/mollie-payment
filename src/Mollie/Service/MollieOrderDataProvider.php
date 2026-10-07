@@ -29,9 +29,9 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MollieProductLineInput;
  */
 class MollieOrderDataProvider implements MollieOrderDataProviderInterface
 {
-    public function billingAddress(): ?MollieAddressDto
+    public function billingAddress(?Basket $basket = null): ?MollieAddressDto
     {
-        $user = $this->basketUser();
+        $user = $this->basketUser($basket ?? $this->basket());
         if ($user === null) {
             return null;
         }
@@ -47,9 +47,9 @@ class MollieOrderDataProvider implements MollieOrderDataProviderInterface
         );
     }
 
-    public function lines(string $currency, float $expectedTotal): array
+    public function lines(string $currency, float $expectedTotal, ?Basket $basket = null): array
     {
-        $basket = $this->basket();
+        $basket ??= $this->basket();
         if ($basket === null) {
             return [];
         }
@@ -138,9 +138,8 @@ class MollieOrderDataProvider implements MollieOrderDataProviderInterface
         return $basket instanceof Basket ? $basket : null;
     }
 
-    protected function basketUser(): ?User
+    protected function basketUser(?Basket $basket): ?User
     {
-        $basket = $this->basket();
         $user = $basket?->getBasketUser();
 
         return $user instanceof User && $user->getId() ? $user : null;

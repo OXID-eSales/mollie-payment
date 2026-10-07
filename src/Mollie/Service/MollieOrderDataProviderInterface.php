@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Service;
 
+use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAddressDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieLineDto;
 
@@ -21,10 +22,14 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MollieLineDto;
  */
 interface MollieOrderDataProviderInterface
 {
-    public function billingAddress(): ?MollieAddressDto;
+    /**
+     * @param Basket|null $basket the basket being paid; null = the session basket (Twig / OPC).
+     *        GRAPH-QL / MS1: the headless checkout has no session and passes the persisted basket.
+     */
+    public function billingAddress(?Basket $basket = null): ?MollieAddressDto;
 
     /**
      * @return list<MollieLineDto> reconciled so sum(totalAmount) == $expectedTotal
      */
-    public function lines(string $currency, float $expectedTotal): array;
+    public function lines(string $currency, float $expectedTotal, ?Basket $basket = null): array;
 }

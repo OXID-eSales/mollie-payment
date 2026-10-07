@@ -61,6 +61,12 @@ export default defineConfig({
             use: { ...devices['Desktop Chrome'] },
         },
         {
+            // GRAPH-QL / MS6: the headless checkout through the GraphQL Storefront mutations
+            name: 'mollie-graphql',
+            testMatch: 'tests/GraphQL/*.spec.ts',
+            use: { ...devices['Desktop Chrome'] },
+        },
+        {
             name: 'mollie-standard',
             testMatch: 'tests/MollieStandard/*.spec.ts',
             use: { ...devices['Desktop Chrome'] },

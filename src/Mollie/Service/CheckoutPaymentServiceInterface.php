@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Service;
 
+use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\CreatePaymentRequest;
 
@@ -28,5 +29,6 @@ interface CheckoutPaymentServiceInterface
         ?string $method,
         string $redirectUrl,
         ?string $cardToken = null,
+        ?Basket $basket = null,
     ): CreatePaymentRequest;
 }

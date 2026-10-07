@@ -4,6 +4,60 @@ services:
     autoconfigure: true
     public: false
 
+  # ===========================================
+  # GRAPH-QL / MS4 — GraphQL Storefront mutations
+  # ===========================================
+  # Neither autowired nor autoconfigured: the controller takes graphql-base's
+  # Authentication, optional for this module. `@?` keeps the container compiling
+  # without graphql-base (the controller then throws a clear error if it is ever
+  # invoked, which it cannot be without graphql-base).
+  OxidEsales\Payments\Mollie\GraphQL\Controller\MollieCheckout:
+    autowire: false
+    autoconfigure: false
+    arguments:
+      $checkout: '@OxidEsales\PaymentBase\Checkout\Headless\HeadlessCheckoutServiceInterface'
+      $authentication: '@?OxidEsales\GraphQL\Base\Service\Authentication'
+    public: true
+
+  # graphql-base is optional: the mapper mirrors NamespaceMapperInterface
+  # without implementing it, because the container reflects every service
+  # class at module activation and the interface is absent on a shop without
+  # GraphQL. The tag is inert until graphql-base is installed.
+  OxidEsales\Payments\Mollie\GraphQL\Service\NamespaceMapper:
+    autowire: false
+    autoconfigure: false
+    tags: [ 'graphql_namespace_mapper' ]
+
+  # ===========================================
+  # GRAPH-QL / MS5 — ACP checkout service (payment-base MCP layer)
+  # ===========================================
+  # The provider half of the agentic-commerce layer: create_checkout on the
+  # headless path; complete_checkout refused (Mollie has no server-side token
+  # charge - the buyer pays on Mollie's page, the webhook ends the order). The
+  # MCP / UCP transport is a separate feature and wires
+  # AcpCheckoutServiceInterface to this service. In a shop running several
+  # providers the last merged services.yaml decides these two shared ids.
+  OxidEsales\PaymentBase\Mcp\Acp\AcpResponseFormatterInterface:
+    class: OxidEsales\PaymentBase\Mcp\Acp\AcpResponseFormatter
+    arguments:
+      $paymentProviders: [ 'mollie' ]
+
+  OxidEsales\Payments\Mollie\Mcp\MollieAcpCheckoutService:
+    arguments:
+      $contractService: '@OxidEsales\PaymentBase\Service\ContractServiceInterface'
+      $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
+      $eventDispatcher: '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
+      $formatter: '@OxidEsales\PaymentBase\Mcp\Acp\AcpResponseFormatterInterface'
+      $contractOpening: '@OxidEsales\PaymentBase\Checkout\Headless\ContractOpeningServiceInterface'
+      $userBaskets: '@OxidEsales\PaymentBase\Checkout\Headless\UserBasketFactoryInterface'
+      $buyers: '@OxidEsales\PaymentBase\Checkout\Headless\GuestUserResolverInterface'
+      $contractCommit: '@OxidEsales\PaymentBase\Service\Commit\ContractCommitServiceInterface'
+    public: true
+
+  OxidEsales\PaymentBase\Mcp\Acp\AcpCheckoutServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Mcp\MollieAcpCheckoutService
+    public: true
+
   # ===========================================================================
   # Sprint 1: scaffold. Concrete services are appended by later sprints:
   #   - Sprint 2 registers the adapter factory + LazyMollieAdapter and aliases
@@ -159,6 +213,9 @@ services:
       # left behind, instead of stacking another one beside it.
       $previousAttemptCleaner: '@OxidEsales\PaymentBase\Checkout\PreviousCheckoutAttemptCleanerInterface'
       $openAttempts: '@OxidEsales\PaymentBase\Checkout\OpenCheckoutAttemptRegistryInterface'
+      # GRAPH-QL / MS2: a headless attempt has no session; its "previous attempt"
+      # is the open contract of the same user basket (payment-base S3).
+      $openAttemptFinder: '@OxidEsales\PaymentBase\Repository\OpenAttemptFinderInterface'
     tags:
       - { name: payment.event_handler, priority: 90 }
     public: false
@@ -208,8 +265,12 @@ services:
 
   # MollieReturnResolver is excluded from the Service/* resource sweep above (it lives in the
   # Return/ subdirectory, mirroring Stripe's own split) and registered explicitly here.
+  # GRAPH-QL / MS2: tagged so payment-base's ReturnResolverRegistry finds it for the
+  # headless return (mollieCheckoutReturn); the Twig controller keeps resolving it directly.
   OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver:
     public: true
+    tags:
+      - { name: oe.payment.return_resolver, provider: mollie }
     arguments:
       $paymentsAdapter: '@OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface'
       $statusMapper: '@OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper'

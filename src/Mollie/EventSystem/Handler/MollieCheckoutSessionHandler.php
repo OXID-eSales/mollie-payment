@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\EventSystem\Handler;
 
+use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
@@ -73,18 +74,22 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
             );
         }
 
-        $redirectUrl = $this->buildRedirectUrl($contract);
+        $redirectUrl = $this->redirectUrlFor($contract, $context);
 
         // IFRAME-04: the shopper picked a specific Mollie method inline (mollieMethod) and, for
         // "creditcard", Mollie Components minted a cardToken. A cardToken pins the charge to a card
         // (CheckoutPaymentService forces creditcard); other methods are passed straight through so
         // Mollie's hosted page opens directly on that method. Both null = classic redirect flow.
         $cardToken = $this->readCardToken($context);
+        $basket = $context->get('basket');
         $request = $this->checkoutPaymentService->buildCreatePaymentRequest(
             $contract,
             $this->readSelectedMethod($context),
             $redirectUrl,
             $cardToken,
+            // GRAPH-QL / MS1: the basket being paid - the session basket on the Twig / OPC path,
+            // the persisted user basket on the headless one (no session there).
+            $basket instanceof Basket ? $basket : null,
         );
 
         try {
@@ -163,6 +168,24 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
         $method = trim($method);
 
         return $method === '' ? null : $method;
+    }
+
+    /**
+     * Where Mollie sends the shopper afterwards. The Twig / OPC checkout returns to the shop's
+     * `cl=order&fnc=checkoutReturn` with the contract token; a headless contract (GRAPH-QL / MS1)
+     * returns to the client's own URL, with the contract id appended so one landing page can
+     * serve many attempts. Mollie knows a single redirect URL for every outcome, so the client's
+     * `cancelUrl` is not used.
+     */
+    private function redirectUrlFor(PaymentContractInterface $contract, EventContext $context): string
+    {
+        $returnUrl = $context->get('returnUrl');
+        if ($context->get('headless') === true && is_string($returnUrl) && $returnUrl !== '') {
+            return $returnUrl . (str_contains($returnUrl, '?') ? '&' : '?')
+                . 'contract_id=' . urlencode((string) ($contract->getId() ?? ''));
+        }
+
+        return $this->buildRedirectUrl($contract);
     }
 
     private function buildRedirectUrl(PaymentContractInterface $contract): string
