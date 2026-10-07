@@ -11,14 +11,11 @@ env:
   TEMPLATE_ENGINE: 'twig'
   # Branch of OXID-eSales/payment-base to test against. Change in sync with
   # the mollie branch when the two repos co-evolve.
-  # Note: a payment-base feature branch cannot be pinned here - composer.json requires
-  # `payment-base >=v1.2`, which only b-7.4.x satisfies (Packagist aliases it 1.2.x-dev);
-  # a path repo of another branch has no alias and the resolve fails (MOL-18, 2026-09-24).
-  # TEMPORARY (GRAPH-QL): payment-base's headless checkout lives on its b-7.4.x-GRAPH-QL
-  # branch until it is merged; the alias satisfies composer.json's `>=v1.2` for a branch
-  # without a Packagist alias. Revert to 'b-7.4.x' and an empty alias after the merge.
-  PAYMENT_BASE_BRANCH: 'b-7.4.x-GRAPH-QL'
-  PAYMENT_BASE_VERSION_ALIAS: ' as 1.2.x-dev'
+  # composer.json requires `payment-base >=v1.2`; b-7.4.x satisfies it through its branch
+  # alias (1.2.x-dev). To pin a payment-base feature branch set PAYMENT_BASE_VERSION_ALIAS to
+  # ' as 1.2.x-dev' (as GRAPH-QL did 2026-10-06/07); keep it empty on b-7.4.x.
+  PAYMENT_BASE_BRANCH: 'b-7.4.x'
+  PAYMENT_BASE_VERSION_ALIAS: ''
 
 jobs:
   install_shop_with_module:
