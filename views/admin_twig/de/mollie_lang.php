@@ -61,6 +61,8 @@ $aLang = [
     'MOLLIE_ADMIN_AMOUNT_NOT_POSITIVE' => 'Der Betrag muss größer als null sein.',
     'MOLLIE_ADMIN_AMOUNT_PRECISION' => 'Der Betrag darf höchstens zwei Nachkommastellen haben.',
     'MOLLIE_ADMIN_AMOUNT_EXCEEDS_BOUND' => 'Der Betrag überschreitet den verfügbaren Saldo.',
+    'MOLLIE_ADMIN_REFUND_CAPTURE_SETTLING' => 'Mollie verbucht die Erfassung noch — die Erstattung konnte noch nicht angelegt werden. Bitte in einem Moment erneut versuchen.',
+    'MOLLIE_ADMIN_REFUND_FAILED' => 'Die Erstattung konnte bei Mollie nicht angelegt werden. Bitte die Transaktionshistorie prüfen und erneut versuchen.',
     'MOLLIE_ADMIN_AMOUNT_INVALID' => 'Der Betrag ist ungültig.',
 
     'SHOP_MODULE_GROUP_MOLLIE_GENERAL' => 'Allgemein',

@@ -14,10 +14,14 @@ use InvalidArgumentException;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Service\StockRestorationServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieRefundDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\RefundRequest;
+use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface;
+use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
+use OxidEsales\Payments\Mollie\Service\Exception\MollieRefundNotYetAvailableException;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -29,7 +33,9 @@ use Psr\Log\LoggerInterface;
  * and depends on the generic, non-segregated `PaymentAdapterInterface`. Sprint 6's own risk
  * analysis requires the refund bound to come from the Mollie payment (API truth) and requires
  * reuse of the ISP-segregated Mollie adapters — mirrors Stripe's `RefundService`, which made the
- * same call for the same reasons (see docs/dev_day_log 20260629 sprint 06 notes).
+ * same call for the same reasons (see docs/dev_day_log 20260629 sprint 06 notes). MOL-30 refined
+ * "API truth": while Mollie still books a capture its payment reports nothing settled, so the
+ * ceiling is {@see RefundBound} — Mollie's figure once settled, the shop's record until then.
  *
  * DRY: the actual contract bookkeeping (FULFILLED guard + delta-only accumulation) is delegated
  * to {@see ContractRefundRecorder}, the same collaborator the webhook-driven refund path uses.
@@ -60,26 +66,46 @@ final class RefundService implements RefundServiceInterface
 
 
         $payment = $this->paymentsAdapter->getPayment($providerOrderId);
-        // Single source of truth for the ceiling (Sprint 11 Story 4 / F21): this service used to
-        // carry its own copy of the formula, so a fix to one was not a fix to the other.
-        $refundable = $payment->refundableAmount();
+        // Single source of truth for the ceiling (Sprint 11 Story 4 / F21, MOL-30): the same rule
+        // the admin panel offers - {@see RefundBound} - so the form never offers what is refused.
+        $refundable = RefundBound::of($contract, $payment);
         $effectiveAmount = $this->resolveRefundAmount($amount, $refundable, $contract->getId() ?? 'unknown');
 
         // Story 3 (Sprint 9): Optional admin description for audit trail.
         // Stored in Mollie's refund metadata for retrieval.
-        $refund = $this->refundAdapter->createRefund(new RefundRequest(
+        $request = new RefundRequest(
             $providerOrderId,
             MollieAmountDto::fromComponents($payment->amount->currency, $effectiveAmount),
             $reason,
             $idempotencyKey,
             $description,
-        ));
+        );
+        $refund = $this->createRefund($request, $payment);
 
         $this->refundRecorder->record($contract, (float) $refund->amount->value, $contract->getId());
 
         $this->restoreStockIfOrderLinked($contract);
 
         return $refund;
+    }
+
+    /**
+     * MOL-30: in the seconds after "Execute capture" Mollie's payment still reads `authorized`;
+     * the shop knows it captured and offers the refund, but Mollie may refuse it until the capture
+     * has settled. That refusal is named, so the admin is told to try again in a moment rather
+     * than shown a generic failure. Any other refusal propagates as before.
+     */
+    private function createRefund(RefundRequest $request, MolliePaymentDto $payment): MollieRefundDto
+    {
+        try {
+            return $this->refundAdapter->createRefund($request);
+        } catch (MollieAdapterException $refusal) {
+            if ($payment->status === MollieStatusMapper::STATUS_AUTHORIZED) {
+                throw MollieRefundNotYetAvailableException::whileSettling($request->paymentId, $refusal);
+            }
+
+            throw $refusal;
+        }
     }
 
     /**

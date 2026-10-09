@@ -131,3 +131,20 @@ export function articleStockOf(articleId: string): ArticleStock {
 export function setArticleStock(articleId: string, stock: ArticleStock): void {
     shopDbExecute(`UPDATE oxarticles SET OXSTOCK = ${stock.stock}, OXSTOCKFLAG = ${stock.flag} WHERE OXID = '${articleId}'`);
 }
+
+export interface ContractRow {
+    oxid: string;
+    state: string;
+    providerOrderId: string;
+    capturedAmount: string;
+    refundedAmount: string;
+}
+
+/** The payment contract linked to an order (MOL-30: its Mollie payment id and the shop's own figures). */
+export function contractForOrder(orderId: string): ContractRow | undefined {
+    const row = shopDbQuery(
+        `SELECT OXID, OXSTATE, IFNULL(OXPROVIDERORDERID, ''), IFNULL(OXCAPTUREDAMOUNT, ''), IFNULL(OXREFUNDEDAMOUNT, '') FROM oe_payments_contract WHERE OXORDERID = '${orderId.replace(/'/g, "''")}' ORDER BY OXCREATED DESC LIMIT 1`,
+    )[0];
+    if (!row) return undefined;
+    return { oxid: row[0], state: row[1], providerOrderId: row[2], capturedAmount: row[3], refundedAmount: row[4] };
+}

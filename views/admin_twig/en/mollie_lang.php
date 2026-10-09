@@ -64,6 +64,8 @@ $aLang = [
     'MOLLIE_ADMIN_AMOUNT_NOT_POSITIVE' => 'The amount must be greater than zero.',
     'MOLLIE_ADMIN_AMOUNT_PRECISION' => 'The amount may only have up to two decimal places.',
     'MOLLIE_ADMIN_AMOUNT_EXCEEDS_BOUND' => 'The amount exceeds the available balance.',
+    'MOLLIE_ADMIN_REFUND_CAPTURE_SETTLING' => 'Mollie is still settling the capture — the refund could not be booked yet. Please try again in a moment.',
+    'MOLLIE_ADMIN_REFUND_FAILED' => 'The refund could not be booked at Mollie. Please check the transaction history and try again.',
     'MOLLIE_ADMIN_AMOUNT_INVALID' => 'The amount is invalid.',
 
     // Module configuration — group headings

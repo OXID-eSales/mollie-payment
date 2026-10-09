@@ -204,6 +204,47 @@ final class MolliePanelViewDataBuilderTest extends TestCase
         self::assertFalse($viewData['isCapturable']);
     }
 
+    /**
+     * MOL-30 (2026-10-09): the render right after "Execute capture". The contract is fulfilled with
+     * the captured amount recorded; Mollie's payment still reads `authorized`, captured 0.00. The
+     * Refund section must be there on that render, not after a reload. Real bounds, not a mock.
+     */
+    public function testBuild_RightAfterACaptureWhileMollieStillShowsTheHold_IsRefundableForTheCapturedAmount(): void
+    {
+        $order = $this->stubOrder('order-fresh-capture');
+        $contract = $this->fulfilledContract();
+        $contract->method('getAmount')->willReturn(20.9);
+        $contract->method('getCapturedAmount')->willReturn(20.9);
+        $contract->method('getRefundedAmount')->willReturn(0.0);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+
+        $adapter = $this->createMock(MolliePaymentsAdapterInterface::class);
+        $adapter->method('getPayment')->with('tr_2')->willReturn(new MolliePaymentDto(
+            id: 'tr_2',
+            status: 'authorized',
+            amount: MollieAmountDto::fromComponents('EUR', 20.9),
+            amountCaptured: 0.0,
+        ));
+        $snapshots = new MolliePaymentSnapshotProvider($adapter, new NullLogger());
+        $builder = new MolliePanelViewDataBuilder(
+            $this->contracts,
+            $this->transactionHistory,
+            new AdminActionBounds($snapshots),
+            $this->urlBuilder,
+            $this->validationFeedback,
+            $snapshots,
+            $this->translatorStub(),
+            new RefundedAmountResolver(),
+        );
+
+        $viewData = $builder->build($order);
+
+        self::assertTrue($viewData['isRefundable'], 'the Refund section is offered on the very next render');
+        self::assertSame(20.9, $viewData['refundBound']);
+        self::assertFalse($viewData['isCapturable'], 'nothing is left to capture');
+    }
+
     // =========================================================================
     // Story 2 (Sprint 9) / 2026-09-17: View Cache Reset
     // =========================================================================
