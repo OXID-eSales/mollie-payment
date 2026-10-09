@@ -1,7 +1,7 @@
 # 2026-10-09
 
 - Sprint MOL-30 — Refund option available right after a successful manual capture (Mollie admin Payment tab) —
-  **IMPLEMENTED** (approved 2026-10-09), branch `b-7.4.x-MOL-30-refund-after-capture`, pushed; merge on the product owner's word. Done: `done/MOL-30-refund-after-capture-without-reload.md`. Plan `sprints/MOL-30-refund-after-capture-without-reload.md`,
+  **IMPLEMENTED** (approved 2026-10-09), branch `b-7.4.x-MOL-30-refund-after-capture`; **merged into `b-7.4.x` 2026-10-09** (merge commit `0bea33b`, at the user's request). Done: `done/MOL-30-refund-after-capture-without-reload.md`. Plan `sprints/MOL-30-refund-after-capture-without-reload.md`,
   trace `reports/MOL-30-refund-after-capture-trace.md`.
   - Cause: `isRefundable` needs contract `fulfilled` (already true after the capture) **and** a positive refund bound,
     but `AdminActionBounds::refundBound()` reads only Mollie's live payment, which still says `authorized` / captured
