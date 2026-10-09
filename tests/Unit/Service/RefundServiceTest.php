@@ -18,8 +18,10 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieRefundDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\RefundRequest;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
+use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
 use OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface;
 use OxidEsales\Payments\Mollie\Service\ContractRefundRecorder;
+use OxidEsales\Payments\Mollie\Service\Exception\MollieRefundNotYetAvailableException;
 use OxidEsales\Payments\Mollie\Service\RefundService;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -139,6 +141,51 @@ final class RefundServiceTest extends TestCase
         $this->service->refund($contract, 50.0);
     }
 
+    // ---- MOL-30 (2026-10-09): a refund inside the window in which Mollie still settles the capture ----
+
+    public function testRefund_InsideTheSettlingWindow_AcceptsWhatTheShopCaptured(): void
+    {
+        // The panel offers the captured amount right after the capture; the service must not refuse
+        // it with "only 0.00 is refundable" because Mollie's payment still reads `authorized`.
+        $contract = $this->fulfilledContract('tr_fresh', '7', captured: 20.9, refunded: 0.0);
+        $this->paymentsAdapter->method('getPayment')->with('tr_fresh')->willReturn(
+            $this->authorizedHold('tr_fresh', 20.9),
+        );
+        $this->refundAdapter->expects(self::once())
+            ->method('createRefund')
+            ->with(self::callback(static fn (RefundRequest $request): bool => $request->amount->value === 20.9))
+            ->willReturn($this->refundDto('re_9', 'tr_fresh', 20.9));
+
+        $dto = $this->service->refund($contract, 20.9);
+
+        self::assertSame(20.9, $dto->amount->value);
+    }
+
+    public function testRefund_WhenMollieRefusesWhileStillSettling_SaysSoInsteadOfAGenericFailure(): void
+    {
+        $contract = $this->fulfilledContract('tr_fresh', '7', captured: 20.9, refunded: 0.0);
+        $this->paymentsAdapter->method('getPayment')->willReturn($this->authorizedHold('tr_fresh', 20.9));
+        $this->refundAdapter->method('createRefund')
+            ->willThrowException(new MollieAdapterException('The payment is not refundable', 422));
+        $contract->expects(self::never())->method('addRefundedAmount');
+
+        $this->expectException(MollieRefundNotYetAvailableException::class);
+
+        $this->service->refund($contract, 20.9);
+    }
+
+    public function testRefund_WhenMollieRefusesASettledPayment_PropagatesTheAdapterError(): void
+    {
+        $contract = $this->fulfilledContract('tr_paid', '8', captured: 100.0, refunded: 0.0);
+        $this->paymentsAdapter->method('getPayment')->willReturn($this->payment('tr_paid', 100.0, 0.0, captured: 100.0));
+        $this->refundAdapter->method('createRefund')
+            ->willThrowException(new MollieAdapterException('Something else', 500));
+
+        $this->expectException(MollieAdapterException::class);
+
+        $this->service->refund($contract, 50.0);
+    }
+
     public function testRefund_WhenContractNotFulfilled_Rejected(): void
     {
         $state = $this->createMock(ContractState::class);
@@ -254,8 +301,12 @@ final class RefundServiceTest extends TestCase
         return $contract;
     }
 
-    private function fulfilledContract(string $providerOrderId, string $id): PaymentContractInterface&MockObject
-    {
+    private function fulfilledContract(
+        string $providerOrderId,
+        string $id,
+        ?float $captured = null,
+        ?float $refunded = null,
+    ): PaymentContractInterface&MockObject {
         $state = $this->createMock(ContractState::class);
         $state->method('isFulfilled')->willReturn(true);
 
@@ -263,8 +314,21 @@ final class RefundServiceTest extends TestCase
         $contract->method('getState')->willReturn($state);
         $contract->method('getProviderOrderId')->willReturn($providerOrderId);
         $contract->method('getId')->willReturn($id);
+        $contract->method('getCapturedAmount')->willReturn($captured);
+        $contract->method('getRefundedAmount')->willReturn($refunded);
 
         return $contract;
+    }
+
+    /** Mollie's payment right after a capture: still `authorized`, nothing settled yet. */
+    private function authorizedHold(string $id, float $amount): MolliePaymentDto
+    {
+        return new MolliePaymentDto(
+            id: $id,
+            status: 'authorized',
+            amount: MollieAmountDto::fromComponents('EUR', $amount),
+            amountCaptured: 0.0,
+        );
     }
 
     private function payment(

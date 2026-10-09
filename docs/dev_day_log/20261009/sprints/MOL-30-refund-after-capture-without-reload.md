@@ -3,7 +3,7 @@
 **Date:** 2026-10-09 · **Ticket:** MOL-30 · **Report:** `../reports/MOL-30-refund-after-capture-trace.md`
 **Repo:** mollie-payment only (payment-base untouched). **Branch (when approved):** `b-7.4.x-MOL-30-refund-after-capture`
 cut from `b-7.4.x`. **Requirements:** payment-base `docs/dev_log/20260903/sprints/_engeneering_requirements.md`.
-**Status:** PLANNED — awaiting the product owner's approval. Nothing implemented.
+**Status:** DONE 2026-10-09 on `b-7.4.x-MOL-30-refund-after-capture` — see `../done/MOL-30-refund-after-capture-without-reload.md`; merge on the product owner's word.
 
 **Definition of Done (sprint-level):** after "Execute capture" succeeds on the Payment tab, the very next render shows
 the Refund section with the captured amount as refundable, without a reload; a refund submitted in that window either
@@ -113,3 +113,11 @@ after it succeeds (e2e in Story 4).
 - Gates in CI form; `done/MOL-30-….md`; `status.md`; memory note; sound.
 
 **Definition of Done:** CI green on the branch; merge on the product owner's word.
+
+## Done (2026-10-09)
+
+Stories 1–4 delivered as planned; details, measurement and follow-ups in `../done/MOL-30-refund-after-capture-without-reload.md`.
+Two plan details moved during implementation: the lookup-failure case stays fail-closed (0, as the capture bound), and the
+refund rule lives in a small pure class `Service\RefundBound` used by both the panel and `RefundService` rather than on
+`AdminActionBounds`, so the service does not depend on the admin snapshot provider. The measurement came from Mollie's own
+timestamps instead of the spec's poll (placeholder API key in the e2e env).

@@ -546,6 +546,9 @@ services:
   # Admin request handlers — delegate to the services above, tagged so
   # EventListenerProvider dispatches the Mollie concrete event produced by the translator.
   OxidEsales\Payments\Mollie\EventSystem\Handler\MollieRefundRequestHandler:
+    arguments:
+      $feedback: '@OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface'
+      $translator: '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
     tags:
       - { name: payment.event_handler }
     public: true

@@ -15,6 +15,9 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieRefundDto;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieRefundRequestEvent;
 use OxidEsales\Payments\Mollie\EventSystem\Handler\MollieRefundRequestHandler;
+use OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface;
+use OxidEsales\Payments\Mollie\Service\Exception\MollieRefundNotYetAvailableException;
+use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use OxidEsales\Payments\Mollie\Service\RefundServiceInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -56,6 +59,64 @@ final class MollieRefundRequestHandlerTest extends TestCase
 
         self::assertTrue($event->isSuccess());
         self::assertSame('re_1', $event->getRefundId());
+    }
+
+    // ---- MOL-30 (2026-10-09): a failed admin refund is told to the admin, not swallowed ----
+
+    public function testHandle_WhenTheCaptureIsStillSettling_TellsTheAdminToTryAgainInAMoment(): void
+    {
+        $feedback = $this->createMock(AdminValidationFeedbackInterface::class);
+        $feedback->expects(self::once())
+            ->method('rejectWithMessage')
+            ->with('order-7', 'translated:MOLLIE_ADMIN_REFUND_CAPTURE_SETTLING');
+        $handler = new MollieRefundRequestHandler($this->refundService, $feedback, $this->translator());
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getOrderId')->willReturn('order-7');
+        $event = new MollieRefundRequestEvent($contract, 20.9);
+        $this->refundService->method('refund')->willThrowException(
+            MollieRefundNotYetAvailableException::whileSettling('tr_fresh', new \RuntimeException('422')),
+        );
+
+        $handler->handle($event);
+
+        self::assertFalse($event->isSuccess());
+        self::assertSame('capture_settling', $event->getErrorCode());
+    }
+
+    public function testHandle_WhenTheRefundFailsForAnotherReason_TellsTheAdminItFailed(): void
+    {
+        $feedback = $this->createMock(AdminValidationFeedbackInterface::class);
+        $feedback->expects(self::once())
+            ->method('rejectWithMessage')
+            ->with('order-8', 'translated:MOLLIE_ADMIN_REFUND_FAILED');
+        $handler = new MollieRefundRequestHandler($this->refundService, $feedback, $this->translator());
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getOrderId')->willReturn('order-8');
+        $event = new MollieRefundRequestEvent($contract, 5.0);
+        $this->refundService->method('refund')->willThrowException(new \RuntimeException('Mollie said no'));
+
+        $handler->handle($event);
+
+        self::assertSame('refund_failed', $event->getErrorCode());
+    }
+
+    public function testHandle_WithoutTheAdminChannel_KeepsTheResultOnTheEventOnly(): void
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $event = new MollieRefundRequestEvent($contract, 5.0);
+        $this->refundService->method('refund')->willThrowException(new \RuntimeException('Mollie said no'));
+
+        $this->handler->handle($event);
+
+        self::assertSame('refund_failed', $event->getErrorCode());
+    }
+
+    private function translator(): LanguageTranslatorInterface
+    {
+        $translator = $this->createMock(LanguageTranslatorInterface::class);
+        $translator->method('translateString')->willReturnCallback(static fn (string $key): string => "translated:$key");
+
+        return $translator;
     }
 
     public function testHandle_IgnoresOtherEventTypes(): void

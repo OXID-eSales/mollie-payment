@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { AdminLoginPage } from '../pages/admin/AdminLoginPage';
 import { checkoutAuthorizedByInlineCard } from '../../fixtures/mollie-inline-card';
-import { allOrderIds, ordersAddedSince } from '../../fixtures/shop-db';
+import { allOrderIds, ordersAddedSince, contractForOrder } from '../../fixtures/shop-db';
+import { fetchMolliePayment } from '../../fixtures/mollie-api';
 
 /**
  * Capture option remains available after the payment has been captured — after a successful manual
@@ -49,5 +50,37 @@ test.describe('Mollie admin — Capture section after a successful capture', () 
         expect(history, 'the transaction history has the CAPTURE').toMatch(/capture/i);
         await expect(page.locator('[data-testid="mollie-capture-form"]'), 'nothing left to capture → no Capture section').toHaveCount(0);
         await expect(page.locator('form[name="mollieCancelForm"], [data-testid="mollie-cancel-form"]'), 'nothing left to cancel → no Cancel section').toHaveCount(0);
+
+        // MOL-30: the Refund section on that same render — the shop knows what it captured even while
+        // Mollie's payment resource still reads `authorized`.
+        const refundForm = page.locator('[data-testid="mollie-refund-form"]');
+        await expect(refundForm, 'MOL-30: the Refund section is offered without a reload').toBeVisible({ timeout: 5_000 });
+        await expect(refundForm.locator('[data-testid="refund-bound"]'), 'refundable = what was captured').toContainText(capturable.toFixed(2));
+
+        // Measurement (no assertion): how long Mollie takes to move the payment to `paid` after the capture.
+        const contract = contractForOrder(order.oxid);
+        expect(contract?.state, 'the capture fulfilled the contract in the same request').toBe('fulfilled');
+        if (contract?.providerOrderId && process.env.MOLLIE_API_KEY) {
+            const started = Date.now();
+            for (let i = 0; i < 30; i++) {
+                const live = await fetchMolliePayment(contract.providerOrderId);
+                if ('status' in live && live.status === 'paid') {
+                    console.log(`[MOL-30] Mollie payment ${contract.providerOrderId} read paid ${Date.now() - started} ms after the capture render (captured ${live.amountCaptured}, remaining ${live.amountRemaining})`);
+                    break;
+                }
+                if (i === 29) console.log(`[MOL-30] Mollie payment ${contract.providerOrderId} still ${'status' in live ? live.status : live.error} after ${Date.now() - started} ms`);
+                await page.waitForTimeout(500);
+            }
+        } else {
+            await page.waitForTimeout(10_000);
+        }
+
+        // Story 4: the offered refund is a real one - a full refund from that same panel goes through.
+        await refundForm.locator('[data-testid="refund-amount-input"]').fill(capturable.toFixed(2));
+        await refundForm.locator('[data-testid="refund-submit"]').click();
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(1500);
+        await expect(page.locator('[data-testid="mollie-validation-errors"]'), 'the refund was booked, no message').toHaveCount(0);
+        await expect(page.locator('[data-testid="refunded-amount"]'), '"Refunded" reflects the refund').toContainText(capturable.toFixed(2));
     });
 });

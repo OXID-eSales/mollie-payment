@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\Admin;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
+use OxidEsales\Payments\Mollie\Service\RefundBound;
 
 /**
  * Derives admin capture/refund bounds from the live Mollie payment via
@@ -48,9 +49,13 @@ final class AdminActionBounds implements AdminActionBoundsInterface
         return max(0.0, min($live, $remainder));
     }
 
+    /**
+     * MOL-30 (2026-10-09): the same rule RefundService accepts ({@see RefundBound}) - the shop's
+     * own record stands while Mollie still books a capture, Mollie's figure once it has settled.
+     */
     public function refundBound(PaymentContractInterface $contract): float
     {
-        return $this->snapshots->snapshot($contract)?->refundableAmount() ?? 0.0;
+        return RefundBound::of($contract, $this->snapshots->snapshot($contract));
     }
 
     public function isAuthorizedHold(PaymentContractInterface $contract): bool
