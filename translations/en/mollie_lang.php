@@ -29,7 +29,6 @@ $aLang = [
     // %1$s = field label, %2$s = allowed-symbols description.
     'MOLLIE_VALIDATION_FIELD_INVALID' => 'The %1$s field is not valid. Allowed symbols are: %2$s',
     'MOLLIE_VALIDATION_REVIEW_ADDRESS' => 'Please review your address details.',
-    'MOLLIE_VALIDATION_UNDERSTAND' => 'Understand',
     'MOLLIE_VALIDATION_INVALID_USER_DATA' => 'Some of your address details contain characters we cannot pass on to the payment provider. Please review your address details.',
     'MOLLIE_VALIDATION_CLASS_LETTERS' => 'letters',
     'MOLLIE_VALIDATION_CLASS_DIGITS' => 'digits',

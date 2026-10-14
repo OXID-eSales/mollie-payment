@@ -11,9 +11,6 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Security;
 
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieConfigurationException;
 use OxidEsales\Payments\Mollie\Adapter\MollieClientFactory;
-use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-use OxidEsales\Payments\Mollie\Service\ConfigurationValidator;
-use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 
@@ -34,21 +31,9 @@ final class CredentialConfidentialityTest extends TestCase
 {
     private const SECRET_MARKER = 'zzTOPSECRETzz789';
 
-    public function testConfigurationValidatorErrorsNeverContainTheApiKeyValue(): void
-    {
-        $key = 'test_' . self::SECRET_MARKER . str_repeat('a', 20);
-        $config = $this->createMock(ModuleConfigurationServiceInterface::class);
-        $config->method('getMode')->willReturn(MollieDefinitions::MODE_LIVE); // mismatched on purpose
-        $config->method('getApiKey')->willReturn($key);
-
-        $result = (new ConfigurationValidator($config))->validate();
-
-        self::assertFalse($result->isValid());
-        foreach ($result->getErrors() as $error) {
-            self::assertStringNotContainsString(self::SECRET_MARKER, $error);
-            self::assertStringNotContainsString($key, $error);
-        }
-    }
+    // 2026-10-14 (review B2): the ConfigurationValidator leak test left with the validator
+    // itself — the class had no production caller, so its error strings could not leak anything.
+    // MollieClientFactory remains the one place a malformed key is turned into a message.
 
     public function testClientFactoryMalformedKeyExceptionNeverContainsTheKeyValue(): void
     {

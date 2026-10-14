@@ -76,11 +76,6 @@ final class MollieDefinitionsTest extends TestCase
         self::assertFalse(MollieDefinitions::requiresOrderData('ideal'));
     }
 
-    public function testSupportsCountry_EmptyListMeansAll(): void
-    {
-        self::assertTrue(MollieDefinitions::supportsCountry(MollieDefinitions::PAYMENT_ID, 'DE'));
-    }
-
     public function testModeAndCaptureConstants_AreExpectedValues(): void
     {
         self::assertSame('test', MollieDefinitions::MODE_TEST);

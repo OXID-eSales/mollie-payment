@@ -81,7 +81,6 @@ services:
       - 'src/Mollie/Service/OxidStockRestorationService.php'
       - 'src/Mollie/Service/Factory/*'
       - 'src/Mollie/Service/Result/*'
-      - 'src/Mollie/Service/ConfigurationValidationResult.php'
       # MOL-22 value objects (built by the validator / from a throwable, never by the container)
       - 'src/Mollie/Service/BuyabilityFailure.php'
       - 'src/Mollie/Service/NotOrderableCheckoutFailure.php'
@@ -108,9 +107,6 @@ services:
   # Interface aliases (DIP) — config foundation.
   OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface:
     alias: OxidEsales\Payments\Mollie\Service\ModuleConfigurationService
-    public: true
-  OxidEsales\Payments\Mollie\Service\ConfigurationValidatorInterface:
-    alias: OxidEsales\Payments\Mollie\Service\ConfigurationValidator
     public: true
   OxidEsales\Payments\Mollie\Service\MollieOrderDataProviderInterface:
     alias: OxidEsales\Payments\Mollie\Service\MollieOrderDataProvider
@@ -168,11 +164,10 @@ services:
     alias: OxidEsales\Payments\Mollie\Adapter\OxidShopAdapter
     public: true
 
-  OxidEsales\Payments\Mollie\Adapter\OxidShopOrderService:
-    public: true
-  # 2026-09-01 — this module no longer binds ShopOrderServiceInterface.
-  # payment-base owns order finalization; four modules aliasing one container
-  # id meant a single winner finalized every provider's orders.
+  # 2026-09-01 — this module does not bind ShopOrderServiceInterface: payment-base owns order
+  # finalization (four modules aliasing one container id meant a single winner finalized every
+  # provider's orders). 2026-10-14 (review B1): the orphaned OxidShopOrderService class that
+  # registration kept alive was deleted outright.
 
   # ===========================================================================
   # Sprint 4: checkout flow.
