@@ -16,6 +16,7 @@ use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
 use OxidEsales\Payments\Mollie\Command\ReconcilePaidContractsCommand;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
+use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentResult;
 use OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandlerInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -51,7 +52,7 @@ final class ReconcilePaidContractsCommandTest extends TestCase
             ->willReturn([$this->contract('c-1', 'tr_1')]);
         $this->payments->method('getPayment')->with('tr_1')->willReturn($this->payment('paid'));
         $this->fulfillment->expects(self::once())->method('handlePaymentPaid')->with('tr_1')
-            ->willReturn(FulfillmentOutcome::Acted);
+            ->willReturn(FulfillmentResult::acted('contract-1'));
 
         self::assertSame(Command::SUCCESS, $this->tester->execute([]));
         self::assertStringContainsString('1 contract(s) fulfilled', $this->tester->getDisplay());

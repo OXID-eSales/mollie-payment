@@ -119,7 +119,11 @@ class WebhookController extends FrontendController
             $this->sendResponse(503, 'guard_unavailable');
         }
 
-        $guardResult = $guard->check($this->buildGuardRequest());
+        // Built ONCE (review 2026-10-14, A-L2): a second build re-read php://input and re-emitted
+        // the proxy-header debug log just to recover an IP this request object already carries.
+        $guardRequest = $this->buildGuardRequest();
+
+        $guardResult = $guard->check($guardRequest);
         if (!$guardResult->ok) {
             $this->getFileLogger()?->log('webhook_rejected', [
                 'reason' => $guardResult->reason ?? 'rejected',
@@ -140,7 +144,7 @@ class WebhookController extends FrontendController
         $result = $this->processor->process(new ProcessorWebhookRequest(
             payload: 'id=' . rawurlencode($paymentId),
             signature: '',
-            remoteIp: $this->buildGuardRequest()->clientIp,
+            remoteIp: $guardRequest->clientIp,
             receivedAt: new DateTimeImmutable(),
         ));
 

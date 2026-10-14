@@ -13,6 +13,7 @@ use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Webhook\WebhookEvent;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
+use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentResult;
 use OxidEsales\Payments\Mollie\Webhook\Handler\PaymentPaidHandler;
 use OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandlerInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -41,7 +42,7 @@ final class WebhookRetrySemanticsTest extends TestCase
 
     public function testFulfilmentThatCouldNotCompleteIsAFailureSoMollieRetries(): void
     {
-        $outcome = $this->handle(FulfillmentOutcome::Failed);
+        $outcome = $this->handle(FulfillmentResult::failed('contract-1'));
 
         self::assertTrue($outcome->result->isFailure(), 'a failed fulfilment must be retried by Mollie');
         self::assertNotSame('skipped', $outcome->result->action);
@@ -49,7 +50,7 @@ final class WebhookRetrySemanticsTest extends TestCase
 
     public function testAlreadyFulfilledContractStaysASuccessfulSkip(): void
     {
-        $outcome = $this->handle(FulfillmentOutcome::NoOp);
+        $outcome = $this->handle(FulfillmentResult::noOp('contract-1'));
 
         self::assertTrue($outcome->result->isSuccess(), 'a genuine no-op must not trigger a retry');
         self::assertSame('skipped', $outcome->result->action);
@@ -57,7 +58,7 @@ final class WebhookRetrySemanticsTest extends TestCase
 
     public function testActedIsSuccess(): void
     {
-        $outcome = $this->handle(FulfillmentOutcome::Acted);
+        $outcome = $this->handle(FulfillmentResult::acted('contract-1'));
 
         self::assertTrue($outcome->result->isSuccess());
         self::assertSame('contract_fulfilled', $outcome->result->action);
@@ -69,7 +70,7 @@ final class WebhookRetrySemanticsTest extends TestCase
      */
     public function testMissingContractOnAYoungPaymentIsRetried(): void
     {
-        $outcome = $this->handle(FulfillmentOutcome::ContractNotFound, createdAt: '-30 seconds');
+        $outcome = $this->handle(FulfillmentResult::contractNotFound(), createdAt: '-30 seconds');
 
         self::assertTrue($outcome->result->isFailure(), 'a fresh payment whose contract is not visible yet must be retried');
     }
@@ -82,7 +83,7 @@ final class WebhookRetrySemanticsTest extends TestCase
     #[DataProvider('terminalAges')]
     public function testMissingContractOnAnOldOrUndatedPaymentIsTerminal(?string $createdAt): void
     {
-        $outcome = $this->handle(FulfillmentOutcome::ContractNotFound, createdAt: $createdAt);
+        $outcome = $this->handle(FulfillmentResult::contractNotFound(), createdAt: $createdAt);
 
         self::assertTrue($outcome->result->isSuccess(), 'must not retry forever');
         self::assertSame('skipped', $outcome->result->action);
@@ -103,22 +104,22 @@ final class WebhookRetrySemanticsTest extends TestCase
 
     public function testBoundaryIsInclusiveOfTheWindow(): void
     {
-        $stillRetried = $this->handle(FulfillmentOutcome::ContractNotFound, createdAt: '-9 minutes');
+        $stillRetried = $this->handle(FulfillmentResult::contractNotFound(), createdAt: '-9 minutes');
 
         self::assertTrue($stillRetried->result->isFailure());
     }
 
-    private function handle(FulfillmentOutcome $outcome, ?string $createdAt = '-1 second'): \OxidEsales\Payments\Mollie\Webhook\MollieWebhookOutcome
+    private function handle(FulfillmentResult $result, ?string $createdAt = '-1 second'): \OxidEsales\Payments\Mollie\Webhook\MollieWebhookOutcome
     {
         $fulfillmentHandler = $this->createMock(WebhookContractFulfillmentHandlerInterface::class);
-        $fulfillmentHandler->method('handlePaymentPaid')->willReturn($outcome);
+        $fulfillmentHandler->method('handlePaymentPaid')->willReturn($result);
 
         $contractRepository = $this->createMock(ContractRepositoryInterface::class);
         $contract = $this->createMock(PaymentContractInterface::class);
         $contract->method('getId')->willReturn('contract-1');
         $contractRepository->method('findByProviderOrderId')->willReturn($contract);
 
-        $handler = new PaymentPaidHandler($fulfillmentHandler, $contractRepository, new NullLogger());
+        $handler = new PaymentPaidHandler($fulfillmentHandler, new NullLogger());
 
         return $handler->handle($this->event($createdAt));
     }

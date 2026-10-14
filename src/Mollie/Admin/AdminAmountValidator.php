@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Admin;
 
+use OxidEsales\Payments\Mollie\Service\MoneyComparison;
+
 /**
  * Semantic validation of admin capture/refund amount inputs — distinct from Sprint 4's
  * character-level user-data validation (this checks numeric shape and bounds, not allowed
@@ -49,7 +51,7 @@ final class AdminAmountValidator
             return AmountValidationResult::failure(AmountValidationResult::CODE_PRECISION);
         }
 
-        if ($amount > $bound + 0.00001) {
+        if (MoneyComparison::exceeds($amount, $bound)) {
             return AmountValidationResult::failure(AmountValidationResult::CODE_EXCEEDS_BOUND);
         }
 
