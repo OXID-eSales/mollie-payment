@@ -24,8 +24,11 @@ use PDO;
  *
  * Invoked from {@see \OxidEsales\Payments\Mollie\Core\Events::onActivate()} so admins don't
  * have to hand-create the payment method after installing the module. Ported 1:1 from PayPal.
+ *
+ * Not final on purpose: the protected steps are seams — the integration test runs them against a
+ * throwaway payment id instead of the live Mollie row (review 2026-10-14, C-M1).
  */
-final class PaymentMethodInstaller
+class PaymentMethodInstaller
 {
     public function __construct(
         private readonly QueryBuilderFactoryInterface $queryBuilderFactory,

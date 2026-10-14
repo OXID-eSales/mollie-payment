@@ -42,9 +42,8 @@ class OxidStockRestorationService implements StockRestorationServiceInterface
 
     public function restoreStockForOrder(string $orderId): int
     {
-        /** @var Order $order */
-        $order = oxNew(Order::class);
-        if (!$order->load($orderId)) {
+        $order = $this->loadOrder($orderId);
+        if ($order === null) {
             $this->logger->warning('Order not found for stock restoration', ['orderId' => $orderId]);
             return 0;
         }
@@ -73,6 +72,18 @@ class OxidStockRestorationService implements StockRestorationServiceInterface
         }
 
         return $processedCount;
+    }
+
+    /**
+     * Testability seam — oxNew() needs the OXID factory (review 2026-10-14, C-M1: this class's
+     * storno/stock branch logic had no test because the order load was not seamable).
+     */
+    protected function loadOrder(string $orderId): ?Order
+    {
+        /** @var Order $order */
+        $order = oxNew(Order::class);
+
+        return $order->load($orderId) ? $order : null;
     }
 
     /**
