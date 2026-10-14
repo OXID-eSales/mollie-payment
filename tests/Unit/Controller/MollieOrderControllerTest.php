@@ -426,9 +426,11 @@ final class MollieOrderControllerTest extends TestCase
     public function testExecuteWhenUserDataInvalidDoesNotReplayAnInFlightAttempt(): void
     {
         // The address went bad between two clicks: the shopper must fix it, not be sent to Mollie.
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::never())->method('dispatch');
         $controller = $this->executeController(
             MollieDefinitions::PAYMENT_ID,
-            null,
+            $dispatcher,
             inFlightReplay: $this->replayNeverAsked(),
             userDataProblems: ['problem'],
         );

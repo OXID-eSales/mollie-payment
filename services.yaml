@@ -85,6 +85,10 @@ services:
       # MOL-22 value objects (built by the validator / from a throwable, never by the container)
       - 'src/Mollie/Service/BuyabilityFailure.php'
       - 'src/Mollie/Service/NotOrderableCheckoutFailure.php'
+      # Review A-H1 (2026-10-14) value objects: built by the entry points / the starter,
+      # never by the container (scalar ctor args Symfony cannot autowire).
+      - 'src/Mollie/Service/CheckoutStartRequest.php'
+      - 'src/Mollie/Service/CheckoutStartOutcome.php'
       - 'src/Mollie/Service/Return/*'
       # Sprint 4 (Story 6): VOs / narrow interfaces / OXID-model-bound readers excluded from
       # the autowire sweep for the same reasons Stripe excludes their counterparts — they either
@@ -205,6 +209,23 @@ services:
       - '@OxidEsales\PaymentBase\Adapter\SessionAdapterInterface'
     public: true
 
+  OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplayInterface:
+    alias: OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplay
+    public: false
+
+  # 2026-10-14 (review A-H1): THE checkout entry ladder — MOL-22 buyability, MOL-15 user-data
+  # gate, MOL-18 in-flight replay, then the checkout-session event. Shared by the standard
+  # cl=order controller and the OPC handler so the guard rungs can never diverge again.
+  # Public: MollieOrderController fetches it through the container at runtime.
+  OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter:
+    arguments:
+      - '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
+      - '@OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator'
+      - '@OxidEsales\Payments\Mollie\Service\CheckoutUserDataGateInterface'
+      - '@OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplayInterface'
+      - '@oxid_esales.monolog.logger'
+    public: true
+
   OxidEsales\PaymentBase\EventSystem\Handler\EarlyOrderCreationHandler:
     arguments:
       $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
@@ -234,13 +255,14 @@ services:
   # over the standard MollieCheckoutSessionRequestEvent; mirrors PayPal's/Stripe's OPC handlers.
   OxidEsales\Payments\Mollie\PaymentHandler\MolliePaymentHandler:
     arguments:
-      $eventDispatcher: '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
+      # 2026-10-14 (review A-H1): the handler climbs the same shared entry ladder as the
+      # standard flow (MOL-22 buyability, MOL-15 user-data gate, MOL-18 in-flight replay).
+      $checkoutStarter: '@OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter'
       $logger: '@oxid_esales.monolog.logger'
       # IFRAME-03: read the payment-base iframe flag so the handler can log the redirect
       # fallback once (Mollie's hosted page forbids framing — X-Frame-Options: DENY).
       $iframeSettings: '@OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface'
       # MOL-22: a not-orderable basket item is named to the shopper instead of a raw core key.
-      $buyability: '@OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator'
       $notOrderableMessages: '@OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages'
     tags:
       - { name: oe.payment.handler }
@@ -339,6 +361,10 @@ services:
       $messageFormatter: '@OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter'
       $translator: '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
     public: true
+
+  OxidEsales\Payments\Mollie\Service\CheckoutUserDataGateInterface:
+    alias: OxidEsales\Payments\Mollie\Service\CheckoutUserDataGate
+    public: false
 
   # ===========================================================================
   # Sprint 5: webhook pipeline.

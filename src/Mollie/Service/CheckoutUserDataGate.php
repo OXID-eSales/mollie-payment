@@ -25,7 +25,7 @@ use Throwable;
  * review your address" notice. Fail-open with a logged warning when the validator cannot run:
  * defence in depth must not take the checkout down.
  */
-final class CheckoutUserDataGate
+final class CheckoutUserDataGate implements CheckoutUserDataGateInterface
 {
     private const REVIEW_KEY = 'MOLLIE_VALIDATION_REVIEW_ADDRESS';
 

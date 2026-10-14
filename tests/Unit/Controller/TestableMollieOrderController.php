@@ -11,12 +11,14 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller;
 
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Controller\CheckoutReturnResponder;
-use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\Payments\Mollie\Service\AbandonedAttemptCleanup;
-use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplay;
+use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
+use OxidEsales\Payments\Mollie\Service\CheckoutStartRequest;
+use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplayInterface;
 use OxidEsales\Payments\Mollie\Service\NotOrderableCheckoutFailure;
+use OxidEsales\Payments\Mollie\Tests\Unit\Support\ScriptedLadderStarter;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\PaymentBase\Service\TokenServiceInterface;
 use OxidEsales\Payments\Mollie\Controller\MollieOrderController;
@@ -59,7 +61,7 @@ final class TestableMollieOrderController extends MollieOrderController
         private readonly bool $termsAccepted = true,
         private readonly bool $challengeValid = true,
         private readonly bool $basketEmpty = false,
-        private readonly ?InFlightCheckoutReplay $inFlightReplay = null,
+        private readonly ?InFlightCheckoutReplayInterface $inFlightReplay = null,
         private readonly array $userDataProblems = [],
         private readonly ?NotOrderableCheckoutFailure $notOrderable = null,
     ) {
@@ -112,7 +114,13 @@ final class TestableMollieOrderController extends MollieOrderController
             MollieReturnResolver::class => $this->resolver,
             EventDispatcherInterface::class => $this->dispatcher,
             AbandonedAttemptCleanup::class => $this->attemptCleaner,
-            InFlightCheckoutReplay::class => $this->inFlightReplay,
+            // The REAL ladder around the scripted knobs; no dispatcher = starter unavailable.
+            CheckoutSessionStarter::class => $this->dispatcher === null ? null : new ScriptedLadderStarter(
+                $this->dispatcher,
+                $this->notOrderable,
+                $this->userDataProblems,
+                $this->inFlightReplay,
+            ),
             default => null,
         };
     }
@@ -129,9 +137,16 @@ final class TestableMollieOrderController extends MollieOrderController
         return $this->paymentId;
     }
 
-    protected function buildCheckoutContext(string $paymentId): EventContext
+    protected function buildStartRequest(): CheckoutStartRequest
     {
-        return new EventContext(['paymentId' => $paymentId]);
+        // The real seam reads the PHP session + order form (Registry-backed).
+        return new CheckoutStartRequest(
+            user: null,
+            basket: null,
+            sessionId: 'test-session',
+            selectedMethod: $this->readRequestParameter('mollieMethod'),
+            cardToken: $this->readRequestParameter('mollieCardToken'),
+        );
     }
 
     protected function redirect(string $url): void
@@ -139,21 +154,9 @@ final class TestableMollieOrderController extends MollieOrderController
         $this->redirectedTo[] = $url;
     }
 
-    protected function userDataProblems(): array
-    {
-        // The real seam asks CheckoutUserDataGate for the session user (Registry-backed).
-        return $this->userDataProblems;
-    }
-
     protected function showUserDataProblems(array $messages): void
     {
         $this->userDataProblemsShown = $messages;
-    }
-
-    protected function basketNotOrderableFailure(): ?NotOrderableCheckoutFailure
-    {
-        // The real seam runs BasketBuyabilityValidator over the session basket (Registry-backed).
-        return $this->notOrderable;
     }
 
     protected function showNotOrderable(NotOrderableCheckoutFailure $failure): string

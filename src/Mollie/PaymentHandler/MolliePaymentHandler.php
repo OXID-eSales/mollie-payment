@@ -16,12 +16,11 @@ use OxidEsales\PaymentBase\Adapter\ContractFirstPaymentHandlerInterface;
 use OxidEsales\PaymentBase\Adapter\PaymentContextInterface;
 use OxidEsales\PaymentBase\Adapter\PaymentHandlerInterface;
 use OxidEsales\PaymentBase\Adapter\PaymentHandlerResult;
-use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
-use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
-use OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator;
+use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
+use OxidEsales\Payments\Mollie\Service\CheckoutStartOutcome;
+use OxidEsales\Payments\Mollie\Service\CheckoutStartRequest;
 use OxidEsales\Payments\Mollie\Service\NotOrderableCheckoutFailure;
 use OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages;
 use OxidEsales\Payments\Mollie\Service\OxidLanguageTranslator;
@@ -62,17 +61,17 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
     /** Error code the footer receives when an item in the basket is not orderable (MOL-22). */
     public const ERROR_ITEMS_NOT_ORDERABLE = 'MOLLIE_ITEMS_NOT_ORDERABLE';
 
-    private readonly BasketBuyabilityValidator $buyability;
+    /** Error code the footer receives when the shopper's address data must be fixed first (MOL-15). */
+    public const ERROR_USER_DATA_INVALID = 'MOLLIE_USER_DATA_INVALID';
+
     private readonly NotOrderableItemsMessages $notOrderableMessages;
 
     public function __construct(
-        private readonly EventDispatcherInterface $eventDispatcher,
+        private readonly CheckoutSessionStarter $checkoutStarter,
         private readonly ?LoggerInterface $logger = null,
         private readonly ?IframeCheckoutSettingsInterface $iframeSettings = null,
-        ?BasketBuyabilityValidator $buyability = null,
         ?NotOrderableItemsMessages $notOrderableMessages = null,
     ) {
-        $this->buyability = $buyability ?? new BasketBuyabilityValidator();
         $this->notOrderableMessages = $notOrderableMessages
             ?? new NotOrderableItemsMessages(new OxidLanguageTranslator());
     }
@@ -113,38 +112,14 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
             } else {
                 $this->prepareOxidBasket($context);
             }
-            // MOL-22: name a not-orderable item before any contract exists (see the catch for the race).
-            $notOrderable = $this->notOrderableItems($context);
-            if ($notOrderable !== null) {
-                return $this->notOrderableResult($notOrderable);
-            }
 
-            $eventContext = $this->buildEventContext($context);
-            $this->eventDispatcher->dispatch(new MollieCheckoutSessionRequestEvent($eventContext));
+            // The shared checkout entry ladder (MOL-22 buyability -> MOL-15 user-data gate ->
+            // MOL-18 in-flight replay -> dispatch) — the same rungs the standard `cl=order` flow
+            // climbs; the order and the whys live in {@see CheckoutSessionStarter}. Until the
+            // 2026-10-14 review (A-H1) this path silently lacked the MOL-15 and MOL-18 guards.
+            $outcome = $this->checkoutStarter->start($this->buildStartRequest($context));
 
-            $checkoutUrl = $eventContext->get('checkoutUrl');
-            $contractId = $eventContext->getContract()?->getId() ?? '';
-
-            if (!is_string($checkoutUrl) || $checkoutUrl === '') {
-                return PaymentHandlerResult::error(
-                    'Mollie did not return a checkout URL for contract ' . $contractId,
-                    'MOLLIE_NO_CHECKOUT_URL',
-                );
-            }
-
-            $this->logger?->info('[MolliePaymentHandler] Mollie checkout session created', [
-                'contractId' => $contractId,
-            ]);
-
-            return PaymentHandlerResult::success(
-                contractId: $contractId,
-                clientSecret: null,
-                metadata: [
-                    'handler' => 'mollie',
-                    'requiresRedirect' => true,
-                    'redirectUrl' => $checkoutUrl,
-                ],
-            );
+            return $this->resultFromOutcome($outcome);
         } catch (Throwable $e) {
             $this->logger?->error('[MolliePaymentHandler] processPayment failed', [
                 'error' => $e->getMessage(),
@@ -164,17 +139,44 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
     }
 
     /**
-     * MOL-22: which items of the basket being paid are not orderable right now (null = all fine).
+     * Translate the shared ladder's outcome into OPC's medium: a PaymentHandlerResult whose
+     * metadata carries the redirect (OPC's frontend follows `metadata.redirectUrl`; a replayed
+     * in-flight attempt rides the same rails — CheckoutResult defaults a missing contract id).
      */
-    private function notOrderableItems(PaymentContextInterface $context): ?NotOrderableCheckoutFailure
+    private function resultFromOutcome(CheckoutStartOutcome $outcome): PaymentHandlerResult
     {
-        $basket = $context->getBasket();
-        if (!$basket instanceof Basket) {
-            return null;
+        if ($outcome->isNotOrderable() && $outcome->notOrderable !== null) {
+            return $this->notOrderableResult($outcome->notOrderable);
         }
-        $failures = $this->buyability->validate($basket);
 
-        return $failures === [] ? null : NotOrderableCheckoutFailure::fromBuyabilityFailures($failures);
+        if ($outcome->hasUserDataProblems()) {
+            // The footer prints the error message verbatim — translated sentences, like MOL-22.
+            return PaymentHandlerResult::error(
+                implode(' ', $outcome->userDataProblems),
+                self::ERROR_USER_DATA_INVALID,
+            );
+        }
+
+        if ($outcome->isRedirect() && $outcome->checkoutUrl !== null) {
+            $this->logger?->info('[MolliePaymentHandler] Mollie checkout redirect ready', [
+                'contractId' => $outcome->contractId,
+            ]);
+
+            return PaymentHandlerResult::success(
+                contractId: $outcome->contractId,
+                clientSecret: null,
+                metadata: [
+                    'handler' => 'mollie',
+                    'requiresRedirect' => true,
+                    'redirectUrl' => $outcome->checkoutUrl,
+                ],
+            );
+        }
+
+        return PaymentHandlerResult::error(
+            'Mollie did not return a checkout URL for contract ' . $outcome->contractId,
+            'MOLLIE_NO_CHECKOUT_URL',
+        );
     }
 
     /**
@@ -309,9 +311,7 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
     }
 
     /**
-     * Build the checkout EventContext — same shape
-     * {@see \OxidEsales\Payments\Mollie\Controller\MollieOrderController::buildCheckoutContext()}
-     * assembles in the standard flow.
+     * Everything the shared ladder needs, read off OPC's agnostic PaymentContext.
      *
      * GRAPH-QL / MS1: a headless context (payment-base HeadlessCheckoutService) carries its own
      * session id (`headless:<basketId>`), the persisted basket's id and the client's return URL;
@@ -320,32 +320,25 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
      *
      * Overridable seam — unit tests stub it to avoid the OXID Registry.
      */
-    protected function buildEventContext(PaymentContextInterface $context): EventContext
+    protected function buildStartRequest(PaymentContextInterface $context): CheckoutStartRequest
     {
         $user = $context->getUser();
-        $userId = $user instanceof User ? (string) $user->getId() : '';
+        $basket = $context->getBasket();
         $params = $this->mollieParamsFromContext($context);
         $headless = $this->isHeadless($context);
+        $basketId = $context->getMetadataValue('basketId');
 
-        $data = [
-            'paymentId' => MollieDefinitions::PAYMENT_ID,
-            'userId' => $userId,
-            'basket' => $context->getBasket(),
-            'user' => $user,
-            'sessionId' => $headless ? (string) $context->getMetadataValue('sessionId') : $this->sessionId(),
-            'conditionTypes' => ['payment_authorized'],
-            // Same keys the standard cl=order flow sets (MollieOrderController::buildCheckoutContext):
-            // MollieCheckoutSessionHandler consumes them to pin the chosen method / tokenize a card.
-            'selectedMethod' => $params['selectedMethod'],
-            'cardToken' => $params['cardToken'],
-        ];
-        if ($headless) {
-            $data['headless'] = true;
-            $data['basketId'] = $context->getMetadataValue('basketId');
-            $data['returnUrl'] = $context->getReturnUrl();
-        }
-
-        return new EventContext($data);
+        return new CheckoutStartRequest(
+            user: $user instanceof User ? $user : null,
+            basket: $basket instanceof Basket ? $basket : null,
+            sessionId: $headless ? (string) $context->getMetadataValue('sessionId') : $this->sessionId(),
+            // MollieCheckoutSessionHandler consumes these to pin the chosen method / tokenize a card.
+            selectedMethod: $params['selectedMethod'],
+            cardToken: $params['cardToken'],
+            headless: $headless,
+            basketId: $headless && is_string($basketId) ? $basketId : null,
+            returnUrl: $headless ? $context->getReturnUrl() : null,
+        );
     }
 
     /**

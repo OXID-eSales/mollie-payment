@@ -1,0 +1,36 @@
+import { chromium, firefox } from '@playwright/test';
+const base = 'https://daniil.oxiddev.de';
+const which = process.argv[2] || 'chromium';
+const browser = await (which === 'firefox' ? firefox : chromium).launch();
+const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+const log = (...a) => console.log(`[${which}]`, ...a);
+await page.goto(base + '/index.php?cl=account');
+const form = page.locator('form').filter({ has: page.locator('input[name="lgn_pwd"]:visible') }).first();
+await form.locator('input[name="lgn_usr"]:visible').first().fill('playwright.user@oxid-esales.dev');
+await form.locator('input[name="lgn_pwd"]:visible').first().fill('useruser');
+await form.locator('button[type="submit"], input[type="submit"]').first().click();
+await page.waitForLoadState('domcontentloaded');
+await page.goto(base + '/Merchandise/Sonnenbrillen/Ocean-Eyes.html');
+await page.getByRole('button', { name: /In den Warenkorb|add to (cart|basket)/i }).first().click();
+await page.waitForLoadState('domcontentloaded');
+await page.goto(base + '/index.php?cl=user'); await page.getByRole('button', { name: /weiter|continue|next/i }).first().click(); await page.waitForLoadState('domcontentloaded');
+if (!/cl=order/.test(page.url())) { await page.goto(base + '/index.php?cl=payment'); await page.locator('input[name="paymentid"][value="oe_payments_mollie"]').check().catch(()=>{}); await page.getByRole('button', { name: /weiter|continue|next/i }).first().click(); await page.waitForLoadState('domcontentloaded'); }
+await page.waitForTimeout(2000);
+const region = page.locator('[data-mollie-agb-gate-target="region"]');
+log('C: locked at load, inert =', await region.getAttribute('inert'));
+// Scenario C: card mounts WHILE locked (as when card is the preselected method on page load)
+await page.locator('input[name="mollieMethod"][value="creditcard"]').evaluate(r => { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); });
+await page.waitForTimeout(3500);
+log('C: iframes mounted while locked:', await page.locator('iframe[name$="-input"]').count(), '| fields visible:', await page.locator('[data-mollie-components-target="fields"]').isVisible());
+await page.locator('label[for="checkAgbTop"]').click();
+log('C: unlocked, inert =', await region.getAttribute('inert'));
+await page.waitForTimeout(500);
+const ifr = await page.locator('iframe[name="cardNumber-input"]').boundingBox();
+await page.mouse.click(ifr.x + ifr.width / 2, ifr.y + ifr.height / 2);
+await page.keyboard.type('4242 4242', { delay: 40 });
+const val = await page.frameLocator('iframe[name="cardNumber-input"]').locator('input').first().inputValue({ timeout: 5000 }).catch(() => 'n/a');
+log('C: card number value after unlock =', JSON.stringify(val));
+const holder = await page.locator('iframe[name="cardHolder-input"]').boundingBox();
+await page.mouse.click(holder.x + holder.width / 2, holder.y + holder.height / 2); await page.keyboard.type('Marc', { delay: 40 });
+log('C: holder value =', JSON.stringify(await page.frameLocator('iframe[name="cardHolder-input"]').locator('input').first().inputValue({ timeout: 5000 }).catch(() => 'n/a')));
+await browser.close();
