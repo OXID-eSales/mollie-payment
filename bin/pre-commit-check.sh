@@ -88,8 +88,11 @@ run_phpstan_docker() {
         echo -e "${YELLOW}⊘ PHPStan binary not installed in shop vendor${NC}"
         return 0
     fi
+    # No --level / path override: the neon pins level 6 and its own paths (what CI and
+    # `composer phpstan` run). A --level=max here made this script fail on errors the
+    # canonical gate never reports (2026-10-14, review finding C-H1 follow-up).
     docker compose exec -w /var/www/extensions/mollie-payment -T php \
-        /var/www/vendor/bin/phpstan analyse -c tests/PhpStan/phpstan.neon --level=max src/ --memory-limit=1G
+        /var/www/vendor/bin/phpstan analyse -c tests/PhpStan/phpstan.neon --memory-limit=1G
 }
 
 run_phpmd_docker() {
@@ -150,8 +153,11 @@ else
         echo "skip on github"
         PHPUNIT_STATUS=0
     else
+        # The config's own tests/bootstrap.php must run (it loads the shop AND registers the
+        # module's Tests\ autoloader). Overriding it with the bare shop bootstrap fataled on
+        # the first tests/Unit/Support trait (2026-10-14, review finding C-H1 follow-up).
         docker compose exec -w /var/www/extensions/mollie-payment -T php \
-            /var/www/vendor/bin/phpunit -c tests/phpunit.xml --bootstrap=/var/www/source/bootstrap.php $TESTSUITE_ARG
+            /var/www/vendor/bin/phpunit -c tests/phpunit.xml $TESTSUITE_ARG
         PHPUNIT_STATUS=$?
     fi
 
