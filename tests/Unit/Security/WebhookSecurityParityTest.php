@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Security;
 
 use OxidEsales\PaymentBase\Repository\WebhookLogRepositoryInterface;
+use OxidEsales\PaymentBase\Validation\RateLimit\InMemoryRateLimitStore;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
@@ -77,7 +78,9 @@ final class WebhookSecurityParityTest extends TestCase
     #[Group('F17')]
     public function testF17_RateLimited(): void
     {
-        $guard = new WebhookRateLimitGuard(burst: 1.0, refillRatePerSecond: 0.0);
+        // Shared-storage counter since 2026-10-14 (review D-M1); behavior detail lives in
+        // WebhookRateLimitGuardTest — this parity sweep pins the 429 contract only.
+        $guard = new WebhookRateLimitGuard(new InMemoryRateLimitStore(), limitPerWindow: 1);
         $request = new WebhookRequest('https', '5.5.5.5', 10, 'id=tr_x');
 
         $guard->check($request);

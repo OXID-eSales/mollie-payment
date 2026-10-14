@@ -456,21 +456,28 @@ services:
     public: false
   OxidEsales\Payments\Mollie\Controller\Webhook\WebhookPayloadSizeGuard:
     public: false
+  # 2026-10-14 (review D-M1): reworked onto payment-base's SHARED RateLimitStore (Doctrine,
+  # reuses oe_payments_idempotency — the binding is payment-base's own, this module only
+  # consumes it) and wired into the chain. Sprint 11 (F6) had unwired the per-request
+  # token-bucket version that could never reject; the id-shape precheck alone still let every
+  # well-shaped forged id buy an authenticated Mollie API call (quota-exhaustion DoS).
+  # 120/min per source IP: Mollie delivers from few IPs, so legitimate bursts (batch refunds,
+  # settlement sweeps) stay far below this; the guard fails OPEN on storage failure.
   OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRateLimitGuard:
+    arguments:
+      $store: '@OxidEsales\PaymentBase\Validation\RateLimit\RateLimitStoreInterface'
+      $limitPerWindow: 120
+      $windowSeconds: 60
     public: false
   OxidEsales\Payments\Mollie\Controller\Webhook\WebhookIpAllowlistGuard:
     public: false
 
-  # Sprint 11 Story 6 (F6): WebhookRateLimitGuard is deliberately NOT in this chain. Its token
-  # buckets live in per-request memory, so it could never reject anything — see the class docblock.
-  # The exposure it was meant to close (an unauthenticated POST buying an outbound Mollie API
-  # round-trip) is handled by WebhookController::extractPaymentId()'s stateless id-shape precheck.
-  # Re-wiring it requires a shared storage backend first, not just this line.
   OxidEsales\Payments\Mollie\Controller\Webhook\WebhookGuardChain:
     arguments:
       $guards:
         - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookPayloadSizeGuard'
         - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookHttpsGuard'
+        - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRateLimitGuard'
     public: true
 
   OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRequestGuardInterface:
