@@ -138,10 +138,28 @@ final class StockRestorationDbTest extends TestCase
             'OXVARSTOCK' => 0,
         ]);
 
-        // EE: without the shop-mapping row the oxv_ view hides the article and Article::load()
-        // fails silently inside updateArticleStock() (stock still updates via raw SQL, but
-        // onChange() then warns on unloaded fields). Mirror what the admin would have written.
-        $mapId = $this->connection->fetchOne('SELECT OXMAPID FROM oxarticles WHERE OXID = :id', ['id' => $id]);
+        $this->insertEeShopMappingIfNeeded($id);
+
+        return $id;
+    }
+
+    /**
+     * EE only: without the shop-mapping row the oxv_ view hides the article and Article::load()
+     * fails silently inside updateArticleStock() (stock still updates via raw SQL, but onChange()
+     * then warns on unloaded fields). Mirror what the admin would have written. CE has neither
+     * the mapping table nor the OXMAPID column — querying it unconditionally broke the CE CI
+     * matrix (run 38714317423), so the edition is probed first.
+     */
+    private function insertEeShopMappingIfNeeded(string $articleId): void
+    {
+        if ($this->connection->fetchOne("SHOW TABLES LIKE 'oxarticles2shop'") === false) {
+            return; // CE
+        }
+
+        $mapId = $this->connection->fetchOne(
+            'SELECT OXMAPID FROM oxarticles WHERE OXID = :id',
+            ['id' => $articleId],
+        );
         if ($mapId !== false && $mapId !== null) {
             $this->connection->insert('oxarticles2shop', [
                 'OXSHOPID' => self::SHOP_ID,
@@ -149,8 +167,6 @@ final class StockRestorationDbTest extends TestCase
             ]);
             $this->mappingCleanup[] = (int) $mapId;
         }
-
-        return $id;
     }
 
     private function insertOrder(): string
