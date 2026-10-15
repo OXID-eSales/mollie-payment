@@ -4,6 +4,12 @@ on: [ push, pull_request ]
 
 
 env:
+  # Disambiguates the workspace cache between the per-shop-line workflows:
+  # their keys otherwise share PHP/MySQL values while each workflow counts
+  # its own run_number — paypal's 7.6 workflow restored the 7.5 workflow's
+  # installed shop that way (run 38706815139), and `make addbasicservices`
+  # then duplicated every service in the compose file.
+  OXID_LINE: '7.4'
   PACKAGE_NAME: 'oxid-esales/mollie-payment'
   MODULE_ID: 'oe_payments_mollie'
   PHP_VERSION: '8.2'
@@ -51,7 +57,7 @@ jobs:
         with:
           path: |
             ./*
-          key: installation-${{ env.PHP_VERSION }}-${{ env.MYSQL_VERSION }}-${{ env.TEMPLATE_ENGINE }}-${{ github.run_number }}-${{ github.run_attempt }}
+          key: installation-${{ env.OXID_LINE }}-${{ env.PHP_VERSION }}-${{ env.MYSQL_VERSION }}-${{ env.TEMPLATE_ENGINE }}-${{ github.run_number }}-${{ github.run_attempt }}
 
       - name: Prepare container configuration
         run: |
@@ -227,7 +233,7 @@ jobs:
         with:
           path: |
             ./*
-          key: installation-${{ env.PHP_VERSION }}-${{ env.MYSQL_VERSION }}-${{ env.TEMPLATE_ENGINE }}-${{ github.run_number }}-${{ github.run_attempt }}
+          key: installation-${{ env.OXID_LINE }}-${{ env.PHP_VERSION }}-${{ env.MYSQL_VERSION }}-${{ env.TEMPLATE_ENGINE }}-${{ github.run_number }}-${{ github.run_attempt }}
 
 
       - name: Upload configuration artifacts
@@ -317,7 +323,7 @@ jobs:
         with:
           path: |
             ./*
-          key: installation-${{ env.PHP_VERSION }}-${{ env.MYSQL_VERSION }}-${{ env.TEMPLATE_ENGINE }}-${{ github.run_number }}-${{ github.run_attempt }}
+          key: installation-${{ env.OXID_LINE }}-${{ env.PHP_VERSION }}-${{ env.MYSQL_VERSION }}-${{ env.TEMPLATE_ENGINE }}-${{ github.run_number }}-${{ github.run_attempt }}
           fail-on-cache-miss: true
 
       - name: Login to Docker Hub
@@ -378,7 +384,7 @@ jobs:
         with:
           path: |
             ./*
-          key: installation-${{ env.PHP_VERSION }}-${{ env.MYSQL_VERSION }}-${{ env.TEMPLATE_ENGINE }}-${{ github.run_number }}-${{ github.run_attempt }}
+          key: installation-${{ env.OXID_LINE }}-${{ env.PHP_VERSION }}-${{ env.MYSQL_VERSION }}-${{ env.TEMPLATE_ENGINE }}-${{ github.run_number }}-${{ github.run_attempt }}
           fail-on-cache-miss: true
 
       - name: Login to Docker Hub
