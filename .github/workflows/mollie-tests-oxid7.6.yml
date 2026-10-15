@@ -221,6 +221,15 @@ jobs:
           docker compose exec -T php bin/oe-console oe:module:install /var/www/test-module
           docker compose exec -T php bin/oe-console oe:module:activate ${{ env.MODULE_ID }}
 
+      - name: Composer security audit (policy: no packages with security advisories)
+        # Audits the FULL resolved stack this run tests (shop composer.lock inside the
+        # container). Fails the build the day an advisory is published for anything locked;
+        # the fix is bumping to the patched version (inline-alias exact metapackage pins),
+        # never ignore-id / block=false. --abandoned=report keeps the gate scoped to
+        # advisories (transitively abandoned packages are reported, not fatal).
+        run: |
+          docker compose exec -T php composer audit --locked --abandoned=report --working-dir=/var/www
+
       - name: Show docker log
         if: always()
         run: |
