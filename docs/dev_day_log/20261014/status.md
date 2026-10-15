@@ -1,7 +1,8 @@
 # 2026-10-14
 
-Branch for S02–S07: `b-7.4.x-REVIEW-01-fixes` (NOT merged — merge is the user's call).
-**Open before merging:** rerun the e2e proof
+Branch for S02–S07: `b-7.4.x-REVIEW-01-fixes`; **merged into `b-7.4.x` 2026-10-15** (merge commit
+`6bbf426`, at the user's request; post-merge gates ALL PASSED — Unit 773, phpcs/phpstan/phpmd).
+**Still open:** the e2e proof
 (`npx playwright test --project=mollie-standard --project=mollie-opc`) — the S04 run was killed by
 host memory pressure, not by a failing test.
 
