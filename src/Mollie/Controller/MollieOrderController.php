@@ -14,15 +14,12 @@ use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\EshopCommunity\Core\Di\ContainerFacade;
 use OxidEsales\PaymentBase\Controller\HandlesCheckoutReturn;
-use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
-use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-use OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator;
-use OxidEsales\Payments\Mollie\Service\CheckoutUserDataGate;
-use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplay;
+use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
+use OxidEsales\Payments\Mollie\Service\CheckoutStartOutcome;
+use OxidEsales\Payments\Mollie\Service\CheckoutStartRequest;
 use OxidEsales\Payments\Mollie\Service\NotOrderableCheckoutFailure;
 use OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages;
-use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use Throwable;
 
 /**
@@ -78,71 +75,37 @@ class MollieOrderController extends MollieOrderController_parent
             return $basketRedirect;
         }
 
-        // MOL-22: an item that is not orderable any more (turned unbuyable since the page rendered)
-        // is named to the shopper before anything else - the basket has to be fixed first, and no
-        // contract or draft order is created for it. Core's finalizeOrder() stays the safety net for
-        // the race window (see startCheckoutSession()).
-        $notOrderable = $this->basketNotOrderableFailure();
-        if ($notOrderable !== null) {
-            return $this->showNotOrderable($notOrderable);
+        // The checkout entry ladder (MOL-22 buyability -> MOL-15 user-data gate -> MOL-18
+        // in-flight replay -> dispatch) is shared with the OPC handler; the rung order and the
+        // whys live in {@see CheckoutSessionStarter}. Deliberately AFTER the CSRF / AGB /
+        // basket-hash guards above - those are core-OrderController parity, owned here.
+        $starter = $this->resolveService(CheckoutSessionStarter::class);
+        if ($starter === null) {
+            return $this->onCheckoutUnavailable();
         }
 
-        // MOL-15: the point of no return. Address data is validated with payment-base's rules for
-        // Mollie right before the PSP is called - the payment step checked it too, but it can have
-        // changed since (account page, another tab). Comes BEFORE the in-flight replay: data that
-        // went bad between two clicks must be fixed, not replayed into Mollie.
-        $problems = $this->userDataProblems();
-        if ($problems !== []) {
-            $this->showUserDataProblems($problems);
+        return $this->applyStartOutcome($starter->start($this->buildStartRequest()));
+    }
+
+    /**
+     * Translate the shared ladder's outcome into this controller's medium: error slots, render
+     * targets and the redirect to Mollie.
+     */
+    private function applyStartOutcome(CheckoutStartOutcome $outcome): ?string
+    {
+        if ($outcome->isNotOrderable() && $outcome->notOrderable !== null) {
+            return $this->showNotOrderable($outcome->notOrderable);
+        }
+
+        if ($outcome->hasUserDataProblems()) {
+            $this->showUserDataProblems($outcome->userDataProblems);
 
             return 'user';
         }
 
-        // MOL-18: a repeated "Order now" rejoins the attempt already in flight instead of starting
-        // another ({@see InFlightCheckoutReplay}). Deliberately AFTER the CSRF / AGB / basket-hash
-        // guards - a replay is still an order submission. Fail-open to "nothing in flight" when
-        // payment-base predates the resolver: resolveService() answers null.
-        $replay = $this->resolveService(InFlightCheckoutReplay::class)?->checkoutUrl();
-        if ($replay !== null) {
-            $this->redirect($replay);
+        if ($outcome->isRedirect() && $outcome->checkoutUrl !== null) {
+            $this->redirect($outcome->checkoutUrl);
 
-            return null;
-        }
-
-        return $this->startCheckoutSession($paymentId);
-    }
-
-    /**
-     * A fresh attempt: dispatch the checkout-session event and leave for Mollie.
-     */
-    private function startCheckoutSession(string $paymentId): ?string
-    {
-        $dispatcher = $this->resolveDispatcher();
-        if ($dispatcher === null) {
-            return $this->onCheckoutUnavailable();
-        }
-
-        $context = $this->buildCheckoutContext($paymentId);
-
-        try {
-            $dispatcher->dispatch(new MollieCheckoutSessionRequestEvent($context));
-        } catch (Throwable $e) {
-            Registry::getLogger()->error('MollieOrderController: checkout session event failed', [
-                'error' => $e->getMessage(),
-            ]);
-            // MOL-22: core refused inside finalizeOrder() because an item is not orderable (out of
-            // stock for the ordered quantity, turned unbuyable, removed) - say so, not "unavailable".
-            $notOrderable = NotOrderableCheckoutFailure::fromThrowable($e);
-            if ($notOrderable !== null) {
-                return $this->showNotOrderable($notOrderable);
-            }
-            return $this->onCheckoutUnavailable();
-        }
-
-        // Set by MollieCheckoutSessionHandler as a string; anything else means "no checkout".
-        $checkoutUrl = (string) $context->get('checkoutUrl', '');
-        if ($checkoutUrl !== '') {
-            $this->redirect($checkoutUrl);
             return null;
         }
 
@@ -255,30 +218,26 @@ class MollieOrderController extends MollieOrderController_parent
         return is_scalar($paymentId) ? (string) $paymentId : '';
     }
 
-    protected function resolveDispatcher(): ?EventDispatcherInterface
-    {
-        return $this->resolveService(EventDispatcherInterface::class);
-    }
-
-    protected function buildCheckoutContext(string $paymentId): EventContext
+    /**
+     * Everything the shared ladder needs, read off the PHP session and the order form.
+     * Testability seam (Registry-backed).
+     */
+    protected function buildStartRequest(): CheckoutStartRequest
     {
         $session = Registry::getSession();
         $basket = $session->getBasket();
         // Base::getUser() returns User|false (anonymous session) — normalize to User|null once.
         $user = $session->getUser() ?: null;
 
-        return new EventContext([
-            'paymentId' => $paymentId,
-            'userId' => (string) $user?->getId(),
-            'basket' => $basket,
-            'user' => $user,
-            'sessionId' => (string) $session->getId(),
-            'conditionTypes' => ['payment_authorized'],
+        return new CheckoutStartRequest(
+            user: $user instanceof User ? $user : null,
+            basket: $basket instanceof Basket ? $basket : null,
+            sessionId: (string) $session->getId(),
             // IFRAME-04: the inline method selection + (for card) the Mollie Components token,
             // posted with the order form. Both null for the classic redirect flow.
-            'cardToken' => $this->readRequestParameter('mollieCardToken'),
-            'selectedMethod' => $this->readRequestParameter('mollieMethod'),
-        ]);
+            selectedMethod: $this->readRequestParameter('mollieMethod'),
+            cardToken: $this->readRequestParameter('mollieCardToken'),
+        );
     }
 
     /**
@@ -288,20 +247,6 @@ class MollieOrderController extends MollieOrderController_parent
     protected function redirect(string $url): void
     {
         Registry::getUtils()->redirect($url, false);
-    }
-
-    /**
-     * Testability seam: the translated messages for the session user's address problems, empty when
-     * the data may go to Mollie ({@see CheckoutUserDataGate}). Fail-open when the gate is unavailable.
-     *
-     * @return list<string>
-     */
-    protected function userDataProblems(): array
-    {
-        $user = Registry::getSession()->getUser();
-
-        return $this->resolveService(CheckoutUserDataGate::class)
-            ?->problemsFor($user instanceof User ? $user : null) ?? [];
     }
 
     /**
@@ -325,21 +270,6 @@ class MollieOrderController extends MollieOrderController_parent
         Registry::getUtilsView()->addErrorToDisplay('MOLLIE_CHECKOUT_UNAVAILABLE');
 
         return 'payment';
-    }
-
-    /**
-     * MOL-22: which items of the session basket are not orderable right now (null = all fine).
-     * Fail-open when the basket cannot be read - core's finalizeOrder() refuses such an item anyway.
-     */
-    protected function basketNotOrderableFailure(): ?NotOrderableCheckoutFailure
-    {
-        $basket = Registry::getSession()->getBasket();
-        if (!$basket instanceof Basket) {
-            return null;
-        }
-        $failures = (new BasketBuyabilityValidator())->validate($basket);
-
-        return $failures === [] ? null : NotOrderableCheckoutFailure::fromBuyabilityFailures($failures);
     }
 
     /**

@@ -48,11 +48,6 @@ class OxidShopAdapter implements ShopAdapterInterface
         return (string) Registry::getLang()->getLanguageAbbr();
     }
 
-    public function getActiveLanguageId(): int
-    {
-        return (int) Registry::getLang()->getBaseLanguage();
-    }
-
     public function getShopId(): string
     {
         return (string) Registry::getConfig()->getShopId();

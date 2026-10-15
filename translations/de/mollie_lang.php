@@ -28,7 +28,6 @@ $aLang = [
     // MOL-15: Validierung der Adressfelder (payment-base ValidationBase, Mollie-Regeldatei).
     'MOLLIE_VALIDATION_FIELD_INVALID' => 'Das Feld %1$s ist ungültig. Erlaubte Zeichen: %2$s',
     'MOLLIE_VALIDATION_REVIEW_ADDRESS' => 'Bitte überprüfen Sie Ihre Adressdaten.',
-    'MOLLIE_VALIDATION_UNDERSTAND' => 'Verstanden',
     'MOLLIE_VALIDATION_INVALID_USER_DATA' => 'Einige Ihrer Adressdaten enthalten Zeichen, die wir nicht an den Zahlungsanbieter übergeben können. Bitte überprüfen Sie Ihre Adressdaten.',
     'MOLLIE_VALIDATION_CLASS_LETTERS' => 'Buchstaben',
     'MOLLIE_VALIDATION_CLASS_DIGITS' => 'Ziffern',

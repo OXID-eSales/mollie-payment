@@ -56,27 +56,27 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
     ) {
     }
 
-    public function handlePaymentAuthorized(string $providerOrderId): FulfillmentOutcome
+    public function handlePaymentAuthorized(string $providerOrderId): FulfillmentResult
     {
         return $this->attemptTwice(fn () => $this->doPaymentAuthorized($providerOrderId));
     }
 
-    public function handlePaymentPaid(string $providerOrderId): FulfillmentOutcome
+    public function handlePaymentPaid(string $providerOrderId): FulfillmentResult
     {
         return $this->attemptTwice(fn () => $this->doPaymentPaid($providerOrderId));
     }
 
-    public function handlePaymentFailed(string $providerOrderId, string $reason): FulfillmentOutcome
+    public function handlePaymentFailed(string $providerOrderId, string $reason): FulfillmentResult
     {
         return $this->attemptTwice(fn () => $this->doPaymentFailed($providerOrderId, $reason));
     }
 
-    public function handlePaymentExpired(string $providerOrderId): FulfillmentOutcome
+    public function handlePaymentExpired(string $providerOrderId): FulfillmentResult
     {
         return $this->attemptTwice(fn () => $this->doPaymentExpired($providerOrderId));
     }
 
-    public function handlePaymentCanceled(string $providerOrderId, string $reason): FulfillmentOutcome
+    public function handlePaymentCanceled(string $providerOrderId, string $reason): FulfillmentResult
     {
         return $this->attemptTwice(fn () => $this->doPaymentCanceled($providerOrderId, $reason));
     }
@@ -87,9 +87,9 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
      * the contract, so the ladder continues from the state the return leg left. A second refusal is
      * answered Failed (non-200), and Mollie comes back later with a fresh delivery.
      *
-     * @param callable(): FulfillmentOutcome $step
+     * @param callable(): FulfillmentResult $step
      */
-    private function attemptTwice(callable $step): FulfillmentOutcome
+    private function attemptTwice(callable $step): FulfillmentResult
     {
         try {
             return $step();
@@ -108,19 +108,19 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
                 ['contractId' => $second->contractId, 'error' => $second->getMessage()],
             );
 
-            return FulfillmentOutcome::Failed;
+            return FulfillmentResult::failed($second->contractId);
         }
     }
 
-    private function doPaymentPaid(string $providerOrderId): FulfillmentOutcome
+    private function doPaymentPaid(string $providerOrderId): FulfillmentResult
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
-            return FulfillmentOutcome::ContractNotFound;
+            return FulfillmentResult::contractNotFound();
         }
 
         if ($contract->getState()->isFulfilled()) {
-            return FulfillmentOutcome::NoOp;
+            return FulfillmentResult::noOp((string) $contract->getId());
         }
 
         $this->advanceToCommitted($contract);
@@ -139,7 +139,7 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
                 'state' => $contract->getStateValue(),
             ]);
 
-            return FulfillmentOutcome::Failed;
+            return FulfillmentResult::failed((string) $contract->getId());
         }
 
         $this->auditRecorder->record(
@@ -149,18 +149,18 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             $contract->getAmount(),
         );
 
-        return FulfillmentOutcome::Acted;
+        return FulfillmentResult::acted((string) $contract->getId());
     }
 
-    private function doPaymentFailed(string $providerOrderId, string $reason): FulfillmentOutcome
+    private function doPaymentFailed(string $providerOrderId, string $reason): FulfillmentResult
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
-            return FulfillmentOutcome::ContractNotFound;
+            return FulfillmentResult::contractNotFound();
         }
 
         if ($contract->getState()->isTerminal()) {
-            return FulfillmentOutcome::NoOp;
+            return FulfillmentResult::noOp((string) $contract->getId());
         }
 
         $contract->fail($reason);
@@ -176,18 +176,18 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             0.0,
         );
 
-        return FulfillmentOutcome::Acted;
+        return FulfillmentResult::acted((string) $contract->getId());
     }
 
-    private function doPaymentExpired(string $providerOrderId): FulfillmentOutcome
+    private function doPaymentExpired(string $providerOrderId): FulfillmentResult
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
-            return FulfillmentOutcome::ContractNotFound;
+            return FulfillmentResult::contractNotFound();
         }
 
         if ($contract->getState()->isTerminal()) {
-            return FulfillmentOutcome::NoOp;
+            return FulfillmentResult::noOp((string) $contract->getId());
         }
 
         // STRP-168: `committed` is not terminal, so a late or duplicate expiry
@@ -196,7 +196,7 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         // transition outright, so acting on it would throw out of the webhook
         // and Mollie would retry forever. Skip it.
         if ($contract->getState()->isCommitted()) {
-            return FulfillmentOutcome::NoOp;
+            return FulfillmentResult::noOp((string) $contract->getId());
         }
 
         $contract->expire();
@@ -208,18 +208,18 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             0.0,
         );
 
-        return FulfillmentOutcome::Acted;
+        return FulfillmentResult::acted((string) $contract->getId());
     }
 
-    private function doPaymentCanceled(string $providerOrderId, string $reason): FulfillmentOutcome
+    private function doPaymentCanceled(string $providerOrderId, string $reason): FulfillmentResult
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
-            return FulfillmentOutcome::ContractNotFound;
+            return FulfillmentResult::contractNotFound();
         }
 
         if ($contract->getState()->isTerminal()) {
-            return FulfillmentOutcome::NoOp;
+            return FulfillmentResult::noOp((string) $contract->getId());
         }
 
         $contract->cancel($reason);
@@ -232,7 +232,7 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             0.0,
         );
 
-        return FulfillmentOutcome::Acted;
+        return FulfillmentResult::acted((string) $contract->getId());
     }
 
     /**
@@ -246,15 +246,15 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
      * attempting the ladder would be a wasted (and harmless, thanks to {@see attemptTransition})
      * no-op, so it is skipped outright to avoid recording a spurious audit transaction.
      */
-    private function doPaymentAuthorized(string $providerOrderId): FulfillmentOutcome
+    private function doPaymentAuthorized(string $providerOrderId): FulfillmentResult
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
-            return FulfillmentOutcome::ContractNotFound;
+            return FulfillmentResult::contractNotFound();
         }
 
         if (!$contract->getState()->isNotFinished() && !$contract->getState()->isPending()) {
-            return FulfillmentOutcome::NoOp;
+            return FulfillmentResult::noOp((string) $contract->getId());
         }
 
         if ($this->contractCommit !== null) {
@@ -270,7 +270,7 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             $contract->getAmount(),
         );
 
-        return FulfillmentOutcome::Acted;
+        return FulfillmentResult::acted((string) $contract->getId());
     }
 
     /**
@@ -291,7 +291,7 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
     private function commitAuthorization(
         PaymentContractInterface $contract,
         string $providerOrderId,
-    ): FulfillmentOutcome {
+    ): FulfillmentResult {
         $outcome = $this->contractCommit->commit(new PaymentConfirmation(
             contractId: (string) $contract->getId(),
             providerName: MollieDefinitions::PROVIDER_NAME,
@@ -319,24 +319,19 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
                 $contract->getAmount(),
             );
 
-            return FulfillmentOutcome::Acted;
+            return FulfillmentResult::acted((string) $contract->getId());
         }
 
         if ($outcome->outcome === CommitOutcome::PENDING) {
             // Another condition is still open; the commit will follow when it closes.
-            return FulfillmentOutcome::NoOp;
+            return FulfillmentResult::noOp((string) $contract->getId());
         }
 
         // Refused (amount mismatch, closed contract): a 5xx, so Mollie retries and the
         // merchant sees it in the webhook log instead of a silent 200.
-        return FulfillmentOutcome::Failed;
+        return FulfillmentResult::failed((string) $contract->getId());
     }
 
-    /**
-     * NOT_FINISHED → PENDING → AUTHORIZED, each step a named transition wrapped so an
-     * inapplicable step (already advanced past it) is a silent no-op instead of propagating —
-     * mirrors {@see advanceToCommitted()}.
-     */
     /**
      * MOL-17 Story 5: an automatically captured payment never wrote OXCAPTUREDAMOUNT (only the manual
      * CaptureService did), so the admin panel showed "Captured 0.00" for every paid Mollie order. The
@@ -355,6 +350,11 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         );
     }
 
+    /**
+     * NOT_FINISHED → PENDING → AUTHORIZED, each step a named transition wrapped so an
+     * inapplicable step (already advanced past it) is a silent no-op instead of propagating —
+     * mirrors {@see advanceToCommitted()}.
+     */
     private function advanceToAuthorized(PaymentContractInterface $contract): void
     {
         $this->attemptTransition('transitionToPending', $contract, static fn () => $contract->transitionToPending());

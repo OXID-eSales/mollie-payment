@@ -74,6 +74,6 @@ keywords = ["pk_test_51", "pk_live_51"]
 
 [[rules]]
 id = "mollie-api-key"
-description = "Mollie API key (live_/test_ + 30 characters)"
-regex = '''\b(?:live|test)_[A-Za-z0-9]{30}\b'''
+description = "Mollie API key (live_/test_ + key material; length not contractual, so 25+ — review 2026-10-14 D-L3: an exactly-30 match let differently sized real keys commit clean)"
+regex = '''\b(?:live|test)_[A-Za-z0-9]{25,}'''
 keywords = ["live_", "test_"]

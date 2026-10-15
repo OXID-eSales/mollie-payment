@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller\Webhook;
 
+use OxidEsales\PaymentBase\Validation\RateLimit\InMemoryRateLimitStore;
 use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookGuardChain;
 use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookHttpsGuard;
 use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookIpAllowlistGuard;
@@ -67,7 +68,7 @@ final class WebhookGuardChainTest extends TestCase
 
     public function testRateLimitExceeded_Rejected429(): void
     {
-        $guard = new WebhookRateLimitGuard(burst: 1.0, refillRatePerSecond: 0.0);
+        $guard = new WebhookRateLimitGuard(new InMemoryRateLimitStore(), limitPerWindow: 1);
         $chain = new WebhookGuardChain([$guard]);
 
         $first = $chain->check($this->request());
@@ -97,7 +98,7 @@ final class WebhookGuardChainTest extends TestCase
         $chain = new WebhookGuardChain([
             new WebhookPayloadSizeGuard(),
             new WebhookHttpsGuard(),
-            new WebhookRateLimitGuard(),
+            new WebhookRateLimitGuard(new InMemoryRateLimitStore()),
         ]);
 
         self::assertTrue($chain->check($this->request())->ok);

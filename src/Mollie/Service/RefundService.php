@@ -62,7 +62,7 @@ final class RefundService implements RefundServiceInterface
         ?string $description = null,
     ): MollieRefundDto {
         $this->assertFulfilled($contract);
-        $providerOrderId = $this->requireProviderOrderId($contract);
+        $providerOrderId = ProviderOrderId::requireFrom($contract, 'refund');
 
 
         $payment = $this->paymentsAdapter->getPayment($providerOrderId);
@@ -140,18 +140,6 @@ final class RefundService implements RefundServiceInterface
         ));
     }
 
-    private function requireProviderOrderId(PaymentContractInterface $contract): string
-    {
-        $providerOrderId = $contract->getProviderOrderId();
-        if ($providerOrderId === null || $providerOrderId === '') {
-            throw new DomainException(sprintf(
-                'Cannot refund contract "%s": no Mollie payment id on record.',
-                $contract->getId() ?? 'unknown',
-            ));
-        }
-
-        return $providerOrderId;
-    }
 
     private function resolveRefundAmount(?float $amount, float $refundable, string $contractId): float
     {
@@ -170,7 +158,7 @@ final class RefundService implements RefundServiceInterface
             throw new InvalidArgumentException('Refund amount must be positive.');
         }
 
-        if ($amount > $refundable + 0.00001) {
+        if (MoneyComparison::exceeds($amount, $refundable)) {
             throw new InvalidArgumentException(sprintf(
                 'Cannot refund %.2f on contract "%s": only %.2f is refundable.',
                 $amount,

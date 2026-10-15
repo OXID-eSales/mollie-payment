@@ -22,7 +22,7 @@ use OxidEsales\PaymentBase\Checkout\InFlightCheckoutAttemptResolverInterface;
  * order still NOT_FINISHED, same basket total); this class only reads the live basket total for it
  * and hands the Mollie checkout URL to replay back to the controller.
  */
-final class InFlightCheckoutReplay
+final class InFlightCheckoutReplay implements InFlightCheckoutReplayInterface
 {
     public function __construct(
         private readonly InFlightCheckoutAttemptResolverInterface $resolver,

@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Controller;
 
+use OxidEsales\Eshop\Application\Model\User as EshopUserModel;
 use OxidEsales\GraphQL\Base\DataType\User;
 use OxidEsales\GraphQL\Base\Service\Authentication;
 use OxidEsales\PaymentBase\Checkout\Headless\HeadlessCancelResult;
@@ -43,7 +44,12 @@ final class MollieCheckoutTest extends TestCase
     {
         $this->checkout = $this->createMock(HeadlessCheckoutServiceInterface::class);
         $this->authentication = $this->createMock(Authentication::class);
-        $this->authentication->method('getUser')->willReturn(new User('user-1'));
+        // graphql-base's real User is final and wraps the shop user model (its id() answers
+        // getId()), so build it the way the shop does — a string ctor only exists in the
+        // standalone stub and made this file error under the shop's vendor dir.
+        $userModel = $this->createMock(EshopUserModel::class);
+        $userModel->method('getId')->willReturn('user-1');
+        $this->authentication->method('getUser')->willReturn(new User($userModel));
     }
 
     public function testStartHandsTheJwtUserThePaymentIdAndTheMethodHintToTheHeadlessService(): void

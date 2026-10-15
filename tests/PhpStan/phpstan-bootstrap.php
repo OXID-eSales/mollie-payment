@@ -53,11 +53,13 @@ if (!class_exists(\TheCodingMachine\GraphQLite\Annotations\Mutation::class, fals
     );
 }
 if (!class_exists(\OxidEsales\GraphQL\Base\DataType\User::class, false)) {
+    // Mirrors the REAL graphql-base signature — keep in sync with tests/bootstrap-unit.php
+    // (2026-10-14, review finding C-H1: a looser string ctor masked a shop-vendor failure).
     eval(
         'namespace OxidEsales\\GraphQL\\Base\\DataType; '
         . 'class User { '
-        . '  public function __construct(private string $userId = "", private bool $anonymous = false) {} '
-        . '  public function id(): \\TheCodingMachine\\GraphQLite\\Types\\ID { return new \\TheCodingMachine\\GraphQLite\\Types\\ID($this->userId); } '
+        . '  public function __construct(private \\OxidEsales\\Eshop\\Application\\Model\\User $userModel, private bool $anonymous = false) {} '
+        . '  public function id(): \\TheCodingMachine\\GraphQLite\\Types\\ID { return new \\TheCodingMachine\\GraphQLite\\Types\\ID((string) $this->userModel->getId()); } '
         . '  public function isAnonymous(): bool { return $this->anonymous; } '
         . '}'
     );
@@ -67,7 +69,7 @@ if (!class_exists(\OxidEsales\GraphQL\Base\Service\Authentication::class, false)
         'namespace OxidEsales\\GraphQL\\Base\\Service; '
         . 'class Authentication { '
         . '  public function isLogged(): bool { return false; } '
-        . '  public function getUser(): \\OxidEsales\\GraphQL\\Base\\DataType\\User { return new \\OxidEsales\\GraphQL\\Base\\DataType\\User(); } '
+        . '  public function getUser(): \\OxidEsales\\GraphQL\\Base\\DataType\\User { throw new \\LogicException(\'stub — mock getUser()\'); } '
         . '}'
     );
 }

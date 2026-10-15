@@ -9,57 +9,71 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Controller\Webhook;
 
+use Closure;
+use OxidEsales\PaymentBase\Validation\RateLimit\RateLimitStoreInterface;
+
 /**
- * Per-IP token bucket — **NOT wired into the default guard chain, and it must not be re-wired as
- * it stands.**
+ * Per-source fixed-window counter in SHARED storage — wired into the guard chain since
+ * 2026-10-14 (review finding D-M1).
  *
- * The arithmetic below is correct, but `$buckets` is instance state on a request-scoped service in a
- * share-nothing PHP process: every request starts with an empty bucket map, spends one of `$burst`
- * tokens and throws the map away. It can only reject if `check()` were called more than `$burst`
- * times *within a single request*, which never happens. The previous docblock claimed "in-memory
- * only (per PHP-FPM worker) — fine for single-node deployments"; both halves were wrong (the state
- * is per-*request*), and a guard that reads as protection while providing none is worse than an
- * absent one, because it satisfies a reviewer looking for a rate limit. See Sprint 11 Story 6 / F6.
+ * History: the first version kept token buckets in per-request instance state and could never
+ * reject anything, so Sprint 11 (F6) unwired it rather than let it read as protection. The
+ * stateless `tr_` id-shape precheck in {@see WebhookController::extractPaymentId()} filters
+ * garbage, but any well-shaped id still buys an authenticated outbound `getPayment` call —
+ * a flood of forged ids exhausts the merchant's Mollie API quota and starves legitimate
+ * webhook verification and checkout payment creation. Closing that needs a counter that
+ * survives the request, which is exactly payment-base's {@see RateLimitStoreInterface}:
+ * the Doctrine store reuses `oe_payments_idempotency` (no new table, no migration — Mollie
+ * owns none per CLAUDE.md) and is registered by payment-base's own services.yaml, so this
+ * module only consumes the shared binding.
  *
- * Sprint 11 removed it from `services.yaml`'s chain rather than leaving the claim standing. The
- * exposure it was aiming at — an unauthenticated POST costing us an outbound Mollie API round-trip —
- * is now closed by {@see WebhookController::extractPaymentId()}'s stateless id-shape precheck, which
- * has no state to rot.
- *
- * Before re-wiring this class, give it a shared backend (APCu, the shop cache, a counter keyed by
- * IP+minute). Note that a counter table is not an option: Mollie owns no migrations (CLAUDE.md).
- * That is a decided-storage-backend task, not a docblock edit.
+ * Semantics:
+ *  - Key: sha1 of the REMOTE_ADDR (hashed so no raw IP lands in the table) + the window
+ *    index. An empty REMOTE_ADDR shares the 'unknown' budget — no free pass.
+ *  - Fixed window: a burst straddling the boundary can reach 2x the limit; acceptable for
+ *    quota protection and the price of needing only increment-and-read.
+ *  - Fail OPEN: the Doctrine store answers 0 when the database is unavailable. Deliveries
+ *    carry money-deciding statuses and the endpoint's actual authentication is the API
+ *    re-fetch, so a broken limiter must not become a webhook outage.
+ *  - Order: wired after the payload-size and HTTPS guards — those are free, this one costs
+ *    a DB round-trip.
  */
 final class WebhookRateLimitGuard implements WebhookRequestGuardInterface
 {
     /**
-     * @var array<string, array{tokens: float, updatedAt: float}>
+     * @param ?Closure(): int $clock test seam; production uses time()
      */
-    private array $buckets = [];
-
     public function __construct(
-        private readonly float $burst = 60.0,
-        private readonly float $refillRatePerSecond = 1.0,
+        private readonly RateLimitStoreInterface $store,
+        private readonly int $limitPerWindow = 120,
+        private readonly int $windowSeconds = 60,
+        private readonly ?Closure $clock = null,
     ) {
     }
 
     public function check(WebhookRequest $request): WebhookGuardResult
     {
-        $key = $request->clientIp !== '' ? $request->clientIp : 'unknown';
-        $now = microtime(true);
-        $bucket = $this->buckets[$key] ?? ['tokens' => $this->burst, 'updatedAt' => $now];
+        $source = $request->clientIp !== '' ? $request->clientIp : 'unknown';
+        $window = intdiv($this->now(), $this->windowSeconds);
+        $key = sprintf('mollie:webhook:%s:%d', sha1($source), $window);
 
-        $elapsed = max(0.0, $now - $bucket['updatedAt']);
-        $tokens = min($this->burst, $bucket['tokens'] + $elapsed * $this->refillRatePerSecond);
+        // TTL of two windows: the counter must outlive its own window, and the store may
+        // only reset on read-after-expiry.
+        $count = $this->store->increment($key, $this->windowSeconds * 2);
 
-        if ($tokens < 1.0) {
-            $this->buckets[$key] = ['tokens' => $tokens, 'updatedAt' => $now];
+        if ($count === 0) {
+            return WebhookGuardResult::pass();
+        }
 
+        if ($count > $this->limitPerWindow) {
             return WebhookGuardResult::reject(429, 'rate_limited');
         }
 
-        $this->buckets[$key] = ['tokens' => $tokens - 1.0, 'updatedAt' => $now];
-
         return WebhookGuardResult::pass();
+    }
+
+    private function now(): int
+    {
+        return $this->clock !== null ? ($this->clock)() : time();
     }
 }

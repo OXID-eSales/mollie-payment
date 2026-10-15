@@ -11,7 +11,6 @@ namespace OxidEsales\Payments\Mollie\Webhook\Handler;
 
 use DateTimeImmutable;
 use Exception;
-use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Webhook\WebhookEvent;
 use OxidEsales\PaymentBase\Webhook\WebhookResult;
 use OxidEsales\Payments\Mollie\Webhook\MollieWebhookEventHandlerInterface;
@@ -41,9 +40,10 @@ abstract class AbstractMollieWebhookHandler implements MollieWebhookEventHandler
      */
     protected const CONTRACT_WAIT_WINDOW_SECONDS = 600;
 
+    // The repository left this ctor with review A-M2 (2026-10-14): the FulfillmentResult now
+    // carries the contract id, so the base class has nothing left to look up.
     public function __construct(
         protected readonly WebhookContractFulfillmentHandlerInterface $fulfillmentHandler,
-        protected readonly ContractRepositoryInterface $contractRepository,
         protected readonly LoggerInterface $logger,
     ) {
     }
@@ -57,37 +57,32 @@ abstract class AbstractMollieWebhookHandler implements MollieWebhookEventHandler
      * - `ContractNotFound` → age-dependent, see {@see self::CONTRACT_WAIT_WINDOW_SECONDS}
      */
     protected function mapHandlerResult(
-        FulfillmentOutcome $outcome,
+        FulfillmentResult $result,
         string $providerOrderId,
         string $successAction,
         string $noOpReason,
         WebhookEvent $event,
     ): MollieWebhookOutcome {
-        // One exhaustive match over the enum — the contract id is resolved only in the arms that can
-        // have one, so the not-found path does not spend a lookup proving what it already knows.
-        return match ($outcome) {
+        // The fulfilment handler already loaded the contract and carries its id in the result
+        // (review 2026-10-14, A-M2) — no second repository lookup per delivery.
+        return match ($result->outcome) {
             FulfillmentOutcome::ContractNotFound => $this->contractNotFoundOutcome($providerOrderId, $event),
             FulfillmentOutcome::Acted => MollieWebhookOutcome::of(
                 WebhookResult::success($successAction),
-                $this->resolveContractIdFromProviderOrderId($providerOrderId),
+                $result->contractId,
             ),
             FulfillmentOutcome::NoOp => MollieWebhookOutcome::of(
                 WebhookResult::skipped($noOpReason),
-                $this->resolveContractIdFromProviderOrderId($providerOrderId),
+                $result->contractId,
             ),
             FulfillmentOutcome::Failed => MollieWebhookOutcome::of(
                 WebhookResult::failure(
                     'fulfillment_failed',
                     sprintf('Could not apply the Mollie status to contract for payment %s', $providerOrderId),
                 ),
-                $this->resolveContractIdFromProviderOrderId($providerOrderId),
+                $result->contractId,
             ),
         };
-    }
-
-    protected function resolveContractIdFromProviderOrderId(string $providerOrderId): ?string
-    {
-        return $this->contractRepository->findByProviderOrderId($providerOrderId)?->getId();
     }
 
     /**

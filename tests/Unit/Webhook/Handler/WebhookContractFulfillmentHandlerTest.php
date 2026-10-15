@@ -23,6 +23,7 @@ use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface;
 use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
+use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentResult;
 use OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandler;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -64,7 +65,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
     {
         $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
 
-        self::assertSame(FulfillmentOutcome::ContractNotFound, $this->handler->handlePaymentPaid('tr_missing'));
+        self::assertSame(FulfillmentOutcome::ContractNotFound, $this->handler->handlePaymentPaid('tr_missing')->outcome);
     }
 
     public function testHandlePaymentPaid_IsNoOpWhenAlreadyFulfilled(): void
@@ -76,7 +77,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $this->contractRepository->expects(self::never())->method('save');
         $this->contractFulfillmentService->expects(self::never())->method('fulfill');
 
-        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentPaid('tr_paid'));
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentPaid('tr_paid')->outcome);
     }
 
     public function testHandlePaymentPaid_ClimbsLadderAndFulfillsAndRecordsTransaction(): void
@@ -100,7 +101,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
         $this->expectTransactionRecorded(MollieDefinitions::TRANSACTION_TYPE_CAPTURE, MollieDefinitions::TRANSACTION_STATUS_COMPLETED, 19.99);
 
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentPaid('tr_paid'));
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentPaid('tr_paid')->outcome);
     }
 
     public function testHandlePaymentPaid_SwallowsDomainExceptionsFromLadderSteps(): void
@@ -116,7 +117,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
         $this->transactionRepository->expects(self::never())->method('save');
 
-        self::assertSame(FulfillmentOutcome::Failed, $this->handler->handlePaymentPaid('tr_paid'));
+        self::assertSame(FulfillmentOutcome::Failed, $this->handler->handlePaymentPaid('tr_paid')->outcome);
     }
 
     public function testHandlePaymentPaid_DoesNotRecordTransactionWhenFulfillmentServiceDeclines(): void
@@ -129,7 +130,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
         $this->transactionRepository->expects(self::never())->method('save');
 
-        self::assertSame(FulfillmentOutcome::Failed, $this->handler->handlePaymentPaid('tr_paid'));
+        self::assertSame(FulfillmentOutcome::Failed, $this->handler->handlePaymentPaid('tr_paid')->outcome);
     }
 
     // --- handlePaymentFailed ---
@@ -154,7 +155,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
         $outcome = $this->handler->handlePaymentPaid('tr_1');
 
-        self::assertSame(FulfillmentOutcome::Acted, $outcome);
+        self::assertSame(FulfillmentOutcome::Acted, $outcome->outcome);
         self::assertSame(2, $saves, 'the stale save, then the fresh one');
     }
 
@@ -165,7 +166,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $this->contractFulfillmentService->expects(self::never())->method('fulfill');
         $this->transactionRepository->expects(self::never())->method('save');
 
-        self::assertSame(FulfillmentOutcome::Failed, $this->handler->handlePaymentPaid('tr_1'));
+        self::assertSame(FulfillmentOutcome::Failed, $this->handler->handlePaymentPaid('tr_1')->outcome);
     }
 
     public function testHandlePaymentFailed_AlsoRetriesOnAStaleSave(): void
@@ -179,7 +180,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
             }
         });
 
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentFailed('tr_1', 'declined'));
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentFailed('tr_1', 'declined')->outcome);
     }
 
     public function testHandlePaymentPaid_RecordsTheCapturedAmountOnceTheContractIsCommitted(): void
@@ -223,7 +224,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
     {
         $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
 
-        self::assertSame(FulfillmentOutcome::ContractNotFound, $this->handler->handlePaymentFailed('tr_missing', 'declined'));
+        self::assertSame(FulfillmentOutcome::ContractNotFound, $this->handler->handlePaymentFailed('tr_missing', 'declined')->outcome);
     }
 
     public function testHandlePaymentFailed_IsNoOpWhenAlreadyTerminal(): void
@@ -233,7 +234,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
         $contract->expects(self::never())->method('fail');
 
-        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentFailed('tr_failed', 'declined'));
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentFailed('tr_failed', 'declined')->outcome);
     }
 
     public function testHandlePaymentFailed_FailsContractAndMirrorsOrderAndRecordsTransaction(): void
@@ -247,7 +248,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $this->orderUpdater->expects(self::once())->method('markFailed')->with('order-2', 'declined');
         $this->expectTransactionRecorded(MollieDefinitions::TRANSACTION_TYPE_FAILURE, MollieDefinitions::TRANSACTION_STATUS_FAILED, 0.0);
 
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentFailed('tr_failed', 'declined'));
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentFailed('tr_failed', 'declined')->outcome);
     }
 
     public function testHandlePaymentFailed_DoesNotMirrorOrderWhenOrderIdMissing(): void
@@ -258,7 +259,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
         $this->orderUpdater->expects(self::never())->method('markFailed');
 
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentFailed('tr_failed', 'declined'));
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentFailed('tr_failed', 'declined')->outcome);
     }
 
     // --- handlePaymentExpired ---
@@ -267,7 +268,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
     {
         $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
 
-        self::assertSame(FulfillmentOutcome::ContractNotFound, $this->handler->handlePaymentExpired('tr_missing'));
+        self::assertSame(FulfillmentOutcome::ContractNotFound, $this->handler->handlePaymentExpired('tr_missing')->outcome);
     }
 
     public function testHandlePaymentExpired_IsNoOpWhenAlreadyTerminal(): void
@@ -277,7 +278,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
         $contract->expects(self::never())->method('expire');
 
-        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentExpired('tr_expired'));
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentExpired('tr_expired')->outcome);
     }
 
     public function testHandlePaymentExpired_ExpiresContractAndRecordsTransaction(): void
@@ -289,7 +290,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $this->contractRepository->expects(self::once())->method('save')->with($contract);
         $this->expectTransactionRecorded(MollieDefinitions::TRANSACTION_TYPE_EXPIRATION, MollieDefinitions::TRANSACTION_STATUS_FAILED, 0.0);
 
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentExpired('tr_expired'));
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentExpired('tr_expired')->outcome);
     }
 
     /**
@@ -307,7 +308,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $contract->expects(self::never())->method('expire');
         $this->contractRepository->expects(self::never())->method('save');
 
-        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentExpired('tr_committed'));
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentExpired('tr_committed')->outcome);
     }
 
     // --- handlePaymentCanceled ---
@@ -316,7 +317,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
     {
         $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
 
-        self::assertSame(FulfillmentOutcome::ContractNotFound, $this->handler->handlePaymentCanceled('tr_missing', 'customer_canceled'));
+        self::assertSame(FulfillmentOutcome::ContractNotFound, $this->handler->handlePaymentCanceled('tr_missing', 'customer_canceled')->outcome);
     }
 
     public function testHandlePaymentCanceled_IsNoOpWhenAlreadyTerminal(): void
@@ -326,7 +327,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
         $contract->expects(self::never())->method('cancel');
 
-        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentCanceled('tr_canceled', 'customer_canceled'));
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentCanceled('tr_canceled', 'customer_canceled')->outcome);
     }
 
     public function testHandlePaymentCanceled_CancelsContractAndMirrorsOrderAndRecordsTransaction(): void
@@ -340,7 +341,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $this->orderUpdater->expects(self::once())->method('markCancelled')->with('order-3');
         $this->expectTransactionRecorded(MollieDefinitions::TRANSACTION_TYPE_CANCELLATION, MollieDefinitions::TRANSACTION_STATUS_FAILED, 0.0);
 
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentCanceled('tr_canceled', 'customer_canceled'));
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentCanceled('tr_canceled', 'customer_canceled')->outcome);
     }
 
     // --- handlePaymentAuthorized ---
@@ -349,7 +350,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
     {
         $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
 
-        self::assertSame(FulfillmentOutcome::ContractNotFound, $this->handler->handlePaymentAuthorized('tr_missing'));
+        self::assertSame(FulfillmentOutcome::ContractNotFound, $this->handler->handlePaymentAuthorized('tr_missing')->outcome);
     }
 
     public function testHandlePaymentAuthorized_IsNoOpWhenAlreadyAuthorized(): void
@@ -361,7 +362,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $contract->expects(self::never())->method('authorize');
         $this->contractRepository->expects(self::never())->method('save');
 
-        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentAuthorized('tr_authorized'));
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentAuthorized('tr_authorized')->outcome);
     }
 
     public function testHandlePaymentAuthorized_IsNoOpWhenPastAuthorizationOrTerminal(): void
@@ -374,7 +375,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $contract->expects(self::never())->method('authorize');
         $this->contractRepository->expects(self::never())->method('save');
 
-        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentAuthorized('tr_captured'));
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentAuthorized('tr_captured')->outcome);
     }
 
     public function testHandlePaymentAuthorized_FromNotFinished_AuthorizesContractAndRecordsTransaction(): void
@@ -389,7 +390,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
         $this->expectTransactionRecorded(MollieDefinitions::TRANSACTION_TYPE_AUTHORIZATION, MollieDefinitions::TRANSACTION_STATUS_COMPLETED, 42.5);
 
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentAuthorized('tr_authorized'));
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentAuthorized('tr_authorized')->outcome);
     }
 
     public function testHandlePaymentAuthorized_FromPending_SwallowsTransitionToPendingDomainException(): void
@@ -402,7 +403,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $contract->expects(self::once())->method('authorize');
         $this->contractRepository->expects(self::once())->method('save')->with($contract);
 
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentAuthorized('tr_authorized'));
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentAuthorized('tr_authorized')->outcome);
     }
 
     public function testHandlePaymentAuthorized_SwallowsDomainExceptionFromAuthorizeStep(): void
@@ -414,7 +415,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $this->contractRepository->expects(self::once())->method('save')->with($contract);
         $this->transactionRepository->expects(self::once())->method('save');
 
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentAuthorized('tr_authorized'));
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentAuthorized('tr_authorized')->outcome);
     }
 
     public function testHandlePaymentAuthorized_DoesNotFulfillOrTouchOxpaid(): void
@@ -429,7 +430,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $contract->expects(self::never())->method('fulfill');
         $contract->expects(self::never())->method('commitToOrder');
 
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentAuthorized('tr_authorized'));
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentAuthorized('tr_authorized')->outcome);
     }
 
     private function contractWithState(

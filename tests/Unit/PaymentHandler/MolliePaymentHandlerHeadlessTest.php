@@ -22,15 +22,23 @@ use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use OxidEsales\Payments\Mollie\PaymentHandler\MolliePaymentHandler;
 use OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator;
+use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
+use OxidEsales\Payments\Mollie\Tests\Unit\Support\FixedUserDataGate;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The handler with its two PHP-session seams recorded instead of executed.
+ * The handler with its two PHP-session seams recorded instead of executed, around the REAL
+ * {@see CheckoutSessionStarter} ladder.
  */
 final class SessionRecordingMollieHandler extends MolliePaymentHandler
 {
     /** @var list<string> */
     public array $sessionCalls = [];
+
+    public function __construct(EventDispatcherInterface $dispatcher, BasketBuyabilityValidator $buyability)
+    {
+        parent::__construct(new CheckoutSessionStarter($dispatcher, $buyability, new FixedUserDataGate()));
+    }
 
     protected function prepareOxidBasket(PaymentContextInterface $context): void
     {
@@ -135,7 +143,7 @@ final class MolliePaymentHandlerHeadlessTest extends TestCase
         $buyability = $this->createMock(BasketBuyabilityValidator::class);
         $buyability->method('validate')->willReturn([]);
 
-        return new SessionRecordingMollieHandler($dispatcher, null, null, $buyability);
+        return new SessionRecordingMollieHandler($dispatcher, $buyability);
     }
 
     /**

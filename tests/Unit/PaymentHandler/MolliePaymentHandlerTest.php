@@ -27,6 +27,7 @@ use OxidEsales\Eshop\Core\Exception\OutOfStockException;
 use OxidEsales\PaymentBase\Adapter\Exception\ShopOrderException;
 use OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator;
 use OxidEsales\Payments\Mollie\Service\BuyabilityFailure;
+use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplayInterface;
 use OxidEsales\Payments\Mollie\Service\NotOrderableCheckoutFailure;
 use OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages;
 
@@ -139,6 +140,9 @@ final class MolliePaymentHandlerTest extends TestCase
 
     public function testProcessPaymentSwallowsDispatchFailuresAsAnErrorResult(): void
     {
+        // The shared ladder absorbs a failing dispatch into "no checkout available" (same
+        // behavior the cl=order flow shows the shopper); MOLLIE_PAYMENT_FAILED remains for
+        // failures outside the ladder (e.g. basket preparation).
         $dispatcher = $this->createMock(EventDispatcherInterface::class);
         $dispatcher->method('dispatch')->willThrowException(new RuntimeException('boom'));
 
@@ -146,7 +150,52 @@ final class MolliePaymentHandlerTest extends TestCase
             ->processPayment($this->createMock(PaymentContextInterface::class));
 
         self::assertFalse($result->isSuccess());
-        self::assertSame('MOLLIE_PAYMENT_FAILED', $result->getErrorCode());
+        self::assertSame('MOLLIE_NO_CHECKOUT_URL', $result->getErrorCode());
+    }
+
+    // ── Review 2026-10-14 A-H1: the OPC path climbs the SAME ladder as cl=order ────────────────
+
+    /**
+     * MOL-15 reached OPC with the shared ladder: address data that went bad since the payment
+     * step stops the checkout with the translated sentences — previously this guard existed
+     * only in the standard cl=order flow.
+     */
+    public function testProcessPaymentRefusesBadUserDataBeforeDispatching(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::never())->method('dispatch');
+
+        $result = (new TestableMolliePaymentHandler(
+            $dispatcher,
+            userDataProblems: ['The street field is not valid.', 'The ZIP field is not valid.'],
+        ))->processPayment($this->createMock(PaymentContextInterface::class));
+
+        self::assertFalse($result->isSuccess());
+        self::assertSame(MolliePaymentHandler::ERROR_USER_DATA_INVALID, $result->getErrorCode());
+        self::assertSame(
+            'The street field is not valid. The ZIP field is not valid.',
+            $result->getErrorMessage(),
+        );
+    }
+
+    /**
+     * MOL-18 reached OPC with the shared ladder: a repeated "Pay" click rejoins the attempt
+     * already in flight instead of creating a second contract/payment — previously only the
+     * standard cl=order flow had this guard.
+     */
+    public function testProcessPaymentReplaysAnInFlightAttemptInsteadOfStartingASecondOne(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::never())->method('dispatch');
+        $replay = $this->createMock(InFlightCheckoutReplayInterface::class);
+        $replay->method('checkoutUrl')->willReturn('https://mollie.test/checkout/tr_first');
+
+        $result = (new TestableMolliePaymentHandler($dispatcher, replay: $replay))
+            ->processPayment($this->createMock(PaymentContextInterface::class));
+
+        self::assertTrue($result->isSuccess());
+        self::assertSame('https://mollie.test/checkout/tr_first', $result->getMetadataValue('redirectUrl'));
+        self::assertTrue($result->getMetadataValue('requiresRedirect'));
     }
 
     /**

@@ -108,8 +108,8 @@ final class ReconcilePaidContractsCommand extends Command
         }
 
         $result = $this->fulfillment->handlePaymentPaid($paymentId);
-        $io->writeln(sprintf('  %s  %s', str_pad($result->name, 8), $label));
+        $io->writeln(sprintf('  %s  %s', str_pad($result->outcome->name, 8), $label));
 
-        return $result->name === 'Acted';
+        return $result->outcome->name === 'Acted';
     }
 }

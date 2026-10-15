@@ -54,7 +54,7 @@ final class CaptureService implements CaptureServiceInterface
         ?string $idempotencyKey = null,
     ): MollieCaptureDto {
         $this->assertCapturable($contract);
-        $providerOrderId = $this->requireProviderOrderId($contract);
+        $providerOrderId = ProviderOrderId::requireFrom($contract, 'capture');
 
         $payment = $this->paymentsAdapter->getPayment($providerOrderId);
         // One formula, one place (Sprint 11 Story 10 / F11) — this service used to carry its own
@@ -85,18 +85,6 @@ final class CaptureService implements CaptureServiceInterface
         ));
     }
 
-    private function requireProviderOrderId(PaymentContractInterface $contract): string
-    {
-        $providerOrderId = $contract->getProviderOrderId();
-        if ($providerOrderId === null || $providerOrderId === '') {
-            throw new DomainException(sprintf(
-                'Cannot capture contract "%s": no Mollie payment id on record.',
-                $contract->getId() ?? 'unknown',
-            ));
-        }
-
-        return $providerOrderId;
-    }
 
     private function assertWithinCapturable(?float $amount, float $capturable, string $contractId): void
     {
@@ -108,7 +96,7 @@ final class CaptureService implements CaptureServiceInterface
             throw new InvalidArgumentException('Capture amount must be positive.');
         }
 
-        if ($amount > $capturable + 0.00001) {
+        if (MoneyComparison::exceeds($amount, $capturable)) {
             throw new InvalidArgumentException(sprintf(
                 'Cannot capture %.2f on contract "%s": only %.2f is authorized.',
                 $amount,

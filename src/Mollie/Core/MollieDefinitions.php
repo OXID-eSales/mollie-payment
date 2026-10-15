@@ -91,13 +91,6 @@ final class MollieDefinitions
     public const LOG_LEVEL_NORMAL = 'normal';
     public const LOG_LEVEL_DEBUG = 'debug';
 
-    // Provider-internal (module-event) names.
-    public const EVENT_CHECKOUT_SESSION_REQUEST = 'oe_payments.mollie.checkout_session_request';
-    public const EVENT_CHECKOUT_RETURN = 'oe_payments.mollie.checkout_return';
-    public const EVENT_CAPTURE_REQUEST = 'oe_payments.mollie.capture_request';
-    public const EVENT_REFUND_REQUEST = 'oe_payments.mollie.refund_request';
-    public const EVENT_CANCEL_AUTHORIZATION = 'oe_payments.mollie.cancel_authorization';
-
     /**
      * Mollie method ids that support MANUAL capture (the authorize-then-capture / two-step flow).
      * On a manual-capture shop these are created with captureMode=manual; every other method is
@@ -166,7 +159,6 @@ final class MollieDefinitions
                     'longdesc' => 'Pay securely with Mollie (iDEAL, credit card and more).',
                 ],
             ],
-            'countries' => [],
             'currencies' => ['EUR'],
             'constraints' => self::PAYMENT_CONSTRAINTS_DEFAULT,
             'defaulton' => true,
@@ -194,15 +186,6 @@ final class MollieDefinitions
     {
         $currencies = self::MOLLIE_DEFINITIONS[$paymentId]['currencies'] ?? [];
         return array_values(array_filter($currencies, 'is_string'));
-    }
-
-    /**
-     * @return list<string>
-     */
-    public static function getSupportedCountries(string $paymentId): array
-    {
-        $countries = self::MOLLIE_DEFINITIONS[$paymentId]['countries'] ?? [];
-        return array_values(array_filter($countries, 'is_string'));
     }
 
     /**
@@ -251,11 +234,5 @@ final class MollieDefinitions
     public static function requiresOrderData(string $methodId): bool
     {
         return in_array(strtolower($methodId), self::METHODS_REQUIRING_ORDER_DATA, true);
-    }
-
-    public static function supportsCountry(string $paymentId, string $country): bool
-    {
-        $countries = self::getSupportedCountries($paymentId);
-        return $countries === [] || in_array(strtoupper($country), $countries, true);
     }
 }

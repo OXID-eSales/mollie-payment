@@ -22,6 +22,7 @@ use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface;
 use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
+use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentResult;
 use OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandler;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -68,7 +69,7 @@ final class WebhookContractFulfillmentHandlerAuthorizedCommitTest extends TestCa
         $this->contracts->expects($this->never())->method('save'); // the commit service saved its own copy
         $this->transactions->expects($this->once())->method('save');
 
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler()->handlePaymentAuthorized('tr_1'));
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler()->handlePaymentAuthorized('tr_1')->outcome);
     }
 
     public function testARefusedCommitIsReportedAsFailedSoMollieRetries(): void
@@ -77,7 +78,7 @@ final class WebhookContractFulfillmentHandlerAuthorizedCommitTest extends TestCa
         $this->commit->method('commit')->willReturn(CommitOutcome::refused('amount_mismatch'));
         $this->transactions->expects($this->never())->method('save');
 
-        self::assertSame(FulfillmentOutcome::Failed, $this->handler()->handlePaymentAuthorized('tr_1'));
+        self::assertSame(FulfillmentOutcome::Failed, $this->handler()->handlePaymentAuthorized('tr_1')->outcome);
     }
 
     public function testAPendingCommitIsANoOpUntilTheOtherConditionCloses(): void
@@ -85,7 +86,7 @@ final class WebhookContractFulfillmentHandlerAuthorizedCommitTest extends TestCa
         $this->contracts->method('findByProviderOrderId')->willReturn($this->pendingContract());
         $this->commit->method('commit')->willReturn(CommitOutcome::pending());
 
-        self::assertSame(FulfillmentOutcome::NoOp, $this->handler()->handlePaymentAuthorized('tr_1'));
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler()->handlePaymentAuthorized('tr_1')->outcome);
     }
 
     public function testAnAlreadyCommittedContractIsLeftAlone(): void
@@ -96,7 +97,7 @@ final class WebhookContractFulfillmentHandlerAuthorizedCommitTest extends TestCa
         $this->contracts->method('findByProviderOrderId')->willReturn($contract);
         $this->commit->expects($this->never())->method('commit');
 
-        self::assertSame(FulfillmentOutcome::NoOp, $this->handler()->handlePaymentAuthorized('tr_1'));
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler()->handlePaymentAuthorized('tr_1')->outcome);
     }
 
     public function testWithoutACommitServiceTheContractIsOnlyAuthorizedAsBefore(): void
@@ -105,7 +106,7 @@ final class WebhookContractFulfillmentHandlerAuthorizedCommitTest extends TestCa
         $this->contracts->method('findByProviderOrderId')->willReturn($contract);
         $this->contracts->expects($this->once())->method('save')->with($contract);
 
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler(withCommit: false)->handlePaymentAuthorized('tr_1'));
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler(withCommit: false)->handlePaymentAuthorized('tr_1')->outcome);
         self::assertTrue($contract->getState()->isAuthorized());
     }
 
