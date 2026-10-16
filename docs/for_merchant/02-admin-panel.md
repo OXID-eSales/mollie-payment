@@ -14,12 +14,35 @@
   `sMollieCaptureMode=manual`) on an authorized-but-not-yet-captured payment. Orders paid with an
   instant method (iDEAL, PayPal, bank transfer, …) on a manual-capture shop arrive already captured
   and show neither button — there is nothing left to capture.
+- **Release remaining authorization** (MOL-32) — shown once a payment has been **partially captured**
+  and an authorized remainder is still held. It returns that remainder to the customer. See
+  "Multiple captures" below for when this appears instead of Cancel.
 
-  **Known limitation:** as of this release, the module does not yet drive a two-step payment into
-  the "authorized" state through any live path (see
-  `docs/architecture/00-overview.md`'s "Known limitation" note) — these two actions are built and
-  unit-tested, but will not currently have a real order to act on. Auto-capture
-  (`sMollieCaptureMode=automatic`, the default) is unaffected and fully functional.
+## Multiple captures (MOL-32)
+
+Whether you can capture an authorization **in several parts** depends on your Mollie account, not on
+the module: Klarna and Billie allow it by default; cards and PayPal allow it **only if Mollie has
+enabled it for your account** (ask your Mollie contact). Mollie exposes no API flag for this, so the
+module can't detect it — you tell it via **Admin → Extensions → Modules → Mollie → Settings →
+"Multiple captures enabled on the Mollie account"** (`blMollieMultiCapture`, **off by default**).
+
+**Setting off (default, single-capture account).** The first capture is **final**: if you capture
+less than the full amount, Mollie releases the rest back to the customer and the order is settled
+with what you captured. This is the safe, honest default — do not turn the setting on unless Mollie
+has confirmed multi-capture for your account, or captures will fail.
+
+**Setting on (multi-capture account).** A partial capture leaves the remainder **authorized**:
+
+- The **Captured** figure accumulates and the capturable remainder shrinks with each capture.
+- The order is **not** marked paid until the authorization is **fully captured** (or released).
+- **Capture** stays available while a remainder is authorized — capture again later.
+- **Release remaining authorization** gives the rest back to the customer and settles the order with
+  what was captured; the panel then shows a **Released to customer** figure.
+- **Cancel** (which voids the *whole* hold) is only offered **before** the first capture — once
+  anything is captured, use Release.
+
+A capture or release Mollie refuses (e.g. the authorization lapsed, or "capture marked as final" on a
+single-capture account) shows a clear message on the Payment tab and changes nothing.
 
 ## Refunding an order
 

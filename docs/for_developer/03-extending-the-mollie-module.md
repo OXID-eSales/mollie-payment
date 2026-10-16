@@ -111,3 +111,24 @@ Follow `MollieWebhookFileLoggerFactory`'s shape: extend `AbstractFileLoggerFacto
 `autowire: false` and an explicit `$config` argument, then bind the produced `FileLoggerInterface`
 to a plain string service id (not the interface itself, to avoid colliding with Stripe's/PayPal's
 own bindings of the same shared interface — see the comment in `services.yaml`).
+
+## Extension pattern 7 — the multi-capture completion policy (MOL-32)
+
+Whether an admin capture completes the order is decided in **one** place:
+`CaptureCompletionPolicy` (behind `CaptureCompletionPolicyInterface`), which reads
+`ModuleConfigurationServiceInterface::isMultiCaptureEnabled()` (the `blMollieMultiCapture` setting —
+Mollie exposes no API flag) and returns a `CaptureCompletion` enum. `CaptureService` depends on the
+policy, never on the setting, so the single-vs-multi branch lives nowhere else.
+
+To change the rule — e.g. auto-detect multi-capture from the live payment instead of a setting —
+implement `CaptureCompletionPolicyInterface` and re-alias it in `services.yaml`; no capture/panel
+code changes. Key downstream contracts the policy drives:
+
+- `MolliePaymentDto::capturableAmount()` is `amount − amountCaptured` while `authorized` (Mollie's
+  `amountRemaining` is refund-oriented — do not use it for captures).
+- A partial capture under multi-capture must **not** fulfil the contract or stamp OXPAID; only the
+  completing capture (or any capture on a single-capture account) does.
+- Releasing the remainder is `ReleaseAuthorizationService` (sibling of `CaptureService`/
+  `RefundService`); it has no payment-base-generic request event, so the admin dispatches
+  `MollieReleaseAuthorizationRequestEvent` straight to the shared `EventDispatcherInterface` via
+  `MollieExtraActionDispatcherInterface`.

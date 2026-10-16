@@ -1,7 +1,15 @@
 # 2026-10-16
 
-- Sprint MOL-32 (multi-capture support) — **SPRINT PLAN written, nothing implemented**:
-  `sprints/MOL-32-multicapture.md`. Multi-capture is now enabled on the Mollie account, which
+- Sprint MOL-32 (multi-capture support) — **IMPLEMENTED (S1–S8), ready for review; NOT merged**.
+  Branch `b-7.4.x-MOL-32-multicapture`; plan `sprints/MOL-32-multicapture.md`, report
+  `done/MOL-32-multicapture.md`. All 8 stories TDD red-first, gates green after each; Unit 802,
+  Integration green, pre-commit-check.sh ALL PASSED. Closes MOL-31's five defects (OXPAID on partial,
+  blocked second capture, silent capture failure, no release/"released" figure, docs). Default-off
+  setting = no change for single-capture shops. Open: the money-path e2e
+  (`MollieAdmin/MultiCaptureFlow.spec.ts`) needs a multi-capture-enabled Mollie profile + the setting
+  on (skips unless `MOLLIE_E2E_MULTICAPTURE=1`).
+
+- (original plan note) Multi-capture is now enabled on the Mollie account, which
   unblocks the MOL-31 (2026-10-12) finding — the sprint delivers MOL-31's "option A" and keeps
   "option B" (honest single-capture) as the behaviour when the new setting is off.
   - 8 stories, TDD/Clean-Code/SOLID/DRY, red-first with integration/e2e proof on every money path.
