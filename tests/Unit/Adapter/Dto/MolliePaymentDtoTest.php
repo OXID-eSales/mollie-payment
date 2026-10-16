@@ -104,19 +104,7 @@ final class MolliePaymentDtoTest extends TestCase
         self::assertSame(0.0, $dto->refundableAmount());
     }
 
-    public function testCapturableAmount_UsesAmountRemainingWhenPositive(): void
-    {
-        $dto = MolliePaymentDto::fromArray([
-            'id' => 'tr_1',
-            'status' => 'authorized',
-            'amount' => ['currency' => 'EUR', 'value' => '100.00'],
-            'amountRemaining' => '40.00',
-        ]);
-
-        self::assertSame(40.0, $dto->capturableAmount());
-    }
-
-    public function testCapturableAmount_FallsBackToFullAmountWhenRemainingIsZero(): void
+    public function testCapturableAmount_BeforeAnyCapture_IsTheFullAuthorizedAmount(): void
     {
         $dto = MolliePaymentDto::fromArray([
             'id' => 'tr_1',
@@ -125,5 +113,63 @@ final class MolliePaymentDtoTest extends TestCase
         ]);
 
         self::assertSame(100.0, $dto->capturableAmount());
+    }
+
+    /**
+     * MOL-32 — under multi-capture the payment stays `authorized` after a partial capture and the
+     * remaining capturable amount is `amount − amountCaptured`. Mollie's `amountRemaining` is
+     * refund-oriented ("only available when refunds are available") and must NOT drive the capture
+     * bound: before MOL-32 the formula fell back to the full `amount`, so a 40.00 capture on a
+     * 100.00 authorization reported 100.00 capturable again.
+     */
+    public function testCapturableAmount_AfterPartialCapture_IsAmountMinusCaptured(): void
+    {
+        $dto = MolliePaymentDto::fromArray([
+            'id' => 'tr_1',
+            'status' => 'authorized',
+            'amount' => ['currency' => 'EUR', 'value' => '100.00'],
+            'amountCaptured' => '40.00',
+        ]);
+
+        self::assertSame(60.0, $dto->capturableAmount());
+    }
+
+    public function testCapturableAmount_RefundOrientedAmountRemainingDoesNotDriveTheCaptureBound(): void
+    {
+        // An authorized payment that has settled a partial capture: amountRemaining here is the
+        // refundable remainder of the captured part, not a capturable figure.
+        $dto = MolliePaymentDto::fromArray([
+            'id' => 'tr_1',
+            'status' => 'authorized',
+            'amount' => ['currency' => 'EUR', 'value' => '100.00'],
+            'amountCaptured' => '70.00',
+            'amountRemaining' => '70.00',
+        ]);
+
+        self::assertSame(30.0, $dto->capturableAmount());
+    }
+
+    public function testCapturableAmount_FullyCaptured_IsZero(): void
+    {
+        $dto = MolliePaymentDto::fromArray([
+            'id' => 'tr_1',
+            'status' => 'authorized',
+            'amount' => ['currency' => 'EUR', 'value' => '100.00'],
+            'amountCaptured' => '100.00',
+        ]);
+
+        self::assertSame(0.0, $dto->capturableAmount());
+    }
+
+    public function testCapturableAmount_NonAuthorizedPayment_IsZero(): void
+    {
+        $dto = MolliePaymentDto::fromArray([
+            'id' => 'tr_1',
+            'status' => 'paid',
+            'amount' => ['currency' => 'EUR', 'value' => '100.00'],
+            'amountCaptured' => '40.00',
+        ]);
+
+        self::assertSame(0.0, $dto->capturableAmount());
     }
 }
