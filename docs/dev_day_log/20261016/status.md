@@ -1,6 +1,7 @@
 # 2026-10-16
 
-- Sprint MOL-32 (multi-capture support) — **IMPLEMENTED (S1–S8), ready for review; NOT merged**.
+- Sprint MOL-32 (multi-capture support) — **IMPLEMENTED (S1–S8) and MERGED into `b-7.4.x`**
+  2026-10-16 (merge commit `93be52d`, at the user's request; post-merge gates ALL PASSED — Unit 802).
   Branch `b-7.4.x-MOL-32-multicapture`; plan `sprints/MOL-32-multicapture.md`, report
   `done/MOL-32-multicapture.md`. All 8 stories TDD red-first, gates green after each; Unit 802,
   Integration green, pre-commit-check.sh ALL PASSED. Closes MOL-31's five defects (OXPAID on partial,
