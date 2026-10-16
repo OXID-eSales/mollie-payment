@@ -49,6 +49,8 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
 {
     /** GRAPH-QL / MS1: the only way a headless client may render Mollie - its hosted page refuses framing. */
     public const UI_MODE_HOSTED = 'hosted';
+    /** Inline (iframe) mode: Mollie Components card fields in the client; the token rides in `mollieCardToken`. */
+    public const UI_MODE_EMBEDDED = 'embedded';
     /** Error code when a headless client asks for `embedded` / `custom`: nothing is created. */
     public const ERROR_UI_MODE_UNSUPPORTED = 'MOLLIE_UI_MODE_UNSUPPORTED';
 
@@ -99,11 +101,12 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
                 // PaymentContext (payment-base built them from the persisted user basket), and
                 // the ui mode is checked before anything is created.
                 $uiMode = $context->getMetadataValue('uiMode') ?? self::UI_MODE_HOSTED;
-                if ($uiMode !== self::UI_MODE_HOSTED) {
+                if (!in_array($uiMode, [self::UI_MODE_HOSTED, self::UI_MODE_EMBEDDED], true)) {
                     return PaymentHandlerResult::error(
                         sprintf(
-                            'Mollie supports uiMode "%s" only, "%s" requested',
+                            'Mollie supports uiMode "%s" and "%s" only, "%s" requested',
                             self::UI_MODE_HOSTED,
+                            self::UI_MODE_EMBEDDED,
                             (string) $uiMode,
                         ),
                         self::ERROR_UI_MODE_UNSUPPORTED,

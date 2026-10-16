@@ -96,6 +96,39 @@ final class MollieCheckoutTest extends TestCase
         );
     }
 
+    public function testTheComponentsCardTokenTravelsAsAProviderOptionInEmbeddedMode(): void
+    {
+        $this->checkout->expects($this->once())->method('start')
+            ->with($this->callback(function (HeadlessStartRequest $r): bool {
+                self::assertSame('embedded', $r->uiMode);
+                self::assertSame(['mollieMethod' => 'creditcard', 'mollieCardToken' => 'tkn_abc123'], $r->providerOptions);
+
+                return true;
+            }))
+            ->willReturn(new HeadlessStartResult('ctr-1', 'tok-1', 'mollie', '1001', null, null, 'embedded'));
+
+        $this->controller()->mollieCheckoutStart(
+            new ID('ub-1'),
+            true,
+            'https://app.example.com/return',
+            null,
+            'creditcard',
+            'embedded',
+            'tkn_abc123'
+        );
+    }
+
+    public function testAnEmptyCardTokenIsIgnored(): void
+    {
+        $this->checkout->method('start')
+            ->with($this->callback(fn(HeadlessStartRequest $r): bool => $r->providerOptions === []))
+            ->willReturn(new HeadlessStartResult('ctr-1', 'tok-1', 'mollie', null, 'https://www.mollie.com/checkout/tr_1', null, 'redirect'));
+
+        $this->controller()->mollieCheckoutStart(new ID('ub-1'), true, 'https://app.example.com/return', null, null, 'hosted', '');
+
+        $this->addToAssertionCount(1);
+    }
+
     public function testARefusedStartBecomesAClientSafeErrorWithTheStableCode(): void
     {
         $this->checkout->method('start')->willThrowException(
