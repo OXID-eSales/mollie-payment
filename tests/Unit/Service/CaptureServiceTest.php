@@ -222,6 +222,40 @@ final class CaptureServiceTest extends TestCase
         $this->serviceWithMultiCapture()->capture($contract, 40.0);
     }
 
+    // ---- MOL-32 S4: a second capture is allowed while an authorized remainder exists ----
+
+    public function testCapture_MultiCapture_SecondPartialCaptureIsAccepted_AndStillDoesNotFulfil(): void
+    {
+        // 60 already captured; Mollie reports 60 captured (40 still capturable). Capturing a further
+        // 30 is accepted (the contract never became FULFILLED), leaves 10 — still open.
+        $contract = $this->committedContract('tr_s2', captured: 60.0);
+        $this->paymentsAdapter->method('getPayment')->with('tr_s2')->willReturn(
+            new MolliePaymentDto('tr_s2', 'authorized', MollieAmountDto::fromComponents('EUR', 100.0), amountCaptured: 60.0),
+        );
+        $this->captureAdapter->expects(self::once())
+            ->method('createCapture')
+            ->willReturn($this->captureDto('cp_s2', 'tr_s2', 30.0));
+
+        $contract->expects(self::once())->method('setCapturedAmount')->with(90.0);
+        $this->fulfillmentService->expects(self::never())->method('fulfill');
+
+        $this->serviceWithMultiCapture()->capture($contract, 30.0);
+    }
+
+    public function testCapture_MultiCapture_CaptureBeyondTheAuthorizedRemainderIsRejected(): void
+    {
+        // 60 captured at Mollie → only 40 still capturable; asking for 50 is refused before any call.
+        $contract = $this->committedContract('tr_s3', captured: 60.0);
+        $this->paymentsAdapter->method('getPayment')->with('tr_s3')->willReturn(
+            new MolliePaymentDto('tr_s3', 'authorized', MollieAmountDto::fromComponents('EUR', 100.0), amountCaptured: 60.0),
+        );
+        $this->captureAdapter->expects(self::never())->method('createCapture');
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->serviceWithMultiCapture()->capture($contract, 50.0);
+    }
+
     public function testCapture_WhenNotInCapturableState_Rejected(): void
     {
         $state = $this->createMock(ContractState::class);
