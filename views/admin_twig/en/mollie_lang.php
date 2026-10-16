@@ -22,6 +22,7 @@ $aLang = [
     // MOL-10: the OXID contract state, named as such (the Help table explains the values).
     'MOLLIE_CONTRACT_STATE' => 'OXID Contract Status',
     'MOLLIE_CAPTURED_AMOUNT' => 'Captured',
+    'MOLLIE_RELEASED_AMOUNT' => 'Released to customer',
     'MOLLIE_REFUNDED_AMOUNT' => 'Refunded',
     'MOLLIE_NO_CONTRACT' => 'This order was not processed through Mollie.',
 
@@ -57,6 +58,11 @@ $aLang = [
     'MOLLIE_CANCEL_REASON' => 'Reason',
     'MOLLIE_CANCEL_SUBMIT' => 'Cancel authorization',
     'MOLLIE_CANCEL_CONFIRM' => 'Cancel the uncaptured authorization via Mollie?',
+    'MOLLIE_RELEASE' => 'Release remaining authorization',
+    'MOLLIE_RELEASE_HINT' => 'Return the still-authorized remainder to the customer. Amount to be released:',
+    'MOLLIE_RELEASE_REASON' => 'Release reason (optional)',
+    'MOLLIE_RELEASE_SUBMIT' => 'Release remainder',
+    'MOLLIE_RELEASE_CONFIRM' => 'Release the remaining authorized amount back to the customer via Mollie? This cannot be undone.',
 
     // Sprint 7 Story 3 — admin amount validation messages
     // (AdminAmountValidationMessageFormatter).

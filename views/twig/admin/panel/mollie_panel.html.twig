@@ -102,6 +102,13 @@
             <th class="pc-label">{{ "MOLLIE_CAPTURED_AMOUNT"|translate }}</th>
             <td class="pc-value" data-testid="captured-amount">{{ capturedAmount|default('0.00') }} {{ currency|default('') }}</td>
         </tr>
+        {# MOL-32: the remainder returned to the customer after a release of a partially captured hold. #}
+        {% if isReleased is defined and isReleased %}
+        <tr>
+            <th class="pc-label">{{ "MOLLIE_RELEASED_AMOUNT"|translate }}</th>
+            <td class="pc-value" data-testid="released-amount">{{ releasedAmountFormatted|default('0.00') }} {{ currency|default('') }}</td>
+        </tr>
+        {% endif %}
         <tr>
             <th class="pc-label">{{ "MOLLIE_REFUNDED_AMOUNT"|translate }}</th>
             <td class="pc-value" data-testid="refunded-amount">{{ refundedAmount|default('0.00') }} {{ currency|default('') }}</td>
@@ -256,6 +263,37 @@
                     <input type="submit" class="pc-btn pc-btn-danger-outline" data-testid="cancel-submit"
                            value="{{ "MOLLIE_CANCEL_SUBMIT"|translate }}"
                            onclick="return confirm('{{ "MOLLIE_CANCEL_CONFIRM"|translate }}');">
+                </form>
+            </div>
+        </div>
+    {% endif %}
+
+    {# ===== Release section (MOL-32: give back the remaining authorization after a partial capture) ===== #}
+    {% if isReleasable is defined and isReleasable %}
+        <div class="pc-card">
+            <div class="pc-card-header">{{ "MOLLIE_RELEASE"|translate }}</div>
+            <div class="pc-card-body">
+                <form name="mollieReleaseForm" id="mollieReleaseForm" action="{{ oViewConf.getSelfLink() }}" method="post"
+                      class="js-payment-action-form" data-testid="mollie-release-form">
+                    {{ oViewConf.getHiddenSid()|raw }}
+                    <input type="hidden" name="cl" value="PaymentAdmin">
+                    <input type="hidden" name="oxid" value="{{ orderId }}">
+                    <input type="hidden" name="fnc" value="dispatchAction">
+                    <input type="hidden" name="payment_admin_action" value="release">
+
+                    <p class="pc-hint">{{ "MOLLIE_RELEASE_HINT"|translate }}
+                        <strong>{{ captureBoundFormatted }} {{ currency }}</strong></p>
+
+                    <div class="pc-form-row">
+                        <div class="pc-form-group">
+                            <label class="pc-form-label" for="release_reason">{{ "MOLLIE_RELEASE_REASON"|translate }}</label>
+                            <input type="text" class="pc-form-input" id="release_reason" name="release_reason" maxlength="140">
+                        </div>
+                    </div>
+
+                    <input type="submit" class="pc-btn pc-btn-danger-outline" data-testid="release-submit"
+                           value="{{ "MOLLIE_RELEASE_SUBMIT"|translate }}"
+                           onclick="return confirm('{{ "MOLLIE_RELEASE_CONFIRM"|translate }}');">
                 </form>
             </div>
         </div>

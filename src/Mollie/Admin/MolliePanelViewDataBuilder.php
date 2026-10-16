@@ -77,6 +77,10 @@ class MolliePanelViewDataBuilder
         // the two cannot disagree — and a refund Mollie canceled is not counted (2026-09-17).
         $transactions = $this->transactionHistory->fetch($contract);
 
+        // MOL-32: raw figures for the capture/release/cancel gating and the "released" display.
+        $capturedSoFar = $contract->getCapturedAmount() ?? 0.0;
+        $releasedAmount = round(max(0.0, $contract->getAmount() - $capturedSoFar), 2);
+
         return [
             'orderId' => $orderId,
             'orderNumber' => $this->readOrderField($order, 'oxordernr'),
@@ -93,9 +97,18 @@ class MolliePanelViewDataBuilder
             'refundBoundFormatted' => $this->money($refundBound),
             'isCapturable' => $authorizedHold && $captureBound > 0.0,
             'isRefundable' => $contract->getState()->isFulfilled() && $refundBound > 0.0,
-            // Nothing left to capture means nothing left to cancel either - a hold the shop fully
-            // captured a moment ago still reads `authorized` at Mollie (2026-10-01).
-            'isCancellable' => $authorizedHold && $captureBound > 0.0,
+            // MOL-32: cancel deletes the WHOLE hold — only valid before any capture. Once a partial
+            // capture exists the remainder is given back with Release instead (Mollie refuses a
+            // delete after a capture). Nothing left to capture means nothing left to cancel either
+            // (a hold the shop fully captured a moment ago still reads `authorized`, 2026-10-01).
+            'isCancellable' => $authorizedHold && $captureBound > 0.0 && $capturedSoFar <= 0.0,
+            // MOL-32 S6/S7: release the still-authorized remainder after one or more partial captures.
+            'isReleasable' => $authorizedHold && $captureBound > 0.0 && $capturedSoFar > 0.0,
+            // After a release the order is fulfilled with less than the authorized amount — show what
+            // went back to the customer so "Captured 40 of 100" is not mistaken for a loss.
+            'isReleased' => $contract->getState()->isFulfilled() && $capturedSoFar > 0.0 && $releasedAmount > 0.0,
+            'releasedAmount' => $releasedAmount,
+            'releasedAmountFormatted' => $this->money($releasedAmount),
             'dashboardUrl' => $this->dashboardUrl($providerOrderId),
             'transactions' => $transactions,
             'errorMessage' => null,
@@ -139,6 +152,10 @@ class MolliePanelViewDataBuilder
             'isCapturable' => false,
             'isRefundable' => false,
             'isCancellable' => false,
+            'isReleasable' => false,
+            'isReleased' => false,
+            'releasedAmount' => 0.0,
+            'releasedAmountFormatted' => '0.00',
             'dashboardUrl' => null,
             'transactions' => [],
             'errorMessage' => $message,

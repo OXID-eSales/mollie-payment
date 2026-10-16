@@ -21,6 +21,7 @@ $aLang = [
     // MOL-10: der OXID-Vertragsstatus, so benannt (die Hilfe-Tabelle erklärt die Werte).
     'MOLLIE_CONTRACT_STATE' => 'OXID-Vertragsstatus',
     'MOLLIE_CAPTURED_AMOUNT' => 'Erfasst',
+    'MOLLIE_RELEASED_AMOUNT' => 'An Kunden freigegeben',
     'MOLLIE_REFUNDED_AMOUNT' => 'Erstattet',
     'MOLLIE_NO_CONTRACT' => 'Diese Bestellung wurde nicht über Mollie abgewickelt.',
 
@@ -56,6 +57,11 @@ $aLang = [
     'MOLLIE_CANCEL_REASON' => 'Grund',
     'MOLLIE_CANCEL_SUBMIT' => 'Autorisierung stornieren',
     'MOLLIE_CANCEL_CONFIRM' => 'Die nicht erfasste Autorisierung über Mollie stornieren?',
+    'MOLLIE_RELEASE' => 'Restautorisierung freigeben',
+    'MOLLIE_RELEASE_HINT' => 'Den noch autorisierten Restbetrag an den Kunden zurückgeben. Freizugebender Betrag:',
+    'MOLLIE_RELEASE_REASON' => 'Grund der Freigabe (optional)',
+    'MOLLIE_RELEASE_SUBMIT' => 'Restbetrag freigeben',
+    'MOLLIE_RELEASE_CONFIRM' => 'Den verbleibenden autorisierten Betrag über Mollie an den Kunden freigeben? Dies kann nicht rückgängig gemacht werden.',
 
     'MOLLIE_ADMIN_AMOUNT_MALFORMED' => 'Der Betrag ist keine gültige Zahl.',
     'MOLLIE_ADMIN_AMOUNT_NOT_POSITIVE' => 'Der Betrag muss größer als null sein.',
