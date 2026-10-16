@@ -77,6 +77,11 @@ $aLang = [
     'SHOP_MODULE_sMollieCaptureMode' => 'Erfassungsmodus',
     'SHOP_MODULE_sMollieCaptureMode_automatic' => 'Automatisch',
     'SHOP_MODULE_sMollieCaptureMode_manual' => 'Manuell',
+    'SHOP_MODULE_blMollieMultiCapture' => 'Mehrfache Erfassungen im Mollie-Konto aktiviert',
+    'HELP_SHOP_MODULE_blMollieMultiCapture' => 'Nur aktivieren, nachdem Mollie bestätigt hat, dass '
+        . 'mehrfache Erfassungen für Ihr Konto aktiv sind. Aktiv: Eine Teilerfassung lässt den Rest '
+        . 'autorisiert für eine spätere Erfassung oder Freigabe; inaktiv: Die erste Teilerfassung ist '
+        . 'endgültig und Mollie gibt den Restbetrag an den Kunden zurück.',
     'SHOP_MODULE_sMollieTestKey' => 'Test-API-Schlüssel',
     'SHOP_MODULE_sMollieProfileId' => 'Website-Profil-ID (pfl_…) — erforderlich für Inline-Karte (Mollie Components)',
     'SHOP_MODULE_sMollieLiveKey' => 'Live-API-Schlüssel',

@@ -82,6 +82,11 @@ $aLang = [
     'SHOP_MODULE_sMollieCaptureMode' => 'Capture mode',
     'SHOP_MODULE_sMollieCaptureMode_automatic' => 'Automatic',
     'SHOP_MODULE_sMollieCaptureMode_manual' => 'Manual',
+    'SHOP_MODULE_blMollieMultiCapture' => 'Multiple captures enabled on the Mollie account',
+    'HELP_SHOP_MODULE_blMollieMultiCapture' => 'Only enable after Mollie has confirmed multiple '
+        . 'captures are active on your account. When on, a partial capture leaves the remainder '
+        . 'authorized for a later capture or release; when off, the first partial capture is final '
+        . 'and Mollie releases the remainder to the customer.',
     'SHOP_MODULE_sMollieTestKey' => 'Test API key',
     'SHOP_MODULE_sMollieProfileId' => 'Website profile ID (pfl_…) — required for inline card (Mollie Components)',
     'SHOP_MODULE_sMollieLiveKey' => 'Live API key',

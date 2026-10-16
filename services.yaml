@@ -84,6 +84,8 @@ services:
       # MOL-22 value objects (built by the validator / from a throwable, never by the container)
       - 'src/Mollie/Service/BuyabilityFailure.php'
       - 'src/Mollie/Service/NotOrderableCheckoutFailure.php'
+      # MOL-32: a result enum, not a service.
+      - 'src/Mollie/Service/CaptureCompletion.php'
       # Review A-H1 (2026-10-14) value objects: built by the entry points / the starter,
       # never by the container (scalar ctor args Symfony cannot autowire).
       - 'src/Mollie/Service/CheckoutStartRequest.php'
@@ -544,6 +546,10 @@ services:
   OxidEsales\Payments\Mollie\Service\CaptureServiceInterface:
     alias: OxidEsales\Payments\Mollie\Service\CaptureService
     public: true
+  # MOL-32: the single-vs-multi-capture decision behind one injected policy.
+  OxidEsales\Payments\Mollie\Service\CaptureCompletionPolicyInterface:
+    alias: OxidEsales\Payments\Mollie\Service\CaptureCompletionPolicy
+    public: false
   OxidEsales\Payments\Mollie\Service\CancelAuthorizationServiceInterface:
     alias: OxidEsales\Payments\Mollie\Service\CancelAuthorizationService
     public: true

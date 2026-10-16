@@ -36,6 +36,13 @@ interface ModuleConfigurationServiceInterface
     public function isManualCapture(): bool;
 
     /**
+     * MOL-32 — true when the merchant has confirmed (with Mollie) that multiple captures are enabled
+     * on the account. Mollie exposes no API flag for this, so it is a module setting. Off by default:
+     * off keeps the honest single-capture behaviour (the first partial capture is final).
+     */
+    public function isMultiCaptureEnabled(): bool;
+
+    /**
      * The merchant's explicit webhook-URL override, or '' when unset. Deriving the effective URL
      * is {@see MollieWebhookUrlProviderInterface}'s job (Sprint 11 Story 7 / F20).
      */

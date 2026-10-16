@@ -83,6 +83,16 @@ $aModule = [
             'position' => 20,
             'constraints' => MollieDefinitions::CAPTURE_MODE_AUTOMATIC . '|' . MollieDefinitions::CAPTURE_MODE_MANUAL,
         ],
+        // MOL-32: multiple captures on one authorization. Mollie exposes no API flag for it, so the
+        // merchant sets this after confirming with Mollie that multi-capture is enabled on the
+        // account. Off = honest single-capture (the first partial capture is final).
+        [
+            'group' => 'MOLLIE_GENERAL',
+            'name' => 'blMollieMultiCapture',
+            'type' => 'bool',
+            'value' => false,
+            'position' => 22,
+        ],
         ['group' => 'MOLLIE_TEST_CONFIG', 'name' => 'sMollieTestKey', 'type' => 'str', 'value' => '', 'position' => 30],
         // IFRAME-04: Mollie website profile id (pfl_…), required by Mollie Components' JS
         // (`new Mollie(profileId, …)`) for inline card entry. Same id for test + live modes.

@@ -69,6 +69,23 @@ final class ModuleConfigurationServiceTest extends TestCase
         self::assertTrue($config->isManualCapture());
     }
 
+    public function testIsMultiCaptureEnabled_DefaultsToFalse(): void
+    {
+        // MOL-32: default off — the account only has multi-capture after Mollie confirms it, and
+        // off means today's honest single-capture behaviour (no regression).
+        self::assertFalse((new TestableModuleConfigurationService([]))->isMultiCaptureEnabled());
+    }
+
+    public function testIsMultiCaptureEnabled_TrueWhenSet(): void
+    {
+        self::assertTrue(
+            (new TestableModuleConfigurationService(['blMollieMultiCapture' => true]))->isMultiCaptureEnabled(),
+        );
+        self::assertTrue(
+            (new TestableModuleConfigurationService(['blMollieMultiCapture' => '1']))->isMultiCaptureEnabled(),
+        );
+    }
+
     public function testGetLogLevel_DefaultsToErrorsForUnknownValue(): void
     {
         $config = new TestableModuleConfigurationService(['sMollieLogLevel' => 'bogus']);
