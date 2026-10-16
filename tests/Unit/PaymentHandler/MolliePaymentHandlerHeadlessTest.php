@@ -108,12 +108,24 @@ final class MolliePaymentHandlerHeadlessTest extends TestCase
     {
         $handler = $this->handler();
 
-        $result = $handler->processPayment($this->context(headless: true, metadata: ['uiMode' => 'embedded']));
+        $result = $handler->processPayment($this->context(headless: true, metadata: ['uiMode' => 'custom']));
 
         self::assertFalse($result->isSuccess());
         self::assertSame(MolliePaymentHandler::ERROR_UI_MODE_UNSUPPORTED, $result->getErrorCode());
         self::assertNull($this->dispatched, 'no event, no contract, no Mollie payment');
         self::assertSame([], $handler->sessionCalls);
+    }
+
+    public function testEmbeddedIsAcceptedAndTheComponentsCardTokenReachesTheCheckoutEvent(): void
+    {
+        $result = $this->handler()->processPayment($this->context(
+            headless: true,
+            metadata: ['uiMode' => 'embedded', 'mollieMethod' => 'creditcard', 'mollieCardToken' => 'tkn_abc123']
+        ));
+
+        self::assertTrue($result->isSuccess(), 'inline (iframe) card payments are a supported headless mode');
+        self::assertSame('tkn_abc123', $this->dispatched?->get('cardToken'));
+        self::assertSame('creditcard', $this->dispatched?->get('selectedMethod'));
     }
 
     public function testHostedIsTheDefaultUiMode(): void
