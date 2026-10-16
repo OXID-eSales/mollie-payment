@@ -16,6 +16,7 @@ use OxidEsales\PaymentBase\Admin\Panel\PaymentPanelContext;
 use OxidEsales\PaymentBase\Admin\Panel\PaymentPanelRenderable;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
+use OxidEsales\Payments\Mollie\Controller\Admin\MollieExtraActionDispatcherInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
 use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
@@ -47,6 +48,8 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
         private readonly AdminValidationFeedbackInterface $validationFeedback,
         private readonly UserDataValidatorInterface $userDataValidator,
         private readonly MessageFormatterInterface $textMessageFormatter,
+        // MOL-32 S6: Mollie-only release action (optional so older wiring keeps working).
+        private readonly ?MollieExtraActionDispatcherInterface $extraActions = null,
     ) {
     }
 
@@ -83,8 +86,28 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
             'refund' => $this->handleRefund($order, $request),
             'capture' => $this->handleCapture($order, $request),
             'cancel' => $this->handleCancel($order, $request),
+            'release' => $this->handleRelease($order, $request),
             default => null,
         };
+    }
+
+    /**
+     * MOL-32 S6: release the remaining authorized amount after one or more partial captures. No
+     * amount — Mollie releases the whole remainder; the reason is validated like the other free text.
+     *
+     * @param array<string, mixed> $request
+     */
+    private function handleRelease(Order $order, array $request): void
+    {
+        if ($this->extraActions === null) {
+            return;
+        }
+
+        $reason = $this->parseString($request['release_reason'] ?? null);
+        if ($this->refusesText($order, 'captureReason', $reason)) {
+            return;
+        }
+        $this->extraActions->release($order, $reason);
     }
 
     /**

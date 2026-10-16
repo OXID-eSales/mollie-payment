@@ -64,6 +64,7 @@ $aLang = [
     'MOLLIE_ADMIN_REFUND_CAPTURE_SETTLING' => 'Mollie verbucht die Erfassung noch — die Erstattung konnte noch nicht angelegt werden. Bitte in einem Moment erneut versuchen.',
     'MOLLIE_ADMIN_REFUND_FAILED' => 'Die Erstattung konnte bei Mollie nicht angelegt werden. Bitte die Transaktionshistorie prüfen und erneut versuchen.',
     'MOLLIE_ADMIN_CAPTURE_FAILED' => 'Die Erfassung konnte bei Mollie nicht angelegt werden. Bitte die Transaktionshistorie und den erfassbaren Betrag prüfen und erneut versuchen.',
+    'MOLLIE_ADMIN_RELEASE_FAILED' => 'Die verbleibende Autorisierung konnte bei Mollie nicht freigegeben werden. Bitte die Transaktionshistorie prüfen und erneut versuchen.',
     'MOLLIE_ADMIN_AMOUNT_INVALID' => 'Der Betrag ist ungültig.',
 
     'SHOP_MODULE_GROUP_MOLLIE_GENERAL' => 'Allgemein',

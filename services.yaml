@@ -553,6 +553,10 @@ services:
   OxidEsales\Payments\Mollie\Service\CancelAuthorizationServiceInterface:
     alias: OxidEsales\Payments\Mollie\Service\CancelAuthorizationService
     public: true
+  # MOL-32 S6: release the remaining authorization after partial captures.
+  OxidEsales\Payments\Mollie\Service\ReleaseAuthorizationServiceInterface:
+    alias: OxidEsales\Payments\Mollie\Service\ReleaseAuthorizationService
+    public: true
   OxidEsales\Payments\Mollie\Service\OxpaidReconciliationServiceInterface:
     alias: OxidEsales\Payments\Mollie\Service\OxpaidReconciliationService
     public: true
@@ -594,6 +598,15 @@ services:
     tags:
       - { name: payment.event_handler }
     public: true
+  # MOL-32 S6: release-authorization handler. Dispatched directly (no generic request event), so
+  # it is reached by its getHandledEventClass() like the translated provider events.
+  OxidEsales\Payments\Mollie\EventSystem\Handler\MollieReleaseAuthorizationRequestHandler:
+    arguments:
+      $feedback: '@OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface'
+      $translator: '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
+    tags:
+      - { name: payment.event_handler }
+    public: true
   OxidEsales\Payments\Mollie\EventSystem\Handler\MollieCancelAuthorizationRequestHandler:
     tags:
       - { name: payment.event_handler }
@@ -623,7 +636,15 @@ services:
   # (mirrors PayPal's and Stripe's own OrderActionDispatcher wiring). Consumed by
   # MolliePaymentPanelProvider below (Sprint 7).
   OxidEsales\Payments\Mollie\Controller\Admin\OrderActionDispatcher:
+    arguments:
+      # MOL-32 S6: release-authorization is dispatched straight to the shared dispatcher (no
+      # payment-base-generic request event exists for it).
+      $eventDispatcher: '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
     public: true
+
+  OxidEsales\Payments\Mollie\Controller\Admin\MollieExtraActionDispatcherInterface:
+    alias: OxidEsales\Payments\Mollie\Controller\Admin\OrderActionDispatcher
+    public: false
 
   # ===========================================================================
   # Sprint 7: admin panel (oe.payment.admin_panel) + storefront method selector.
@@ -695,6 +716,8 @@ services:
       # by the tagged user-data formatter (the amount formatter belongs to AdminValidationFeedback).
       $userDataValidator: '@OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface'
       $textMessageFormatter: '@OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter'
+      # MOL-32 S6: the Mollie-only release action.
+      $extraActions: '@OxidEsales\Payments\Mollie\Controller\Admin\MollieExtraActionDispatcherInterface'
     tags:
       - { name: oe.payment.admin_panel }
     public: true

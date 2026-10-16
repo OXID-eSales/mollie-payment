@@ -23,4 +23,10 @@ interface MolliePaymentsAdapterInterface
     public function getPayment(string $paymentId): MolliePaymentDto;
 
     public function cancelPayment(string $paymentId): MolliePaymentDto;
+
+    /**
+     * MOL-32: releases the remaining authorized amount of a (partially) captured payment via
+     * Mollie's `release-authorization`. Mollie returns no body for this call.
+     */
+    public function releaseAuthorization(string $paymentId): void;
 }
