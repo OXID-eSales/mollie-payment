@@ -45,6 +45,7 @@ final class CaptureService implements CaptureServiceInterface
         private readonly MollieCaptureAdapterInterface $captureAdapter,
         private readonly ContractRepositoryInterface $contractRepository,
         private readonly ContractFulfillmentServiceInterface $contractFulfillmentService,
+        private readonly CaptureCompletionPolicyInterface $completionPolicy,
     ) {
     }
 
@@ -108,11 +109,24 @@ final class CaptureService implements CaptureServiceInterface
 
     private function applyCapture(PaymentContractInterface $contract, float $capturedValue): void
     {
-        $existing = $contract->getCapturedAmount() ?? 0.0;
-        $contract->setCapturedAmount($existing + $capturedValue);
+        $cumulativeCaptured = ($contract->getCapturedAmount() ?? 0.0) + $capturedValue;
+        $contract->setCapturedAmount($cumulativeCaptured);
         $contract->setCapturedAt(new DateTimeImmutable());
 
+        $remainingToCapture = round($contract->getAmount() - $cumulativeCaptured, 2);
+
+        // MOL-32: on a multi-capture account a capture that leaves an authorized remainder must NOT
+        // complete the order — record it and keep the contract in its capturable state (AUTHORIZED
+        // or COMMITTED) so the next capture is allowed and OXPAID is not stamped for a part payment.
+        if ($this->completionPolicy->classify($remainingToCapture) === CaptureCompletion::PartialCaptureRemains) {
+            $this->contractRepository->save($contract);
+
+            return;
+        }
+
+        // Fully captured (or a single-capture account, where the first capture is final).
         if ($contract->getState()->isAuthorized()) {
+            // Standalone ladder (headless/GraphQL): AUTHORIZED → READY_TO_COMMIT; the webhook fulfils.
             $contract->captureAuthorization();
             $this->contractRepository->save($contract);
 

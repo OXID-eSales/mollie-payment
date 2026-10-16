@@ -20,7 +20,9 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Exception\CaptureNotSupportedException;
 use OxidEsales\Payments\Mollie\Adapter\MollieCaptureAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
+use OxidEsales\Payments\Mollie\Service\CaptureCompletionPolicy;
 use OxidEsales\Payments\Mollie\Service\CaptureService;
+use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -41,12 +43,33 @@ final class CaptureServiceTest extends TestCase
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
         $this->fulfillmentService = $this->createMock(ContractFulfillmentServiceInterface::class);
 
-        $this->service = new CaptureService(
+        // Default: single-capture account — the policy always answers FullyCaptured, so the
+        // existing (pre-MOL-32) behaviour is preserved.
+        $this->service = $this->serviceWithCompletionPolicy($this->policy(multiCapture: false));
+    }
+
+    private function serviceWithCompletionPolicy(CaptureCompletionPolicy $policy): CaptureService
+    {
+        return new CaptureService(
             $this->paymentsAdapter,
             $this->captureAdapter,
             $this->contractRepository,
             $this->fulfillmentService,
+            $policy,
         );
+    }
+
+    private function serviceWithMultiCapture(): CaptureService
+    {
+        return $this->serviceWithCompletionPolicy($this->policy(multiCapture: true));
+    }
+
+    private function policy(bool $multiCapture): CaptureCompletionPolicy
+    {
+        $config = $this->createStub(ModuleConfigurationServiceInterface::class);
+        $config->method('isMultiCaptureEnabled')->willReturn($multiCapture);
+
+        return new CaptureCompletionPolicy($config);
     }
 
     public function testCapture_AuthorizedPayment_CallsCreateCapture_AdvancesContract(): void
@@ -150,6 +173,55 @@ final class CaptureServiceTest extends TestCase
         self::assertSame('cp_c', $dto->id);
     }
 
+    // ---- MOL-32 S3: a partial capture under multi-capture must NOT fulfil / stamp OXPAID ----
+
+    public function testCapture_MultiCapture_PartialOnCommitted_RecordsButDoesNotFulfil(): void
+    {
+        $contract = $this->committedContract('tr_mc');
+        $this->paymentsAdapter->method('getPayment')->with('tr_mc')->willReturn(
+            $this->payment('tr_mc', 100.0, 100.0),
+        );
+        $this->captureAdapter->method('createCapture')->willReturn($this->captureDto('cp_mc', 'tr_mc', 40.0));
+
+        $contract->expects(self::once())->method('setCapturedAmount')->with(40.0);
+        $contract->expects(self::never())->method('captureAuthorization');
+        // 40 of 100 captured, 60 still authorized → the order stays open, nothing is fulfilled.
+        $this->fulfillmentService->expects(self::never())->method('fulfill');
+        $this->contractRepository->expects(self::once())->method('save')->with($contract);
+
+        $this->serviceWithMultiCapture()->capture($contract, 40.0);
+    }
+
+    public function testCapture_MultiCapture_PartialOnAuthorized_LeavesItAuthorized(): void
+    {
+        $contract = $this->authorizedContract('tr_ma');
+        $this->paymentsAdapter->method('getPayment')->with('tr_ma')->willReturn(
+            $this->payment('tr_ma', 100.0, 100.0),
+        );
+        $this->captureAdapter->method('createCapture')->willReturn($this->captureDto('cp_ma', 'tr_ma', 30.0));
+
+        // A remainder is still authorized → do not advance the ladder, keep it capturable.
+        $contract->expects(self::never())->method('captureAuthorization');
+        $this->fulfillmentService->expects(self::never())->method('fulfill');
+
+        $this->serviceWithMultiCapture()->capture($contract, 30.0);
+    }
+
+    public function testCapture_MultiCapture_FinalCaptureCompletesTheOrder(): void
+    {
+        // 60 already captured; this 40 completes the 100 authorization → fulfil.
+        $contract = $this->committedContract('tr_mf', captured: 60.0);
+        $this->paymentsAdapter->method('getPayment')->with('tr_mf')->willReturn(
+            $this->payment('tr_mf', 100.0, 40.0),
+        );
+        $this->captureAdapter->method('createCapture')->willReturn($this->captureDto('cp_mf', 'tr_mf', 40.0));
+
+        $contract->expects(self::once())->method('setCapturedAmount')->with(100.0);
+        $this->fulfillmentService->expects(self::once())->method('fulfill')->with($contract);
+
+        $this->serviceWithMultiCapture()->capture($contract, 40.0);
+    }
+
     public function testCapture_WhenNotInCapturableState_Rejected(): void
     {
         $state = $this->createMock(ContractState::class);
@@ -176,12 +248,13 @@ final class CaptureServiceTest extends TestCase
         $contract->method('getState')->willReturn($state);
         $contract->method('getProviderOrderId')->willReturn($providerOrderId);
         $contract->method('getId')->willReturn('5');
+        $contract->method('getAmount')->willReturn(100.0);
         $contract->method('getCapturedAmount')->willReturn(null);
 
         return $contract;
     }
 
-    private function committedContract(string $providerOrderId): PaymentContractInterface&MockObject
+    private function committedContract(string $providerOrderId, ?float $captured = null): PaymentContractInterface&MockObject
     {
         $state = $this->createMock(ContractState::class);
         $state->method('isAuthorized')->willReturn(false);
@@ -191,7 +264,8 @@ final class CaptureServiceTest extends TestCase
         $contract->method('getState')->willReturn($state);
         $contract->method('getProviderOrderId')->willReturn($providerOrderId);
         $contract->method('getId')->willReturn('7');
-        $contract->method('getCapturedAmount')->willReturn(null);
+        $contract->method('getAmount')->willReturn(100.0);
+        $contract->method('getCapturedAmount')->willReturn($captured);
 
         return $contract;
     }
