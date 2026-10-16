@@ -73,7 +73,8 @@ final class AdminActionBoundsTest extends TestCase
             id: 'tr_2',
             status: 'authorized',
             amount: MollieAmountDto::fromComponents('EUR', 100.0),
-            amountRemaining: 30.0,
+            // MOL-32: Mollie reports the captured total; 70 captured → 30 still capturable.
+            amountCaptured: 70.0,
         ));
 
         self::assertSame(30.0, $this->bounds->captureBound($contract));
@@ -87,8 +88,9 @@ final class AdminActionBoundsTest extends TestCase
         $this->paymentsAdapter->method('getPayment')->with('tr_full')->willReturn(new MolliePaymentDto(
             id: 'tr_full',
             status: 'authorized',
+            // Mollie still shows the whole hold (nothing captured at Mollie yet) while the shop
+            // already recorded the capture locally — the contract is the stricter source.
             amount: MollieAmountDto::fromComponents('EUR', 100.0),
-            amountRemaining: 100.0,
         ));
 
         self::assertSame(0.0, $this->bounds->captureBound($contract), 'what the shop captured is never offered again');
@@ -100,8 +102,8 @@ final class AdminActionBoundsTest extends TestCase
         $this->paymentsAdapter->method('getPayment')->with('tr_part')->willReturn(new MolliePaymentDto(
             id: 'tr_part',
             status: 'authorized',
+            // Mollie still shows the whole hold; the shop's local 40 capture caps the bound to 60.
             amount: MollieAmountDto::fromComponents('EUR', 100.0),
-            amountRemaining: 100.0,
         ));
 
         self::assertSame(60.0, $this->bounds->captureBound($contract));
@@ -114,7 +116,8 @@ final class AdminActionBoundsTest extends TestCase
             id: 'tr_cap',
             status: 'authorized',
             amount: MollieAmountDto::fromComponents('EUR', 100.0),
-            amountRemaining: 30.0,
+            // MOL-32: 70 captured at Mollie → 30 still capturable; the live figure caps the bound.
+            amountCaptured: 70.0,
         ));
 
         self::assertSame(30.0, $this->bounds->captureBound($contract));

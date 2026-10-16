@@ -74,6 +74,15 @@ final class MollieAdapter implements
         return $this->mapPayment($payment);
     }
 
+    public function releaseAuthorization(string $paymentId): void
+    {
+        try {
+            $this->client->payments->releaseAuthorization($paymentId);
+        } catch (ApiException $exception) {
+            throw MollieExceptionConverter::convert($exception);
+        }
+    }
+
     public function fetchByWebhookId(string $paymentId): MolliePaymentDto
     {
         // Verification IS the fetch: re-read the payment over TLS with our secret key.

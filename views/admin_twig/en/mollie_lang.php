@@ -22,6 +22,7 @@ $aLang = [
     // MOL-10: the OXID contract state, named as such (the Help table explains the values).
     'MOLLIE_CONTRACT_STATE' => 'OXID Contract Status',
     'MOLLIE_CAPTURED_AMOUNT' => 'Captured',
+    'MOLLIE_RELEASED_AMOUNT' => 'Released to customer',
     'MOLLIE_REFUNDED_AMOUNT' => 'Refunded',
     'MOLLIE_NO_CONTRACT' => 'This order was not processed through Mollie.',
 
@@ -57,6 +58,11 @@ $aLang = [
     'MOLLIE_CANCEL_REASON' => 'Reason',
     'MOLLIE_CANCEL_SUBMIT' => 'Cancel authorization',
     'MOLLIE_CANCEL_CONFIRM' => 'Cancel the uncaptured authorization via Mollie?',
+    'MOLLIE_RELEASE' => 'Release remaining authorization',
+    'MOLLIE_RELEASE_HINT' => 'Return the still-authorized remainder to the customer. Amount to be released:',
+    'MOLLIE_RELEASE_REASON' => 'Release reason (optional)',
+    'MOLLIE_RELEASE_SUBMIT' => 'Release remainder',
+    'MOLLIE_RELEASE_CONFIRM' => 'Release the remaining authorized amount back to the customer via Mollie? This cannot be undone.',
 
     // Sprint 7 Story 3 — admin amount validation messages
     // (AdminAmountValidationMessageFormatter).
@@ -66,6 +72,8 @@ $aLang = [
     'MOLLIE_ADMIN_AMOUNT_EXCEEDS_BOUND' => 'The amount exceeds the available balance.',
     'MOLLIE_ADMIN_REFUND_CAPTURE_SETTLING' => 'Mollie is still settling the capture — the refund could not be booked yet. Please try again in a moment.',
     'MOLLIE_ADMIN_REFUND_FAILED' => 'The refund could not be booked at Mollie. Please check the transaction history and try again.',
+    'MOLLIE_ADMIN_CAPTURE_FAILED' => 'The capture could not be booked at Mollie. Please check the transaction history and the capturable amount, then try again.',
+    'MOLLIE_ADMIN_RELEASE_FAILED' => 'The remaining authorization could not be released at Mollie. Please check the transaction history and try again.',
     'MOLLIE_ADMIN_AMOUNT_INVALID' => 'The amount is invalid.',
 
     // Module configuration — group headings
@@ -82,6 +90,11 @@ $aLang = [
     'SHOP_MODULE_sMollieCaptureMode' => 'Capture mode',
     'SHOP_MODULE_sMollieCaptureMode_automatic' => 'Automatic',
     'SHOP_MODULE_sMollieCaptureMode_manual' => 'Manual',
+    'SHOP_MODULE_blMollieMultiCapture' => 'Multiple captures enabled on the Mollie account',
+    'HELP_SHOP_MODULE_blMollieMultiCapture' => 'Only enable after Mollie has confirmed multiple '
+        . 'captures are active on your account. When on, a partial capture leaves the remainder '
+        . 'authorized for a later capture or release; when off, the first partial capture is final '
+        . 'and Mollie releases the remainder to the customer.',
     'SHOP_MODULE_sMollieTestKey' => 'Test API key',
     'SHOP_MODULE_sMollieProfileId' => 'Website profile ID (pfl_…) — required for inline card (Mollie Components)',
     'SHOP_MODULE_sMollieLiveKey' => 'Live API key',

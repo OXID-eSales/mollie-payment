@@ -21,6 +21,7 @@ $aLang = [
     // MOL-10: der OXID-Vertragsstatus, so benannt (die Hilfe-Tabelle erklärt die Werte).
     'MOLLIE_CONTRACT_STATE' => 'OXID-Vertragsstatus',
     'MOLLIE_CAPTURED_AMOUNT' => 'Erfasst',
+    'MOLLIE_RELEASED_AMOUNT' => 'An Kunden freigegeben',
     'MOLLIE_REFUNDED_AMOUNT' => 'Erstattet',
     'MOLLIE_NO_CONTRACT' => 'Diese Bestellung wurde nicht über Mollie abgewickelt.',
 
@@ -56,6 +57,11 @@ $aLang = [
     'MOLLIE_CANCEL_REASON' => 'Grund',
     'MOLLIE_CANCEL_SUBMIT' => 'Autorisierung stornieren',
     'MOLLIE_CANCEL_CONFIRM' => 'Die nicht erfasste Autorisierung über Mollie stornieren?',
+    'MOLLIE_RELEASE' => 'Restautorisierung freigeben',
+    'MOLLIE_RELEASE_HINT' => 'Den noch autorisierten Restbetrag an den Kunden zurückgeben. Freizugebender Betrag:',
+    'MOLLIE_RELEASE_REASON' => 'Grund der Freigabe (optional)',
+    'MOLLIE_RELEASE_SUBMIT' => 'Restbetrag freigeben',
+    'MOLLIE_RELEASE_CONFIRM' => 'Den verbleibenden autorisierten Betrag über Mollie an den Kunden freigeben? Dies kann nicht rückgängig gemacht werden.',
 
     'MOLLIE_ADMIN_AMOUNT_MALFORMED' => 'Der Betrag ist keine gültige Zahl.',
     'MOLLIE_ADMIN_AMOUNT_NOT_POSITIVE' => 'Der Betrag muss größer als null sein.',
@@ -63,6 +69,8 @@ $aLang = [
     'MOLLIE_ADMIN_AMOUNT_EXCEEDS_BOUND' => 'Der Betrag überschreitet den verfügbaren Saldo.',
     'MOLLIE_ADMIN_REFUND_CAPTURE_SETTLING' => 'Mollie verbucht die Erfassung noch — die Erstattung konnte noch nicht angelegt werden. Bitte in einem Moment erneut versuchen.',
     'MOLLIE_ADMIN_REFUND_FAILED' => 'Die Erstattung konnte bei Mollie nicht angelegt werden. Bitte die Transaktionshistorie prüfen und erneut versuchen.',
+    'MOLLIE_ADMIN_CAPTURE_FAILED' => 'Die Erfassung konnte bei Mollie nicht angelegt werden. Bitte die Transaktionshistorie und den erfassbaren Betrag prüfen und erneut versuchen.',
+    'MOLLIE_ADMIN_RELEASE_FAILED' => 'Die verbleibende Autorisierung konnte bei Mollie nicht freigegeben werden. Bitte die Transaktionshistorie prüfen und erneut versuchen.',
     'MOLLIE_ADMIN_AMOUNT_INVALID' => 'Der Betrag ist ungültig.',
 
     'SHOP_MODULE_GROUP_MOLLIE_GENERAL' => 'Allgemein',
@@ -77,6 +85,11 @@ $aLang = [
     'SHOP_MODULE_sMollieCaptureMode' => 'Erfassungsmodus',
     'SHOP_MODULE_sMollieCaptureMode_automatic' => 'Automatisch',
     'SHOP_MODULE_sMollieCaptureMode_manual' => 'Manuell',
+    'SHOP_MODULE_blMollieMultiCapture' => 'Mehrfache Erfassungen im Mollie-Konto aktiviert',
+    'HELP_SHOP_MODULE_blMollieMultiCapture' => 'Nur aktivieren, nachdem Mollie bestätigt hat, dass '
+        . 'mehrfache Erfassungen für Ihr Konto aktiv sind. Aktiv: Eine Teilerfassung lässt den Rest '
+        . 'autorisiert für eine spätere Erfassung oder Freigabe; inaktiv: Die erste Teilerfassung ist '
+        . 'endgültig und Mollie gibt den Restbetrag an den Kunden zurück.',
     'SHOP_MODULE_sMollieTestKey' => 'Test-API-Schlüssel',
     'SHOP_MODULE_sMollieProfileId' => 'Website-Profil-ID (pfl_…) — erforderlich für Inline-Karte (Mollie Components)',
     'SHOP_MODULE_sMollieLiveKey' => 'Live-API-Schlüssel',

@@ -17,8 +17,10 @@ use OxidEsales\PaymentBase\EventSystem\Event\Request\AbstractProviderRequestEven
 use OxidEsales\PaymentBase\EventSystem\Event\Request\CancelAuthorizationRequestedEvent;
 use OxidEsales\PaymentBase\EventSystem\Event\Request\CaptureRequestedEvent;
 use OxidEsales\PaymentBase\EventSystem\Event\Request\RefundRequestedEvent;
+use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
+use OxidEsales\Payments\Mollie\EventSystem\Event\MollieReleaseAuthorizationRequestEvent;
 
 /**
  * Dispatches admin-initiated Mollie order actions (refund / capture / cancel) through
@@ -34,11 +36,15 @@ use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
  * (and its capture/cancel siblings) consume. No admin UI is wired to this yet (Sprint 7) — Sprint
  * 6 exercises it directly from unit tests.
  */
-final class OrderActionDispatcher implements AdminActionDispatcherInterface
+final class OrderActionDispatcher implements AdminActionDispatcherInterface, MollieExtraActionDispatcherInterface
 {
     public function __construct(
         private readonly EventBrokerInterface $eventBroker,
         private readonly ContractRepositoryInterface $contractRepository,
+        // MOL-32 S6: release-authorization has no payment-base-generic request event, so it is
+        // dispatched straight to the shared dispatcher (the same one the broker hands translated
+        // provider events to) instead of through the broker/translator path.
+        private readonly ?EventDispatcherInterface $eventDispatcher = null,
     ) {
     }
 
@@ -67,6 +73,17 @@ final class OrderActionDispatcher implements AdminActionDispatcherInterface
     public function cancel(Order $order, ?string $reason, array $extras = []): void
     {
         $this->dispatch(new CancelAuthorizationRequestedEvent($this->buildContext($order), null, $reason));
+    }
+
+    public function release(Order $order, ?string $reason = null): void
+    {
+        $contract = $this->contractRepository->findByOrderId((string) $order->getId());
+        if ($contract === null || $this->eventDispatcher === null) {
+            return;
+        }
+
+        // Mollie-only action, no generic request event — dispatch the provider event directly.
+        $this->eventDispatcher->dispatch(new MollieReleaseAuthorizationRequestEvent($contract, $reason));
     }
 
     private function buildContext(Order $order): EventContext

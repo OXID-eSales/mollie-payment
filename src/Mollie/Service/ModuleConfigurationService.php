@@ -176,6 +176,12 @@ class ModuleConfigurationService implements ModuleConfigurationServiceInterface
         return $this->getCaptureMode() === MollieDefinitions::CAPTURE_MODE_MANUAL;
     }
 
+    public function isMultiCaptureEnabled(): bool
+    {
+        // OXID stores a bool setting as true / '1' (on) or false / '' (off); the cast covers both.
+        return (bool) $this->get('blMollieMultiCapture');
+    }
+
     /**
      * The merchant's explicit webhook-URL override, or '' when they have not set one.
      *

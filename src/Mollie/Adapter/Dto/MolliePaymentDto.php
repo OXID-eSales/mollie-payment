@@ -122,12 +122,23 @@ final readonly class MolliePaymentDto
     /**
      * Remaining capturable balance for a two-step (manual capture) payment.
      *
-     * Only an `authorized` payment has funds waiting to be captured. That check is load-bearing, not
-     * decorative: `amountRemaining === 0` means *both* "no partial capture yet" and "fully captured",
-     * and the previous formula (`amountRemaining > 0 ? amountRemaining : amount->value`) resolved the
-     * ambiguity towards the first — so a fully captured payment reported its whole amount as
-     * capturable again and the local bound guard became a no-op in precisely the case it was written
-     * for. See Sprint 11 Story 10 / F11.
+     * Only an `authorized` payment has funds waiting to be captured — that status check is
+     * load-bearing: a `paid` payment (single-capture account, or one fully captured) has nothing
+     * left to capture.
+     *
+     * The remaining amount is `amount − amountCaptured` (MOL-32). Under multi-capture the payment
+     * stays `authorized` after a partial capture with `amountCaptured` set, so this correctly
+     * decreases with each capture and reaches 0 when fully captured. Before any capture
+     * `amountCaptured` is null → the full authorized amount.
+     *
+     * Mollie's `amountRemaining` is deliberately NOT used here: it is refund-oriented ("the
+     * remaining amount that can be refunded, only available when refunds are available" — Mollie
+     * get-payment reference), so on a partially-captured payment it reports the refundable remainder
+     * of the captured part, not what is still capturable. The pre-MOL-32 formula
+     * (`amountRemaining > 0 ? amountRemaining : amount`) fell back to the full `amount` after a
+     * partial capture and offered the whole authorization for capture a second time (Sprint 11
+     * Story 10 / F11 fixed only the fully-captured/non-authorized case, not the multi-capture one,
+     * which could not occur until multi-capture was enabled on the account).
      */
     public function capturableAmount(): float
     {
@@ -135,6 +146,6 @@ final readonly class MolliePaymentDto
             return 0.0;
         }
 
-        return ($this->amountRemaining ?? 0.0) > 0.0 ? $this->amountRemaining : $this->amount->value;
+        return max(0.0, $this->amount->value - ($this->amountCaptured ?? 0.0));
     }
 }

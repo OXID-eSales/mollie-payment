@@ -21,6 +21,7 @@ use OxidEsales\Payments\Mollie\Admin\MolliePanelOrderLoader;
 use OxidEsales\Payments\Mollie\Admin\MolliePanelViewDataBuilder;
 use OxidEsales\Payments\Mollie\Admin\MolliePaymentPanelProvider;
 use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
+use OxidEsales\Payments\Mollie\Controller\Admin\MollieExtraActionDispatcherInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
 use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
@@ -39,6 +40,7 @@ final class MolliePaymentPanelProviderTest extends TestCase
     private AdminValidationFeedbackInterface&MockObject $validationFeedback;
     private UserDataValidatorInterface&MockObject $userDataValidator;
     private MessageFormatterInterface&MockObject $textMessageFormatter;
+    private MollieExtraActionDispatcherInterface&MockObject $extraActions;
     private MolliePaymentPanelProvider $provider;
 
     protected function setUp(): void
@@ -52,6 +54,8 @@ final class MolliePaymentPanelProviderTest extends TestCase
         $this->userDataValidator = $this->createMock(UserDataValidatorInterface::class);
         $this->textMessageFormatter = $this->createMock(MessageFormatterInterface::class);
 
+        $this->extraActions = $this->createMock(MollieExtraActionDispatcherInterface::class);
+
         $this->provider = new MolliePaymentPanelProvider(
             $this->actionDispatcher,
             $this->viewDataBuilder,
@@ -62,7 +66,23 @@ final class MolliePaymentPanelProviderTest extends TestCase
             $this->validationFeedback,
             $this->userDataValidator,
             $this->textMessageFormatter,
+            $this->extraActions,
         );
+    }
+
+    public function testHandleAction_Release_DispatchesTheReleaseAction(): void
+    {
+        $order = $this->stubOrder('order-rel');
+        $this->orderLoader->order = $order;
+        $this->userDataValidator->method('validateFieldMap')->willReturn([]); // reason accepted
+
+        $this->extraActions->expects(self::once())->method('release')->with($order, 'done capturing');
+
+        $this->provider->handleAction('release', ['release_reason' => 'done capturing'], new PaymentPanelContext(
+            'order-rel',
+            MollieDefinitions::PAYMENT_ID,
+            null,
+        ));
     }
 
     // ── MOL-15: admin free text runs through the same character-level rules as the address ──────

@@ -36,22 +36,23 @@ final class CapturableAmountAmbiguityTest extends TestCase
 {
     public function testFullyCapturedPaymentHasNothingLeftToCapture(): void
     {
-        // Mollie reports amountRemaining = 0 and the status is no longer `authorized`.
-        $payment = $this->payment(status: 'paid', amount: 100.0, remaining: 0.0);
+        // Single-capture account: after the capture the status is no longer `authorized`.
+        $payment = $this->payment(status: 'paid', amount: 100.0, captured: 100.0);
 
         self::assertSame(0.0, $payment->capturableAmount());
     }
 
     public function testAuthorizedPaymentWithNoPartialCaptureExposesTheFullAmount(): void
     {
-        $payment = $this->payment(status: MollieStatusMapper::STATUS_AUTHORIZED, amount: 100.0, remaining: 0.0);
+        $payment = $this->payment(status: MollieStatusMapper::STATUS_AUTHORIZED, amount: 100.0, captured: null);
 
         self::assertSame(100.0, $payment->capturableAmount());
     }
 
     public function testPartiallyCapturedAuthorizedPaymentExposesTheRemainder(): void
     {
-        $payment = $this->payment(status: MollieStatusMapper::STATUS_AUTHORIZED, amount: 100.0, remaining: 40.0);
+        // MOL-32 multi-capture: still `authorized`, 60.00 captured, 40.00 left to capture.
+        $payment = $this->payment(status: MollieStatusMapper::STATUS_AUTHORIZED, amount: 100.0, captured: 60.0);
 
         self::assertSame(40.0, $payment->capturableAmount());
     }
@@ -61,19 +62,19 @@ final class CapturableAmountAmbiguityTest extends TestCase
         foreach (['paid', 'open', 'pending', 'canceled', 'expired', 'failed', ''] as $status) {
             self::assertSame(
                 0.0,
-                $this->payment(status: $status, amount: 100.0, remaining: 0.0)->capturableAmount(),
+                $this->payment(status: $status, amount: 100.0, captured: null)->capturableAmount(),
                 sprintf('status "%s" must not report a capturable balance', $status),
             );
         }
     }
 
-    private function payment(string $status, float $amount, float $remaining): MolliePaymentDto
+    private function payment(string $status, float $amount, ?float $captured): MolliePaymentDto
     {
         return new MolliePaymentDto(
             id: 'tr_capture',
             status: $status,
             amount: new MollieAmountDto('EUR', $amount),
-            amountRemaining: $remaining,
+            amountCaptured: $captured,
         );
     }
 }

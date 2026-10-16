@@ -156,6 +156,52 @@ final class MolliePanelViewDataBuilderTest extends TestCase
         self::assertFalse($viewData['isCancellable'], 'nothing left to capture, nothing left to cancel');
     }
 
+    public function testBuild_PartiallyCapturedHoldWithRemainder_IsReleasableAndNotCancellable(): void
+    {
+        // MOL-32: 40 of 100 captured, 60 still authorized. Cancel (delete the whole hold) is no
+        // longer valid — release gives the remainder back instead.
+        $order = $this->stubOrder('order-partial');
+        $contract = $this->committedContract();
+        $contract->method('getAmount')->willReturn(100.0);
+        $contract->method('getCapturedAmount')->willReturn(40.0);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('captureBound')->willReturn(60.0);
+        $this->bounds->method('refundBound')->willReturn(0.0);
+        $this->bounds->method('isAuthorizedHold')->willReturn(true);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+
+        $viewData = $this->builder->build($order);
+
+        self::assertTrue($viewData['isCapturable'], 'more can still be captured');
+        self::assertTrue($viewData['isReleasable'], 'the remainder can be released');
+        self::assertFalse($viewData['isCancellable'], 'cancel is invalid once something is captured');
+    }
+
+    public function testBuild_ReleasedOrder_ShowsWhatWentBackToTheCustomer(): void
+    {
+        // Fulfilled with 40 of 100 captured → 60 was released.
+        $order = $this->stubOrder('order-released');
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getId')->willReturn('contract-r');
+        $contract->method('getProviderOrderId')->willReturn('tr_r');
+        $contract->method('getStateValue')->willReturn('fulfilled');
+        $contract->method('getCurrency')->willReturn('EUR');
+        $contract->method('getState')->willReturn(ContractState::fulfilled());
+        $contract->method('getAmount')->willReturn(100.0);
+        $contract->method('getCapturedAmount')->willReturn(40.0);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('captureBound')->willReturn(0.0);
+        $this->bounds->method('refundBound')->willReturn(40.0);
+        $this->bounds->method('isAuthorizedHold')->willReturn(false);
+        $this->transactionHistory->method('fetch')->willReturn([]);
+
+        $viewData = $this->builder->build($order);
+
+        self::assertTrue($viewData['isReleased']);
+        self::assertSame('60.00', $viewData['releasedAmountFormatted']);
+        self::assertFalse($viewData['isReleasable'], 'already released — nothing left to release');
+    }
+
     public function testBuild_WhenNotAuthorizedHold_NotCapturableOrCancellable(): void
     {
         // No live authorized hold (e.g. already captured/paid): buttons hidden even if a stale
