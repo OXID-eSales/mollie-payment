@@ -37,11 +37,17 @@ behaviour when the new setting is off. **Not merged — awaiting review.**
 - Mollie API semantics for S1 confirmed against the live get-payment reference
   (`amountRemaining` = "remaining amount that can be refunded"), not assumed.
 
-## Open before merge (honest)
+## Merged + e2e proven
 
-- **e2e not run green here**: the money-path e2e needs a multi-capture-enabled Mollie profile +
-  `blMollieMultiCapture` on. The spec `test.skip()`s unless `MOLLIE_E2E_MULTICAPTURE=1` (it would
-  false-fail on a single-capture account, where the first partial capture is final by design). Run it
-  on a multi-capture-ready shop to complete the proof.
+- **Merged into `b-7.4.x`** 2026-10-16 (merge `93be52d`); CI green on the merge across CE 7.4/7.5/7.6
+  + secret scan.
+- **Money-path e2e PASSED** (2026-10-16) against the dev shop + Mollie test API with
+  `blMollieMultiCapture` on and `MOLLIE_E2E_MULTICAPTURE=1`: `MollieAdmin/MultiCaptureFlow.spec.ts`
+  — (1) two-part capture, order paid only when fully captured; (2) partial capture then release,
+  remainder returned and shown. 2 passed.
+  - Prereqs for that run (same as the existing admin-capture e2e, not multi-capture-specific): OPC
+    deactivated so the classic-checkout fixture can drive the flow, and the payment-base inline
+    iframe flag (`blPaymentBaseUseIframe`) on. OPC was re-activated afterwards; the shop is back to
+    OPC + Mollie active, multicapture on, iframe on.
 - Default off = no behaviour change for existing single-capture shops (every pre-existing capture
-  test stayed green), so the branch is safe to merge even before that e2e runs.
+  test stayed green).
