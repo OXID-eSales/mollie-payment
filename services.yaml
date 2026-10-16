@@ -587,6 +587,10 @@ services:
       - { name: payment.event_handler }
     public: true
   OxidEsales\Payments\Mollie\EventSystem\Handler\MollieCaptureRequestHandler:
+    arguments:
+      # MOL-32 S5: a refused capture reaches the admin on the next render, like the refund handler.
+      $feedback: '@OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface'
+      $translator: '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
     tags:
       - { name: payment.event_handler }
     public: true
