@@ -36,7 +36,7 @@ mollieCheckoutCancel ──▶   ………………………………………�
 
   | Mutation | Arguments | Returns |
   |---|---|---|
-  | `mollieCheckoutStart` | `basketId: ID!`, `confirmTermsAndConditions: Boolean!`, `returnUrl: String!`, `cancelUrl: String` (accepted, unused — Mollie has one redirect URL), `method: String` (hint: ideal, creditcard, klarna, …), `uiMode: String` (`hosted` only) | `CheckoutStartResult!` |
+  | `mollieCheckoutStart` | `basketId: ID!`, `confirmTermsAndConditions: Boolean!`, `returnUrl: String!`, `cancelUrl: String` (accepted, unused — Mollie has one redirect URL), `method: String` (hint: ideal, creditcard, klarna, …), `uiMode: String` (`hosted` default, or `embedded` for inline Mollie Components card payments), `cardToken: String` (the single-use token Mollie Components minted in the browser; with `uiMode: embedded` and `method: creditcard`) | `CheckoutStartResult!` |
   | `mollieCheckoutReturn` | `contractId: String!`, `contractToken: String!` | `CheckoutReturnResult!` |
   | `mollieCheckoutCancel` | `contractId: String!`, `contractToken: String!` | `CheckoutCancelResult!` |
 

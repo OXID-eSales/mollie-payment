@@ -64,7 +64,8 @@ final class MollieCheckout
         string $returnUrl,
         ?string $cancelUrl = null,
         ?string $method = null,
-        string $uiMode = 'hosted'
+        string $uiMode = 'hosted',
+        ?string $cardToken = null
     ): CheckoutStartResult {
         try {
             return new CheckoutStartResult($this->checkout->start(new HeadlessStartRequest(
@@ -77,11 +78,30 @@ final class MollieCheckout
                 // This mutation IS Mollie's: a basket the client never ran through
                 // basketSetPayment still starts; one set to another payment is refused.
                 paymentId: MollieDefinitions::PAYMENT_ID,
-                providerOptions: $method !== null && $method !== '' ? ['mollieMethod' => $method] : [],
+                providerOptions: $this->providerOptions($method, $cardToken),
             )));
         } catch (HeadlessCheckoutException $e) {
             throw new MollieCheckoutError($e);
         }
+    }
+
+    /**
+     * What the client chose: Mollie's method hint, and - inline (iframe) card payments - the
+     * single-use token Mollie Components minted in the browser. Empty values are not options.
+     *
+     * @return array<string, string>
+     */
+    private function providerOptions(?string $method, ?string $cardToken): array
+    {
+        $options = [];
+        if ($method !== null && $method !== '') {
+            $options['mollieMethod'] = $method;
+        }
+        if ($cardToken !== null && $cardToken !== '') {
+            $options['mollieCardToken'] = $cardToken;
+        }
+
+        return $options;
     }
 
     #[Mutation]
