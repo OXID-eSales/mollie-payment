@@ -77,7 +77,7 @@ final class SchemaContainsMollieMutationsTest extends TestCase
         $start = $mutations->getField('mollieCheckoutStart');
         self::assertSame('CheckoutStartResult!', (string) $start->getType());
         self::assertSame(
-            ['basketId', 'confirmTermsAndConditions', 'returnUrl', 'cancelUrl', 'method', 'uiMode'],
+            ['basketId', 'confirmTermsAndConditions', 'returnUrl', 'cancelUrl', 'method', 'uiMode', 'cardToken'],
             array_map(static fn($arg) => $arg->name, $start->args)
         );
         self::assertSame(
