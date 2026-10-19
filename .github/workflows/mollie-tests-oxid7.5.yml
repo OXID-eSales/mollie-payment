@@ -20,8 +20,11 @@ env:
   # composer.json requires `payment-base >=v1.2`; b-7.4.x satisfies it through its branch
   # alias (1.2.x-dev). To pin a payment-base feature branch set PAYMENT_BASE_VERSION_ALIAS to
   # ' as 1.2.x-dev' (as GRAPH-QL did 2026-10-06/07); keep it empty on b-7.4.x.
-  PAYMENT_BASE_BRANCH: 'b-7.4.x'
-  PAYMENT_BASE_VERSION_ALIAS: ''
+  # TEMPORARY: tests against the payment-base branch that adds ClientConfigProviderInterface
+  # (OXID-eSales/payment-base feature/sealed-client-config). Set back to 'b-7.4.x' and empty the
+  # alias as soon as that branch is merged and released.
+  PAYMENT_BASE_BRANCH: 'feature/sealed-client-config'
+  PAYMENT_BASE_VERSION_ALIAS: ' as 1.3.x-dev'
 
 jobs:
   install_shop_with_module:
@@ -153,6 +156,7 @@ jobs:
           if [ -n "${GH_TOKEN}" ]; then
             COMPOSER_AUTH_JSON="{\"github-oauth\":{\"github.com\":\"${GH_TOKEN}\"}}"
           fi
+          docker compose exec -T php composer require oxid-esales/graphql-storefront --no-interaction --no-update
           docker compose exec -T -e COMPOSER_AUTH="${COMPOSER_AUTH_JSON}" \
             php composer update --with-all-dependencies --no-interaction
 
@@ -432,6 +436,7 @@ jobs:
 
       - name: Install testing dependencies
         run: |
+          docker compose exec -T php composer require oxid-esales/graphql-storefront --no-interaction --no-update
           docker compose exec -T php composer update --no-interaction
 
       - name: Install module
