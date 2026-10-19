@@ -6,6 +6,7 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- `Service\MollieClientConfigProvider`: Mollie's provider for payment-base's sealed `paymentClientConfig` query (tag `payment_base.client_config_provider`). Publishes only `profileId` and `testMode` (empty without a profile id, so the storefront falls back to Mollie's hosted page); API keys are never part of it. Requires a payment-base release that ships `ClientConfigProviderInterface`.
 - A "Help" group at the end of the module Settings tab, after "Logging" (MOL-10): payment-base's contract-state
   table (OXID Contract Status · Meaning) with Mollie's third column, the Mollie payment status each state corresponds
   to (`not_finished` → `open`, `pending` → `pending`, `authorized` → `authorized`, `ready_to_commit` → `paid`,
