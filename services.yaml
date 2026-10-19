@@ -120,6 +120,12 @@ services:
     alias: OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProvider
     public: true
 
+  # Sealed client config (payment-base `paymentClientConfig` query): the public values Mollie
+  # Components needs (profile id, test mode). Autowired with the config service interface above.
+  OxidEsales\Payments\Mollie\Service\MollieClientConfigProvider:
+    tags:
+      - { name: payment_base.client_config_provider }
+
   # ===========================================================================
   # Sprint 2: provider adapter layer.
   # The 4 segregated adapter interfaces all alias ONE shared LazyMollieAdapter,
