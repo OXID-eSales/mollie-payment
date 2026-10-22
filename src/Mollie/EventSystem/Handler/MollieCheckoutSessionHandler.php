@@ -173,16 +173,16 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
     /**
      * Where Mollie sends the shopper afterwards. The Twig / OPC checkout returns to the shop's
      * `cl=order&fnc=checkoutReturn` with the contract token; a headless contract (GRAPH-QL / MS1)
-     * returns to the client's own URL, with the contract id appended so one landing page can
-     * serve many attempts. Mollie knows a single redirect URL for every outcome, so the client's
-     * `cancelUrl` is not used.
+     * returns to the client's own URL unchanged (138c): the client already holds the contract id
+     * and token from the start mutation and passes them to `mollieCheckoutReturn`, so nothing
+     * identifying lands in browser history or access logs. Mollie knows a single redirect URL
+     * for every outcome, so the client's `cancelUrl` is not used.
      */
     private function redirectUrlFor(PaymentContractInterface $contract, EventContext $context): string
     {
         $returnUrl = $context->get('returnUrl');
         if ($context->get('headless') === true && is_string($returnUrl) && $returnUrl !== '') {
-            return $returnUrl . (str_contains($returnUrl, '?') ? '&' : '?')
-                . 'contract_id=' . urlencode((string) ($contract->getId() ?? ''));
+            return $returnUrl;
         }
 
         return $this->buildRedirectUrl($contract);

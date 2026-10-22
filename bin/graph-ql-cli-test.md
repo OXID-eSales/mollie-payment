@@ -47,8 +47,8 @@ mollieCheckoutCancel ──▶   ………………………………………�
   such as `origin_not_allowed`), `user_not_found`, `provider_failed` (+ Mollie's code, e.g.
   `MOLLIE_UI_MODE_UNSUPPORTED`, `MOLLIE_ITEMS_NOT_ORDERABLE`), `contract_not_found`, `invalid_token`.
 - The **contract token** is the client's proof of ownership for return and cancel; a wrong token changes nothing.
-- Mollie sends the shopper back to `returnUrl` **+ `contract_id=<contractId>`** (we append it; Mollie appends nothing),
-  for every outcome. The return URL need not exist in the shop; a real client owns it.
+- Mollie sends the shopper back to `returnUrl` **unchanged** (nothing is appended: no contract id in the URL; the client keeps
+  `contractId` and `contractToken` from the start and passes them to `mollieCheckoutReturn`), for every outcome. The return URL need not exist in the shop; a real client owns it.
 - `mollieCheckoutStart` names its payment itself (`oe_payments_mollie`): the client needs no `basketSetPayment` first.
   A basket explicitly set to another payment is refused with `payment_not_supported`.
 - Inline card entry (Mollie Components) needs a browser and is not part of the headless flow; `uiMode` other than
@@ -89,7 +89,7 @@ Environment (all optional):
 | `PRODUCT_ID` | `5e6a374e212258abbfd76b6adf911772` | "Panorama", 20.90 EUR |
 | `MOLLIE_METHOD` | empty | default method hint for `start` / `pay` |
 | `DELIVERY_METHOD_ID` | `oxidstandard` | used by `guard` only |
-| `RETURN_URL` | `${SHOP_URL}index.php?cl=start&headless=return` | the shop's start page, so a hand test lands on the shop; we append `&contract_id=…` |
+| `RETURN_URL` | `${SHOP_URL}index.php?cl=start&headless=return` | the shop's start page, so a hand test lands on the shop; nothing is appended |
 | `STATE_FILE` | `/tmp/graph-ql-cli-test-mollie.state` | the last start's contract id / token / basket id |
 | `VERBOSE` | `0` | `1` prints every raw JSON response to stderr |
 
@@ -135,7 +135,7 @@ Every `start` opens a real contract, a `NOT_FINISHED` order and a Mollie test pa
 ```bash
 SHOP_URL=https://daniil.oxiddev.de/ bin/graph-ql-cli-test.sh pay paypal
 # open the redirectUrl in a browser: Mollie's TEST page — pick "Paid", Continue
-# Mollie's webhook commits and fulfils the order; the browser lands on the shop start page with &contract_id=…
+# Mollie's webhook commits and fulfils the order; the browser lands on the shop start page (URL unchanged)
 SHOP_URL=https://daniil.oxiddev.de/ bin/graph-ql-cli-test.sh return
 ```
 

@@ -28,8 +28,8 @@ use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 /**
- * GRAPH-QL / MS1 — a headless contract returns to the client's URL, not to the
- * shop's checkoutReturn, and the basket being paid travels with the context to
+ * GRAPH-QL / MS1, 138c — a headless contract returns to the client's URL unchanged (no contract id
+ * in the URL: the client holds it), not to the shop's checkoutReturn, and the basket being paid travels with the context to
  * the payment request (pay-later lines and address without a session).
  */
 final class MollieCheckoutSessionHandlerHeadlessTest extends TestCase
@@ -63,18 +63,18 @@ final class MollieCheckoutSessionHandlerHeadlessTest extends TestCase
         );
     }
 
-    public function testAHeadlessContractReturnsToTheClientUrlWithTheContractIdAndPaysTheContextBasket(): void
+    public function testRedirectUrlFor_HeadlessRequest_AppendsNothing(): void
     {
         $basket = $this->createMock(Basket::class);
         $this->checkoutPaymentService->expects($this->once())->method('buildCreatePaymentRequest')
             ->with(
                 $this->anything(),
                 'ideal',
-                'https://app.example.com/return?landing=1&contract_id=contract-1',
+                'https://app.example.com/return?landing=1',
                 null,
                 $this->identicalTo($basket)
             )
-            ->willReturn($this->request('https://app.example.com/return?landing=1&contract_id=contract-1'));
+            ->willReturn($this->request('https://app.example.com/return?landing=1'));
         $this->tokenService->expects($this->never())->method('generateToken');
 
         $context = new EventContext([
@@ -90,7 +90,7 @@ final class MollieCheckoutSessionHandlerHeadlessTest extends TestCase
         self::assertSame('https://www.mollie.com/checkout/tr_abc123', $context->get('checkoutUrl'));
     }
 
-    public function testTheTwigPathStillReturnsToTheShopWithTheContractToken(): void
+    public function testRedirectUrlFor_TwigRequest_KeepsItsContractParameters(): void
     {
         $expected = 'https://shop.test/index.php?cl=' . MollieDefinitions::ORDER_CONTROLLER_ID
             . '&fnc=checkoutReturn&contract_id=contract-1&contract_token=tok_contract-1';

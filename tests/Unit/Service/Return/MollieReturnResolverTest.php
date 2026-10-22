@@ -50,6 +50,17 @@ final class MollieReturnResolverTest extends TestCase
         self::assertFalse($resolution->requiresCapture);
     }
 
+    public function testResolve_ContextCarriesAnotherContractIdFromTheUrl_ReadsTheContractOnly(): void
+    {
+        $contract = $this->contractStub();
+        [$resolver, $adapter] = $this->resolver();
+        $adapter->expects($this->once())->method('getPayment')->with('tr_1')->willReturn($this->paymentDto('paid'));
+
+        $resolution = $resolver->resolve($contract, new EventContext(['contract_id' => 'other-contract']));
+
+        self::assertSame(ReturnResolution::OUTCOME_READY_TO_COMMIT, $resolution->outcome);
+    }
+
     public function testResolveAuthorizedStatusReturnsAuthorizedRequiringCapture(): void
     {
         $contract = $this->contractStub();

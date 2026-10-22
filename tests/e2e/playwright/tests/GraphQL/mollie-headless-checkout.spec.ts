@@ -132,8 +132,9 @@ test.describe('GraphQL headless Mollie checkout (GRAPH-QL / MS6)', () => {
         expect(orderOf(start.contractId).transStatus).toBe('NOT_FINISHED');
 
         await payOnMollieTestPage(page, start.redirectUrl, 'Paid');
-        // Mollie sends the browser to the client's URL with our contract id
-        await page.waitForURL(new RegExp(`headless=mollie-return.*contract_id=${start.contractId}`), { timeout: 60_000 });
+        // Mollie sends the browser to the client's URL unchanged (138c): no contract id in it
+        await page.waitForURL(/headless=mollie-return/, { timeout: 60_000 });
+        expect(page.url(), 'no identifier in the return URL').not.toContain('contract_id');
 
         const state = await waitForContractToLeave(start.contractId, ['pending', 'not_finished']);
         expect(['committed', 'fulfilled'], 'the webhook committed the contract, no return leg involved').toContain(state);

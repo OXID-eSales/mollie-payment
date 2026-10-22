@@ -16,6 +16,11 @@ All notable changes to this module are documented here. Format follows
   description and the three-column table (MOL-10).
 
 ### Changed
+- Sprint 138c: a headless contract's Mollie redirect URL is the client's `returnUrl` unchanged; `contract_id` is no longer
+  appended (nothing identifying in browser history or access logs). The client already holds `contractId` and
+  `contractToken` from `mollieCheckoutStart` and passes them to `mollieCheckoutReturn`. The Twig / OPC flow keeps its URL.
+- `MollieClientConfigProvider` implements payment-base's `AllowListedClientConfigProviderInterface`
+  (`publicValueNames()` = `profileId`, `testMode`).
 - The admin order Payment tab labels the contract state "OXID Contract Status" ("OXID-Vertragsstatus") instead
   of "State" (MOL-10); the Help table uses the same label.
 - The whole Mollie block on the standard order step — the payment-method selection and the inline card
