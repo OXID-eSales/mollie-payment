@@ -45,7 +45,8 @@ use TheCodingMachine\GraphQLite\Types\ID;
  * its own payment (no `paymentId` argument is needed) and `guest` says who the shopper is. A registered e-mail is
  * refused (`account_exists`), missing or invalid details are `guest_details_required` (raised by payment-base's
  * shared `GuestCheckoutInput` while the arguments are resolved: this module defines no input type). Return and cancel
- * never look at the caller: the contract token is the only credential, so another anonymous token may finish a guest's contract.
+ * never look at the caller: the contract token is the only credential, so another anonymous token may finish a
+ * guest's contract.
  *
  * Everything provider-neutral lives in payment-base's HeadlessCheckoutService;
  * this class adds the JWT user and the Mollie payment id, and turns refusals
