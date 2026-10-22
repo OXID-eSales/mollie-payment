@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 
+use OxidEsales\PaymentBase\ClientConfig\Contract\AllowListedClientConfigProviderInterface;
 use OxidEsales\PaymentBase\ClientConfig\Contract\ClientConfigProviderInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\MollieClientConfigProvider;
@@ -27,6 +28,18 @@ final class MollieClientConfigProviderTest extends TestCase
 
         self::assertInstanceOf(ClientConfigProviderInterface::class, $provider);
         self::assertSame('mollie', $provider->providerId());
+    }
+
+    public function testDeclaresExactlyTheKeysItPublishesAsItsAllowList(): void
+    {
+        $provider = $this->providerFor([
+            'sMollieProfileId' => 'pfl_cVf8bSWdQV',
+            'sMollieMode' => MollieDefinitions::MODE_TEST,
+        ]);
+
+        self::assertInstanceOf(AllowListedClientConfigProviderInterface::class, $provider);
+        self::assertSame(['profileId', 'testMode'], $provider->publicValueNames());
+        self::assertSame($provider->publicValueNames(), array_keys($provider->publicValues()));
     }
 
     public function testPublishesProfileIdAndTestModeTrue(): void
