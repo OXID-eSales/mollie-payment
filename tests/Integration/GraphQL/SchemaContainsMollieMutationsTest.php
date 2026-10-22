@@ -9,6 +9,9 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Integration\GraphQL;
 
+// CI runs this suite with the shop bootstrap, which does not autoload the module's Tests\ namespace.
+require_once __DIR__ . '/FixedClassFinderTrait.php';
+
 use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutCancelResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutReturnResult;
