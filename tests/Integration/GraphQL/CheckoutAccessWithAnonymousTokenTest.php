@@ -22,8 +22,8 @@ use OxidEsales\PaymentBase\Checkout\Headless\HeadlessStartResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutCancelResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutReturnResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutStartResult;
+use OxidEsales\PaymentBase\GraphQL\DataType\GuestCheckoutInputFactory;
 use OxidEsales\Payments\Mollie\GraphQL\Controller\MollieCheckout;
-use OxidEsales\Payments\Mollie\GraphQL\Input\MollieGuestInputFactory;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
@@ -105,6 +105,18 @@ final class CheckoutAccessWithAnonymousTokenTest extends TestCase
         self::assertSame('account_exists', $result['errors'][0]['extensions']['errorCode']);
     }
 
+    public function testCheckoutStart_GuestWithAnInvalidEmail_IsRefusedWithTheStableCodeBeforeAnythingStarts(): void
+    {
+        $checkout = $this->createMock(HeadlessCheckoutServiceInterface::class);
+        $checkout->expects($this->never())->method('start');
+
+        $result = $this->execute(str_replace('ada@example.com', 'not-an-email', self::GUEST_START), true, $checkout);
+
+        self::assertSame('guest_details_required', $result['errors'][0]['extensions']['errorCode']);
+        self::assertStringContainsString('email', $result['errors'][0]['message']);
+        self::assertStringNotContainsString('not-an-email', $result['errors'][0]['message'], 'the message names the field, never the value');
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -119,14 +131,13 @@ final class CheckoutAccessWithAnonymousTokenTest extends TestCase
         $factory = new SchemaFactory(new Psr16Cache(new ArrayAdapter()), $this->containerHolding($controller));
         $factory->setFinder($this->finderOver([
             MollieCheckout::class,
-            MollieGuestInputFactory::class,
+            GuestCheckoutInputFactory::class,
             CheckoutStartResult::class,
             CheckoutReturnResult::class,
             CheckoutCancelResult::class,
         ]));
         $factory->addControllerNamespace('OxidEsales\\Payments\\Mollie\\GraphQL\\Controller');
         $factory->addTypeNamespace('OxidEsales\\PaymentBase\\GraphQL\\DataType');
-        $factory->addTypeNamespace('OxidEsales\\Payments\\Mollie\\GraphQL\\Input');
         $factory->setAuthenticationService($this->notLoggedIn());
         $factory->setAuthorizationService($this->grantingPaymentCheckout($hasRight));
 

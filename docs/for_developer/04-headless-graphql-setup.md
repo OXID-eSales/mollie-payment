@@ -36,6 +36,8 @@ Mollie sends the shopper back to your `returnUrl` unchanged; Mollie's webhook fi
 An anonymous token (`query { token }`) that carries `PAYMENT_CHECKOUT` can pay without registering. Anonymous tokens
 cannot call `basketSetPayment`, so `mollieCheckoutStart` names Mollie itself (no `paymentId` argument is needed) and the
 optional `guest` argument says who the shopper is. `guest` is read only for anonymous tokens; a logged-in user ignores it.
+The input types `GuestCheckoutInput` / `GuestAddressInput` are payment-base's (defined once, shared by the Stripe, Mollie and
+PayPal start mutations; see payment-base `docs/graphql-headless-checkout.md`, "Guest checkout"); this module defines none.
 
 ```graphql
 mutation {
@@ -63,7 +65,7 @@ carries nothing. Return and cancel never look at who is calling; the contract to
 anonymous token holding the right contract token can finish the contract, and a wrong token is refused (`invalid_token`).
 
 Errors (`extensions.errorCode`): `guest_details_required` (anonymous token without details, or a missing or invalid
-field; the message names the field, never the value) and `account_exists` (the e-mail belongs to a registered account:
+field; the message names the field, never the value; raised by payment-base's input factory as `GuestDetailsRefused`) and `account_exists` (the e-mail belongs to a registered account:
 the shopper has to log in). Optional address fields: `salutation`, `company`, `additionalInfo`, `stateId`, `phone`.
 
 Known gap: payment-base's contract-first flow does not yet apply a basket's delivery address to the order; the guest's

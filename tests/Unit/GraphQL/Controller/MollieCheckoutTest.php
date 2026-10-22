@@ -22,12 +22,10 @@ use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutCancelResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutReturnResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutStartResult;
 use OxidEsales\PaymentBase\Checkout\Headless\GuestAddress;
+use OxidEsales\PaymentBase\Checkout\Headless\GuestDetails;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\GraphQL\Controller\MollieCheckout;
 use OxidEsales\Payments\Mollie\GraphQL\Exception\MollieCheckoutError;
-use OxidEsales\Payments\Mollie\GraphQL\Input\MollieGuestAddressInput;
-use OxidEsales\Payments\Mollie\GraphQL\Input\MollieGuestCheckoutInput;
-use OxidEsales\Payments\Mollie\GraphQL\Input\MollieGuestInputFactory;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -194,7 +192,7 @@ final class MollieCheckoutTest extends TestCase
         (new MollieCheckout($this->checkout, null))->mollieCheckoutStart(new ID('ub-1'), true, 'https://app.example.com/return');
     }
 
-    public function testStart_WithGuest_MapsItIntoGuestDetailsOfTheRequest(): void
+    public function testStart_WithGuest_PassesTheGuestDetailsOnInTheRequest(): void
     {
         $this->checkout->expects($this->once())->method('start')
             ->with($this->callback(function (HeadlessStartRequest $r): bool {
@@ -212,7 +210,7 @@ final class MollieCheckoutTest extends TestCase
             new ID('ub-1'),
             true,
             'https://app.example.com/return',
-            guest: MollieGuestInputFactory::guestCheckout('ada@example.com', $this->guestAddress('Main St'), $this->guestAddress('Side St'))
+            guest: new GuestDetails('ada@example.com', $this->guestAddress('Main St'), $this->guestAddress('Side St'))
         );
     }
 
@@ -223,24 +221,6 @@ final class MollieCheckoutTest extends TestCase
             ->willReturn($this->startResult());
 
         $this->controller()->mollieCheckoutStart(new ID('ub-1'), true, 'https://app.example.com/return');
-    }
-
-    public function testStart_InvalidGuest_IsAMollieCheckoutErrorWithGuestDetailsRequiredAndNothingIsStarted(): void
-    {
-        $this->checkout->expects($this->never())->method('start');
-
-        try {
-            $this->controller()->mollieCheckoutStart(
-                new ID('ub-1'),
-                true,
-                'https://app.example.com/return',
-                guest: MollieGuestInputFactory::guestCheckout('nope', $this->guestAddress('Main St'), null)
-            );
-            self::fail('invalid guest details are refused');
-        } catch (MollieCheckoutError $e) {
-            self::assertSame(HeadlessCheckoutException::GUEST_DETAILS_REQUIRED, $e->getExtensions()['errorCode']);
-            self::assertTrue($e->isClientSafe());
-        }
     }
 
     public function testStart_RegisteredEmail_IsAMollieCheckoutErrorWithAccountExists(): void
@@ -254,7 +234,7 @@ final class MollieCheckoutTest extends TestCase
                 new ID('ub-1'),
                 true,
                 'https://app.example.com/return',
-                guest: MollieGuestInputFactory::guestCheckout('ada@example.com', $this->guestAddress('Main St'), null)
+                guest: new GuestDetails('ada@example.com', $this->guestAddress('Main St'))
             );
             self::fail('a registered e-mail is refused');
         } catch (MollieCheckoutError $e) {
@@ -290,9 +270,9 @@ final class MollieCheckoutTest extends TestCase
         }
     }
 
-    private function guestAddress(string $street): MollieGuestAddressInput
+    private function guestAddress(string $street): GuestAddress
     {
-        return MollieGuestInputFactory::guestAddress('Ada', 'Lovelace', $street, '1', '79098', 'Freiburg', 'a7c40f631fc920687.20179984');
+        return new GuestAddress('Ada', 'Lovelace', $street, '1', '79098', 'Freiburg', 'a7c40f631fc920687.20179984');
     }
 
     private function startResult(): HeadlessStartResult

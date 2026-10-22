@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\GraphQL\Controller;
 
 use OxidEsales\GraphQL\Base\Service\Authentication;
+use OxidEsales\PaymentBase\Checkout\Headless\GuestDetails;
 use OxidEsales\PaymentBase\Checkout\Headless\HeadlessCheckoutException;
 use OxidEsales\PaymentBase\Checkout\Headless\HeadlessCheckoutServiceInterface;
 use OxidEsales\PaymentBase\Checkout\Headless\HeadlessStartRequest;
@@ -18,7 +19,6 @@ use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutReturnResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutStartResult;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\GraphQL\Exception\MollieCheckoutError;
-use OxidEsales\Payments\Mollie\GraphQL\Input\MollieGuestCheckoutInput;
 use RuntimeException;
 use TheCodingMachine\GraphQLite\Annotations\Mutation;
 use TheCodingMachine\GraphQLite\Annotations\Right;
@@ -43,8 +43,9 @@ use TheCodingMachine\GraphQLite\Types\ID;
  *
  * Anonymous tokens (140b) need only `PAYMENT_CHECKOUT`: they cannot `basketSetPayment`, so this mutation names
  * its own payment (no `paymentId` argument is needed) and `guest` says who the shopper is. A registered e-mail is
- * refused (`account_exists`), missing or invalid details are `guest_details_required`. Return and cancel never look
- * at the caller: the contract token is the only credential, so another anonymous token may finish a guest's contract.
+ * refused (`account_exists`), missing or invalid details are `guest_details_required` (raised by payment-base's
+ * shared `GuestCheckoutInput` while the arguments are resolved: this module defines no input type). Return and cancel
+ * never look at the caller: the contract token is the only credential, so another anonymous token may finish a guest's contract.
  *
  * Everything provider-neutral lives in payment-base's HeadlessCheckoutService;
  * this class adds the JWT user and the Mollie payment id, and turns refusals
@@ -71,7 +72,7 @@ final class MollieCheckout
         ?string $method = null,
         string $uiMode = 'hosted',
         ?string $cardToken = null,
-        ?MollieGuestCheckoutInput $guest = null
+        ?GuestDetails $guest = null
     ): CheckoutStartResult {
         try {
             return new CheckoutStartResult($this->checkout->start(new HeadlessStartRequest(
@@ -85,7 +86,7 @@ final class MollieCheckout
                 // basketSetPayment still starts; one set to another payment is refused.
                 paymentId: MollieDefinitions::PAYMENT_ID,
                 providerOptions: $this->providerOptions($method, $cardToken),
-                guest: $guest?->toGuestDetails(),
+                guest: $guest,
             )));
         } catch (HeadlessCheckoutException $e) {
             throw new MollieCheckoutError($e);

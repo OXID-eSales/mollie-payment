@@ -16,8 +16,8 @@ use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutCancelResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutReturnResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutStartResult;
+use OxidEsales\PaymentBase\GraphQL\DataType\GuestCheckoutInputFactory;
 use OxidEsales\Payments\Mollie\GraphQL\Controller\MollieCheckout;
-use OxidEsales\Payments\Mollie\GraphQL\Input\MollieGuestInputFactory;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
@@ -63,11 +63,10 @@ final class SchemaContainsMollieMutationsTest extends TestCase
             CheckoutStartResult::class,
             CheckoutReturnResult::class,
             CheckoutCancelResult::class,
-            MollieGuestInputFactory::class,
+            GuestCheckoutInputFactory::class,
         ]));
         $factory->addControllerNamespace('OxidEsales\\Payments\\Mollie\\GraphQL\\Controller');
         $factory->addTypeNamespace('OxidEsales\\PaymentBase\\GraphQL\\DataType');
-        $factory->addTypeNamespace('OxidEsales\\Payments\\Mollie\\GraphQL\\Input');
 
         $schema = $factory->createSchema();
         $schema->assertValid();
@@ -84,6 +83,7 @@ final class SchemaContainsMollieMutationsTest extends TestCase
             ['basketId', 'confirmTermsAndConditions', 'returnUrl', 'cancelUrl', 'method', 'uiMode', 'cardToken', 'guest'],
             array_map(static fn($arg) => $arg->name, $start->args)
         );
+        self::assertSame('GuestCheckoutInput', (string) $start->getArg('guest')?->getType(), 'the shared input type of payment-base');
         self::assertSame(
             ['contractId', 'contractToken'],
             array_map(static fn($arg) => $arg->name, $mutations->getField('mollieCheckoutReturn')->args)

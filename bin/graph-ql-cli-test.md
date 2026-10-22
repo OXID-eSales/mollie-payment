@@ -36,7 +36,7 @@ mollieCheckoutCancel ──▶   ………………………………………�
 
   | Mutation | Arguments | Returns |
   |---|---|---|
-  | `mollieCheckoutStart` | `basketId: ID!`, `confirmTermsAndConditions: Boolean!`, `returnUrl: String!`, `cancelUrl: String` (accepted, unused — Mollie has one redirect URL), `method: String` (hint: ideal, creditcard, klarna, …), `uiMode: String` (`hosted` default, or `embedded` for inline Mollie Components card payments), `cardToken: String` (the single-use token Mollie Components minted in the browser; with `uiMode: embedded` and `method: creditcard`) | `CheckoutStartResult!` |
+  | `mollieCheckoutStart` | `basketId: ID!`, `confirmTermsAndConditions: Boolean!`, `returnUrl: String!`, `cancelUrl: String` (accepted, unused — Mollie has one redirect URL), `method: String` (hint: ideal, creditcard, klarna, …), `uiMode: String` (`hosted` default, or `embedded` for inline Mollie Components card payments), `cardToken: String` (the single-use token Mollie Components minted in the browser; with `uiMode: embedded` and `method: creditcard`), `guest: GuestCheckoutInput` (optional, anonymous tokens only: `email`, `invoiceAddress`, `deliveryAddress`) | `CheckoutStartResult!` |
   | `mollieCheckoutReturn` | `contractId: String!`, `contractToken: String!` | `CheckoutReturnResult!` |
   | `mollieCheckoutCancel` | `contractId: String!`, `contractToken: String!` | `CheckoutCancelResult!` |
 
@@ -51,6 +51,8 @@ mollieCheckoutCancel ──▶   ………………………………………�
   `contractId` and `contractToken` from the start and passes them to `mollieCheckoutReturn`), for every outcome. The return URL need not exist in the shop; a real client owns it.
 - `mollieCheckoutStart` names its payment itself (`oe_payments_mollie`): the client needs no `basketSetPayment` first.
   A basket explicitly set to another payment is refused with `payment_not_supported`.
+- The `guest` input types (`GuestCheckoutInput`, `GuestAddressInput`) are payment-base's, shared with Stripe and PayPal: this module
+  defines no GraphQL type. Their refusals (`guest_details_required`) come with `extensions.errorCode` like every other.
 - Inline card entry (Mollie Components) needs a browser and is not part of the headless flow; `uiMode` other than
   `hosted` is refused before anything is created.
 
