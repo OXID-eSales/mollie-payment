@@ -12,7 +12,7 @@
 |------|--------|-------|
 | Checkout (EN) | ✅ **PASSED** | Order #218 created successfully |
 | Checkout (DE) | ✅ **PASSED** | Order #219 created successfully |
-| Admin: Login | ✅ **PASSED** | Credentials: noreply@oxid-esales.com / admin |
+| Admin: Login | ✅ **PASSED** | Credentials: <admin-e-mail> / <admin-password> |
 | Admin: Find Mollie order | ✅ **PASSED** | Order for Збигнев Бжезинский |
 | Admin: Verify Mollie panel | ✅ **PASSED** | Panel visible with contract ID |
 | Admin: View payment details | ✅ **PASSED** | Contract ID: 8d30b83..., Dashboard Link: ✓ |
@@ -26,7 +26,7 @@
 STEP 1: Loading shop (English (lang=1))...
 ✓ Shop loaded
 STEP 2: Logging in...
-  Attempting login with email: playwright.user@oxid-esales.dev
+  Attempting login with email: <test-user-e-mail>
 ✓ Logged in
 STEP 3: Adding product to cart via /en/Spare-parts/Axle-parts/Wishbone-aluminum.html...
 ✓ Added to cart
@@ -80,8 +80,8 @@ Final URL: https://daniil.oxiddev.de/index.php?cl=thankyou&lang=1&...
 ```env
 SHOP_URL=https://daniil.oxiddev.de
 MOLLIE_E2E_SHOP_URL=https://daniil.oxiddev.de
-TEST_USER_EMAIL=playwright.user@oxid-esales.dev
-TEST_USER_PASSWORD=useruser
+TEST_USER_EMAIL=<test-user-e-mail>
+TEST_USER_PASSWORD=<test-user-password>
 ```
 
 ### Test Execution

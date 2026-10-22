@@ -22,7 +22,11 @@ paths = [
   '''\.min\.(js|css)$''',
   '''(^|/)package-lock\.json$''',
   '''(^|/)\.claude/''',
-  '''(^|/)(playwright-report|test-results|reports)/''',
+  '''(^|/)(playwright-report|test-results)/''',
+  # Only the test runners' report output. Dev-log `reports/` directories hold
+  # prose and run logs and are scanned (subsprint 138a, 2026-10-22: a run log
+  # under docs/.../reports/ held a client secret and a session id).
+  '''(^|/)tests/(.*/)?reports/''',
   '''gitleaks-report\.json$''',
 ]
 
@@ -77,3 +81,46 @@ id = "mollie-api-key"
 description = "Mollie API key (live_/test_ + key material; length not contractual, so 25+ — review 2026-10-14 D-L3: an exactly-30 match let differently sized real keys commit clean)"
 regex = '''\b(?:live|test)_[A-Za-z0-9]{25,}'''
 keywords = ["live_", "test_"]
+
+# Added 2026-10-22 (subsprint 138a, audit of 2026-10-21). Four shapes the
+# default rules miss and that were found committed across our repositories:
+# a Stripe Checkout Session client secret and an OXID force_sid in a dev-log
+# run log, a PayPal access token in copied SDK docs, and a demo-shop login
+# (e-mail + password) in e2e fixtures and .env.dist files.
+
+[[rules]]
+id = "stripe-checkout-session-client-secret"
+description = "Stripe Checkout Session client secret (cs_test_/cs_live_ ... _secret_ ...)"
+regex = '''cs_(?:test|live)_[A-Za-z0-9]+_secret_[A-Za-z0-9]+'''
+keywords = ["cs_test_", "cs_live_"]
+
+[[rules]]
+id = "oxid-force-sid"
+description = "OXID session id passed as force_sid (a pasted one hijacks that session)"
+regex = '''force_sid=[0-9a-z]{32}'''
+keywords = ["force_sid"]
+
+[[rules]]
+id = "paypal-access-token"
+description = "PayPal OAuth access token (A21AA...)"
+regex = '''A21AA[A-Za-z0-9_-]{60,}'''
+keywords = ["a21aa"]
+
+# A login pair: `password:` / `Password:` / `PASSWORD=` followed by a value,
+# with an e-mail address on the same line or within the two lines before or
+# after it. Two rules because gitleaks reports capture group 1 as the secret
+# and an alternation would leave that group empty for one of the orders.
+# Lines are matched explicitly ([^\n]*) because the rules run against the
+# whole fragment, not line by line.
+
+[[rules]]
+id = "credential-pair-email-then-password"
+description = "Login e-mail followed within two lines by password: / password= and a value"
+regex = '''(?i)[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}[^\n]*(?:\n[^\n]*){0,2}password\s*[:=]\s*["'`]?([^\s"'`,;)]{3,})'''
+keywords = ["password"]
+
+[[rules]]
+id = "credential-pair-password-then-email"
+description = "password: / password= and a value followed within two lines by a login e-mail"
+regex = '''(?i)password\s*[:=]\s*["'`]?([^\s"'`,;)]{3,})[^\n]*(?:\n[^\n]*){0,2}[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}'''
+keywords = ["password"]

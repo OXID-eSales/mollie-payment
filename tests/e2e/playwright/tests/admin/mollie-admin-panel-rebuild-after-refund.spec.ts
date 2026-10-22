@@ -24,9 +24,10 @@ const ORDER_NUMBER = process.env.MOLLIE_E2E_ORDER_NUMBER || '559';
 // so repeating the exact same amount on the same order is deduplicated (no new refund).
 const REFUND_STEP = parseFloat((0.01 * (1 + (Date.now() % 89))).toFixed(2));
 const ADMIN = {
-    email: process.env.ADMIN_USER_EMAIL || 'noreply@oxid-esales.com',
-    password: process.env.ADMIN_USER_PASSWORD || 'admin',
+    email: process.env.ADMIN_USER_EMAIL ?? '',
+    password: process.env.ADMIN_USER_PASSWORD ?? '',
 };
+test.skip(!ADMIN.email || !ADMIN.password, 'ADMIN_USER_EMAIL / ADMIN_USER_PASSWORD not set (tests/e2e/playwright/.env, see .env.dist)');
 
 const money = (text: string | null): number => {
     const match = (text || '').match(/(\d+(?:[.,]\d{2})?)/);

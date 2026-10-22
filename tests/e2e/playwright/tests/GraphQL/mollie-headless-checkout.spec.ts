@@ -13,7 +13,7 @@ import { shopDbQuery } from '../../fixtures/shop-db';
  *   SHOP_URL / MOLLIE_E2E_SHOP_URL   the shop (its origin is always an allowed return origin)
  *   HEADLESS_GRAPHQL_URL             GraphQL endpoint (default `${SHOP_URL}/graphql/`)
  *   HEADLESS_USER_EMAIL / HEADLESS_USER_PASSWORD   a customer in a country with a delivery set
- *                                    (default headless.user@oxid-esales.dev / useruser)
+ *                                    (no committed default)
  *   HEADLESS_PRODUCT_ID              an orderable article (default: "Panorama", 20.90 EUR)
  *
  * Mollie's webhook must reach the shop (the tunnel does); the spec waits for it
@@ -22,8 +22,9 @@ import { shopDbQuery } from '../../fixtures/shop-db';
 
 const SHOP_URL = (process.env.MOLLIE_E2E_SHOP_URL || process.env.SHOP_URL || 'https://localhost.local').replace(/\/?$/, '/');
 const GRAPHQL_URL = process.env.HEADLESS_GRAPHQL_URL || `${SHOP_URL}graphql/`;
-const USER_EMAIL = process.env.HEADLESS_USER_EMAIL || 'headless.user@oxid-esales.dev';
-const USER_PASSWORD = process.env.HEADLESS_USER_PASSWORD || 'useruser';
+const USER_EMAIL = process.env.HEADLESS_USER_EMAIL ?? '';
+const USER_PASSWORD = process.env.HEADLESS_USER_PASSWORD ?? '';
+test.skip(!USER_EMAIL || !USER_PASSWORD, 'HEADLESS_USER_EMAIL / HEADLESS_USER_PASSWORD not set');
 const PRODUCT_ID = process.env.HEADLESS_PRODUCT_ID || '5e6a374e212258abbfd76b6adf911772';
 const RETURN_URL = `${SHOP_URL}index.php?cl=start&headless=mollie-return`;
 // OXID disables the basket for user agents it takes for search engines; the

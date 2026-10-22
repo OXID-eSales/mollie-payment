@@ -48,7 +48,7 @@ cp .env.dist .env
 | Variable | Description | Default |
 |---|---|---|
 | `SHOP_URL` / `MOLLIE_E2E_SHOP_URL` | Base URL of the OXID shop under test | `http://localhost.local` |
-| `TEST_USER_EMAIL` / `TEST_USER_PASSWORD` | Storefront customer used by the checkout spec | `playwright.user@oxid-esales.dev` / `useruser` |
+| `TEST_USER_EMAIL` / `TEST_USER_PASSWORD` | Storefront customer used by the checkout spec | — (required) |
 | `ADMIN_USER_EMAIL` / `ADMIN_USER_PASSWORD` | Shop admin backend login | — |
 | `MOLLIE_TEST_API_KEY` | Documentation only — the key must be configured in the shop's admin panel, not injected by Playwright; listed here so a runner operator knows it's a prerequisite | — |
 | `HEADLESS` | Run browser headless | `true` |

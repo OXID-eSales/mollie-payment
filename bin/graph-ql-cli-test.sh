@@ -18,8 +18,8 @@ set -euo pipefail
 
 GRAPHQL_URL="${GRAPHQL_URL:-http://localhost.local/graphql/}"
 SHOP_URL="${SHOP_URL:-$(printf '%s' "$GRAPHQL_URL" | sed -E 's#(https?://[^/]+).*#\1/#')}"
-USER_EMAIL="${USER_EMAIL:-headless.user@oxid-esales.dev}"
-USER_PASSWORD="${USER_PASSWORD:-useruser}"
+USER_EMAIL="${USER_EMAIL:?set USER_EMAIL to a shop customer (no committed default)}"
+USER_PASSWORD="${USER_PASSWORD:?set USER_PASSWORD (no committed default)}"
 PRODUCT_ID="${PRODUCT_ID:-5e6a374e212258abbfd76b6adf911772}"   # "Panorama", 20.90 EUR in the demo data
 DELIVERY_METHOD_ID="${DELIVERY_METHOD_ID:-oxidstandard}"
 STATE_FILE="${STATE_FILE:-${TMPDIR:-/tmp}/graph-ql-cli-test-mollie.state}"

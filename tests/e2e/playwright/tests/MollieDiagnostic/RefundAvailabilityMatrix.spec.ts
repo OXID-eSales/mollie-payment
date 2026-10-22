@@ -24,8 +24,9 @@ import { AdminMollieOrderPage } from '../pages/admin/AdminMollieOrderPage';
  */
 const OUT = process.env.MATRIX_OUT || '/tmp/refund-matrix.json';
 const SKIP_METHODS = new Set(['creditcard', 'applepay', 'giftcard', 'voucher', 'pointofsale']);
-const ADMIN_USER = process.env.ADMIN_USER_EMAIL || 'noreply@oxid-esales.com';
-const ADMIN_PW = process.env.ADMIN_USER_PASSWORD || 'admin';
+const ADMIN_USER = process.env.ADMIN_USER_EMAIL ?? '';
+const ADMIN_PW = process.env.ADMIN_USER_PASSWORD ?? '';
+test.skip(!ADMIN_USER || !ADMIN_PW, 'ADMIN_USER_EMAIL / ADMIN_USER_PASSWORD not set (tests/e2e/playwright/.env, see .env.dist)');
 
 interface Row {
     method: string;

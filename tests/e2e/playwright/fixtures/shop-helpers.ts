@@ -1,7 +1,8 @@
 import { Page, Locator, expect } from '@playwright/test';
 
-const EMAIL = process.env.TEST_USER_EMAIL || 'playwright.user@oxid-esales.dev';
-const PW = process.env.TEST_USER_PASSWORD || 'useruser';
+const EMAIL = process.env.TEST_USER_EMAIL ?? '';
+const PW = process.env.TEST_USER_PASSWORD ?? '';
+const TEST_USER_MISSING = 'TEST_USER_EMAIL / TEST_USER_PASSWORD not set (tests/e2e/playwright/.env, see .env.dist)';
 
 /**
  * A product-detail URL from the standard OXID demodata (Apex theme). Checkout requires a
@@ -18,6 +19,9 @@ const DEMO_PRODUCT_URL =
 export async function loginStorefront(page: Page): Promise<void> {
     await page.goto('/index.php?cl=account');
     const loginForm = page.locator('form').filter({ has: page.locator('input[name="lgn_pwd"]:visible') }).first();
+    if (!EMAIL || !PW) {
+        throw new Error(TEST_USER_MISSING);
+    }
     await loginForm.locator('input[name="lgn_usr"]:visible').first().fill(EMAIL);
     await loginForm.locator('input[name="lgn_pwd"]:visible').first().fill(PW);
     await loginForm.locator('button[type="submit"], input[type="submit"]').first().click();

@@ -110,7 +110,7 @@ clean; PHPStan "No errors"; PHPMD exit 0 after the controller refactor (see devi
 ## Environment notes
 
 - OPC's `oeOnePageCheckoutEnabled` was already `false`; no toggle needed for `MollieStandard/*`.
-- The e2e user `playwright.user@oxid-esales.dev` had an edited address that Mollie's
+- The e2e user `<test-user-e-mail>` had an edited address that Mollie's
   `UserDataValidator` rejected at the payment step (`MOLLIE_VALIDATION_INVALID_USER_DATA`): first name
   `Marc3`, street `Hugo-Junkers Str23434212341`, city `Frankfrurt am Mein`. Reset to `Marc` /
   `Hugo-Junkers Str` / `Frankfurt am Main` (the demo-data values sprint 01 ran with); original row

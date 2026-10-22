@@ -60,7 +60,7 @@ mollieCheckoutCancel ──▶   ………………………………………�
   this module's `b-7.4.x-GRAPH-QL` active, a Mollie **test** API key and profile configured.
 - Mollie's webhook must reach the shop: `https://<shop>/index.php?cl=MollieWebhookController` (or `sMollieWebhookUrl`).
   The dev shop's tunnel `https://daniil.oxiddev.de` works; `localhost.local` does not.
-- A customer in a country with a delivery set. The dev shop has `headless.user@oxid-esales.dev` / `useruser`.
+- A customer in a country with a delivery set. Set `USER_EMAIL` / `USER_PASSWORD` to such a customer (no committed default).
 - `curl` and `jq` on the machine you run the script from (the host; the PHP container has no jq).
 
 ## Usage
@@ -85,7 +85,7 @@ Environment (all optional):
 |---|---|---|
 | `GRAPHQL_URL` | `http://localhost.local/graphql/` | the endpoint |
 | `SHOP_URL` | origin of `GRAPHQL_URL` | base of `RETURN_URL`. **Must be the shop's configured URL** (or an origin listed in `sPaymentBaseHeadlessReturnOrigins`), otherwise `return_url_rejected / origin_not_allowed`. Dev shop: `SHOP_URL=https://daniil.oxiddev.de/` |
-| `USER_EMAIL` / `USER_PASSWORD` | `headless.user@oxid-esales.dev` / `useruser` | the customer |
+| `USER_EMAIL` / `USER_PASSWORD` | — (required) | the customer |
 | `PRODUCT_ID` | `5e6a374e212258abbfd76b6adf911772` | "Panorama", 20.90 EUR |
 | `MOLLIE_METHOD` | empty | default method hint for `start` / `pay` |
 | `DELIVERY_METHOD_ID` | `oxidstandard` | used by `guard` only |
