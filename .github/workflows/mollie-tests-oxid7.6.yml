@@ -19,10 +19,8 @@ env:
   # composer.json requires `payment-base >=v1.2`; b-7.4.x satisfies it through its branch
   # alias (1.2.x-dev). To pin a payment-base feature branch set PAYMENT_BASE_VERSION_ALIAS to
   # ' as 1.2.x-dev' (as GRAPH-QL did 2026-10-06/07); keep it empty on b-7.4.x.
-  # TEMPORARY: set back to b-7.4.x when payment-base feature/graphql-comply is merged
-  PAYMENT_BASE_BRANCH: 'feature/graphql-comply'
-  # TEMPORARY with the branch above: a feature branch has no branch-alias, so the module's `>=v1.2` is unmet without it.
-  PAYMENT_BASE_VERSION_ALIAS: ' as 1.5.0'
+  PAYMENT_BASE_BRANCH: 'b-7.4.x'
+  PAYMENT_BASE_VERSION_ALIAS: ''
 
 jobs:
   install_shop_with_module:
