@@ -75,4 +75,6 @@ SHOP_URL=https://<your shop>/ bin/graph-ql-cli-test.sh demo
 ```
 
 How it works, every command and example output: [bin/graph-ql-cli-test.md](bin/graph-ql-cli-test.md).
+Installing for a headless storefront (including the `oe:graphql:cache-clear` step after every activation or update):
+[docs/for_developer/04-headless-graphql-setup.md](docs/for_developer/04-headless-graphql-setup.md).
 

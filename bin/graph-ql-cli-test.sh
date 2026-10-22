@@ -59,6 +59,7 @@ environment (defaults in brackets):
   PRODUCT_ID [$PRODUCT_ID]   DELIVERY_METHOD_ID [$DELIVERY_METHOD_ID]   MOLLIE_METHOD [${MOLLIE_METHOD:-<none>}]
   RETURN_URL (must be under an allowed origin; the shop's own origin always is; nothing is appended to it)
   STATE_FILE [$STATE_FILE]   VERBOSE=1 prints every raw response
+  SCHEMA_CACHE_CLEAR_CMD / SKIP_SCHEMA_CACHE_CLEAR=1   how the schema cache is cleared before the first query (see below)
 USAGE
 }
 
@@ -214,7 +215,29 @@ cmd_raw() {
     gql "$1" | jq .
 }
 
+# GraphQLite caches the schema on disk and never clears it by itself: after a module update the
+# old schema stays live ("Cannot query field ..."). Clear it before the first query when this
+# script runs inside the shop (module symlinked under <shop>/extensions/); from another host
+# run `vendor/bin/oe-console oe:graphql:cache-clear` on the shop yourself, or set
+# SCHEMA_CACHE_CLEAR_CMD (e.g. "ssh shop 'cd /var/www && vendor/bin/oe-console oe:graphql:cache-clear'");
+# SKIP_SCHEMA_CACHE_CLEAR=1 skips the step.
+clear_schema_cache() {
+    [ "${SKIP_SCHEMA_CACHE_CLEAR:-}" = 1 ] && return 0
+    local shop_root console
+    shop_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." 2>/dev/null && pwd)" || shop_root=""
+    for console in "$shop_root/vendor/bin/oe-console" "$shop_root/bin/oe-console"; do
+        [ -n "$shop_root" ] && [ -f "$console" ] && [ -z "${SCHEMA_CACHE_CLEAR_CMD:-}" ] && SCHEMA_CACHE_CLEAR_CMD="php $console oe:graphql:cache-clear"
+    done
+    if [ -z "${SCHEMA_CACHE_CLEAR_CMD:-}" ]; then
+        note "schema cache: not cleared (no shop next to this script) - run vendor/bin/oe-console oe:graphql:cache-clear on the shop after a module update"
+        return 0
+    fi
+    say "Clearing the GraphQL schema cache"
+    eval "$SCHEMA_CACHE_CLEAR_CMD" >&2 || note "schema cache clear failed - continuing"
+}
+
 need curl; need jq
+case "${1:-}" in -h|--help|help|"") ;; *) clear_schema_cache ;; esac
 case "${1:-}" in
     schema) cmd_schema ;;
     start) cmd_start "${2:-}" ;;

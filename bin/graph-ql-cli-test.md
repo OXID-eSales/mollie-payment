@@ -91,6 +91,7 @@ Environment (all optional):
 | `DELIVERY_METHOD_ID` | `oxidstandard` | used by `guard` only |
 | `RETURN_URL` | `${SHOP_URL}index.php?cl=start&headless=return` | the shop's start page, so a hand test lands on the shop; nothing is appended |
 | `STATE_FILE` | `/tmp/graph-ql-cli-test-mollie.state` | the last start's contract id / token / basket id |
+| `SCHEMA_CACHE_CLEAR_CMD` | `php <shop>/vendor/bin/oe-console oe:graphql:cache-clear` when the script sits in a shop checkout (module under `extensions/`) | run before the first query: GraphQLite never clears its schema cache by itself, so after a module update the old schema stays live. From a host without the shop (or without `php`) set it to a command that clears it on the shop, e.g. `ssh shop 'cd /var/www && vendor/bin/oe-console oe:graphql:cache-clear'`, or clear it by hand and set `SKIP_SCHEMA_CACHE_CLEAR=1` |
 | `VERBOSE` | `0` | `1` prints every raw JSON response to stderr |
 
 ## Examples

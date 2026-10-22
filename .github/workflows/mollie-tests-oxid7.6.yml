@@ -19,7 +19,8 @@ env:
   # composer.json requires `payment-base >=v1.2`; b-7.4.x satisfies it through its branch
   # alias (1.2.x-dev). To pin a payment-base feature branch set PAYMENT_BASE_VERSION_ALIAS to
   # ' as 1.2.x-dev' (as GRAPH-QL did 2026-10-06/07); keep it empty on b-7.4.x.
-  PAYMENT_BASE_BRANCH: 'b-7.4.x'
+  # TEMPORARY: set back to b-7.4.x when payment-base feature/graphql-comply is merged
+  PAYMENT_BASE_BRANCH: 'feature/graphql-comply'
   PAYMENT_BASE_VERSION_ALIAS: ''
 
 jobs:
@@ -221,6 +222,8 @@ jobs:
         run: |
           docker compose exec -T php bin/oe-console oe:module:install /var/www/test-module
           docker compose exec -T php bin/oe-console oe:module:activate ${{ env.MODULE_ID }}
+          # Same step as the documented install/update procedure: GraphQLite caches the schema on disk.
+          docker compose exec -T php bin/oe-console oe:graphql:cache-clear
 
       - name: Composer security audit — no packages with security advisories
         # Audits the FULL resolved stack this run tests (shop composer.lock inside the

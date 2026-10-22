@@ -16,6 +16,7 @@ All notable changes to this module are documented here. Format follows
   description and the three-column table (MOL-10).
 
 ### Changed
+- Sprint 139a: docs and CI run `oe:graphql:cache-clear` after module activation (new `docs/for_developer/04-headless-graphql-setup.md`, merchant setup, `bin/graph-ql-cli-test.sh` clears the schema cache before its first query).
 - Sprint 138c: a headless contract's Mollie redirect URL is the client's `returnUrl` unchanged; `contract_id` is no longer
   appended (nothing identifying in browser history or access logs). The client already holds `contractId` and
   `contractToken` from `mollieCheckoutStart` and passes them to `mollieCheckoutReturn`. The Twig / OPC flow keeps its URL.
