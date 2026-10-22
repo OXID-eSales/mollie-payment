@@ -6,6 +6,12 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- Sprint 140b, guest checkout: the Mollie checkout mutations accept an anonymous token that carries `PAYMENT_CHECKOUT`
+  (`#[Logged]` removed from `mollieCheckoutStart/Return/Cancel`, `#[Right]` kept). `mollieCheckoutStart` gains the optional
+  `guest` argument (`MollieGuestCheckoutInput` / `MollieGuestAddressInput`, mapped to payment-base's `GuestDetails`); the
+  mutation names its own payment, so no `basketSetPayment` is needed. `guest_details_required` and `account_exists` arrive as
+  `extensions.errorCode`. Return/cancel with the contract token work from another anonymous token. Requires payment-base 1.5.
+  The two inputs duplicate the Stripe module's (GraphQL input names must be unique): one shared input in payment-base is the follow-up.
 - `Service\MollieClientConfigProvider`: Mollie's provider for payment-base's sealed `paymentClientConfig` query (tag `payment_base.client_config_provider`). Publishes only `profileId` and `testMode` (empty without a profile id, so the storefront falls back to Mollie's hosted page); API keys are never part of it. Requires a payment-base release that ships `ClientConfigProviderInterface`.
 - A "Help" group at the end of the module Settings tab, after "Logging" (MOL-10): payment-base's contract-state
   table (OXID Contract Status · Meaning) with Mollie's third column, the Mollie payment status each state corresponds

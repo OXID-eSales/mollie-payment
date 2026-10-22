@@ -9,17 +9,14 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Integration\GraphQL;
 
-use ArrayIterator;
-use Iterator;
-use Kcs\ClassFinder\Finder\FinderInterface;
 use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutCancelResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutReturnResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutStartResult;
 use OxidEsales\Payments\Mollie\GraphQL\Controller\MollieCheckout;
+use OxidEsales\Payments\Mollie\GraphQL\Input\MollieGuestInputFactory;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Cache\Psr16Cache;
 use TheCodingMachine\GraphQLite\SchemaFactory;
@@ -37,6 +34,8 @@ use TheCodingMachine\GraphQLite\SchemaFactory;
 #[Group('integration')]
 final class SchemaContainsMollieMutationsTest extends TestCase
 {
+    use FixedClassFinderTrait;
+
     public function setUp(): void
     {
         parent::setUp();
@@ -61,9 +60,11 @@ final class SchemaContainsMollieMutationsTest extends TestCase
             CheckoutStartResult::class,
             CheckoutReturnResult::class,
             CheckoutCancelResult::class,
+            MollieGuestInputFactory::class,
         ]));
         $factory->addControllerNamespace('OxidEsales\\Payments\\Mollie\\GraphQL\\Controller');
         $factory->addTypeNamespace('OxidEsales\\PaymentBase\\GraphQL\\DataType');
+        $factory->addTypeNamespace('OxidEsales\\Payments\\Mollie\\GraphQL\\Input');
 
         $schema = $factory->createSchema();
         $schema->assertValid();
@@ -77,7 +78,7 @@ final class SchemaContainsMollieMutationsTest extends TestCase
         $start = $mutations->getField('mollieCheckoutStart');
         self::assertSame('CheckoutStartResult!', (string) $start->getType());
         self::assertSame(
-            ['basketId', 'confirmTermsAndConditions', 'returnUrl', 'cancelUrl', 'method', 'uiMode', 'cardToken'],
+            ['basketId', 'confirmTermsAndConditions', 'returnUrl', 'cancelUrl', 'method', 'uiMode', 'cardToken', 'guest'],
             array_map(static fn($arg) => $arg->name, $start->args)
         );
         self::assertSame(
@@ -86,101 +87,5 @@ final class SchemaContainsMollieMutationsTest extends TestCase
         );
         self::assertSame('CheckoutReturnResult!', (string) $mutations->getField('mollieCheckoutReturn')->getType());
         self::assertSame('CheckoutCancelResult!', (string) $mutations->getField('mollieCheckoutCancel')->getType());
-    }
-
-    /**
-     * A class finder over a fixed list (GraphQLite's default reflects every
-     * class under a namespace prefix, which re-enters OXID's module-chain
-     * autoloader for other modules' controllers in this shop).
-     *
-     * @param list<class-string> $classes
-     */
-    private function finderOver(array $classes): FinderInterface
-    {
-        return new class ($classes) implements FinderInterface {
-            /** @var list<string> */
-            private array $namespaces = [];
-
-            /** @param list<class-string> $classes */
-            public function __construct(private readonly array $classes)
-            {
-            }
-
-            public function getIterator(): Iterator
-            {
-                $found = [];
-                foreach ($this->classes as $class) {
-                    foreach ($this->namespaces ?: [''] as $namespace) {
-                        if (str_starts_with($class, $namespace)) {
-                            $found[$class] = new ReflectionClass($class);
-                            break;
-                        }
-                    }
-                }
-
-                return new ArrayIterator($found);
-            }
-
-            public function inNamespace(string|array $namespaces): self
-            {
-                $clone = clone $this;
-                $clone->namespaces = array_map(
-                    static fn(string $ns): string => rtrim($ns, '\\') . '\\',
-                    (array) $namespaces
-                );
-
-                return $clone;
-            }
-
-            public function implementationOf(string|array $interface): self
-            {
-                return $this;
-            }
-
-            public function subclassOf(string|null $superClass): self
-            {
-                return $this;
-            }
-
-            public function annotatedBy(string|null $annotationClass): self
-            {
-                return $this;
-            }
-
-            public function withAttribute(string|null $attributeClass): self
-            {
-                return $this;
-            }
-
-            public function in(string|array $dirs): self
-            {
-                return $this;
-            }
-
-            public function notInNamespace(string|array $namespaces): self
-            {
-                return $this;
-            }
-
-            public function filter(callable|null $callback): self
-            {
-                return $this;
-            }
-
-            public function path(string $pattern): self
-            {
-                return $this;
-            }
-
-            public function notPath(string $pattern): self
-            {
-                return $this;
-            }
-
-            public function pathFilter(callable|null $callback): self
-            {
-                return $this;
-            }
-        };
     }
 }
