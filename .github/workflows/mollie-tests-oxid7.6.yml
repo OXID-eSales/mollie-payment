@@ -224,7 +224,10 @@ jobs:
           docker compose exec -T php bin/oe-console oe:module:install /var/www/test-module
           docker compose exec -T php bin/oe-console oe:module:activate ${{ env.MODULE_ID }}
           # Same step as the documented install/update procedure: GraphQLite caches the schema on disk.
-          docker compose exec -T php bin/oe-console oe:graphql:cache-clear
+          # graphql-base's console command exists only where graphql-base is installed and active.
+          if docker compose exec -T php bin/oe-console list --raw | grep -q '^oe:graphql:cache-clear'; then
+            docker compose exec -T php bin/oe-console oe:graphql:cache-clear
+          fi
 
       - name: Composer security audit — no packages with security advisories
         # Audits the FULL resolved stack this run tests (shop composer.lock inside the

@@ -28,7 +28,8 @@ use TheCodingMachine\GraphQLite\Types\ID;
  * The Mollie checkout for the GraphQL Storefront (GRAPH-QL / MS4, Option B):
  * core `placeOrder` is not used for Mollie baskets; these three mutations are.
  *
- *   mollieCheckoutStart(basketId, confirmTermsAndConditions, returnUrl, cancelUrl?, method?, uiMode?, cardToken?, guest?)
+ *   mollieCheckoutStart(basketId, confirmTermsAndConditions, returnUrl, cancelUrl?, method?, uiMode?, cardToken?,
+ *       guest?)
  *       → { contractId, contractToken, orderNumber, redirectUrl, renderMode: redirect }
  *   … shopper pays on Mollie's hosted page; Mollie sends them to returnUrl (unchanged) …
  *   mollieCheckoutReturn(contractId, contractToken) → { status, orderId, orderNumber, contractState }
