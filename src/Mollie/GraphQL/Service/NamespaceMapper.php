@@ -11,7 +11,8 @@ namespace OxidEsales\Payments\Mollie\GraphQL\Service;
 
 /**
  * Tells graphql-base where the Mollie checkout mutations live. The result
- * types are payment-base's (`Checkout*Result`), so no type namespace here.
+ * types (`Checkout*Result`) and the `guest` input (`GuestCheckoutInput`) are payment-base's,
+ * mapped by its own namespace mapper: this module defines no GraphQL type.
  *
  * Mirrors `OxidEsales\GraphQL\Base\Framework\NamespaceMapperInterface`
  * WITHOUT implementing it, on purpose: graphql-base is optional for this

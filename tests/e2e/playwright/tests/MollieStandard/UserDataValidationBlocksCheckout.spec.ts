@@ -28,7 +28,8 @@ import { allOrderIds, ordersAddedSince, billingStreetOf, setBillingStreetOf } fr
  * Story 1 of sprint MOL-15: RED until Stories 3-4 land (today the payment step shows the raw key
  * MOLLIE_VALIDATION_INVALID_USER_DATA and the order step does not validate at all).
  */
-const USER_EMAIL = process.env.TEST_USER_EMAIL || 'playwright.user@oxid-esales.dev';
+const USER_EMAIL = process.env.TEST_USER_EMAIL ?? '';
+test.skip(!USER_EMAIL, 'TEST_USER_EMAIL not set (tests/e2e/playwright/.env, see .env.dist)');
 const BAD_STREET = 'Hugo-Junkers Str: <script>';
 const FIELD_MESSAGE = /street field is not valid\. Allowed symbols are: letters, digits, spaces|Straße.*ungültig.*Erlaubte Zeichen/i;
 const REVIEW_MESSAGE = /review your address details|Adressdaten/i;

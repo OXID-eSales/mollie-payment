@@ -21,6 +21,8 @@ use OxidEsales\PaymentBase\Checkout\Headless\HeadlessStartResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutCancelResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutReturnResult;
 use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutStartResult;
+use OxidEsales\PaymentBase\Checkout\Headless\GuestAddress;
+use OxidEsales\PaymentBase\Checkout\Headless\GuestDetails;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\GraphQL\Controller\MollieCheckout;
 use OxidEsales\Payments\Mollie\GraphQL\Exception\MollieCheckoutError;
@@ -188,6 +190,94 @@ final class MollieCheckoutTest extends TestCase
         $this->expectExceptionMessage('graphql-base is not installed');
 
         (new MollieCheckout($this->checkout, null))->mollieCheckoutStart(new ID('ub-1'), true, 'https://app.example.com/return');
+    }
+
+    public function testStart_WithGuest_PassesTheGuestDetailsOnInTheRequest(): void
+    {
+        $this->checkout->expects($this->once())->method('start')
+            ->with($this->callback(function (HeadlessStartRequest $r): bool {
+                self::assertSame('ada@example.com', $r->guest?->email);
+                self::assertInstanceOf(GuestAddress::class, $r->guest->invoiceAddress);
+                self::assertSame('Main St', $r->guest->invoiceAddress->street);
+                self::assertSame('Side St', $r->guest->deliveryAddress?->street);
+                self::assertSame(MollieDefinitions::PAYMENT_ID, $r->paymentId, 'anonymous tokens cannot basketSetPayment: the mutation names the payment');
+
+                return true;
+            }))
+            ->willReturn($this->startResult());
+
+        $this->controller()->mollieCheckoutStart(
+            new ID('ub-1'),
+            true,
+            'https://app.example.com/return',
+            guest: new GuestDetails('ada@example.com', $this->guestAddress('Main St'), $this->guestAddress('Side St'))
+        );
+    }
+
+    public function testStart_WithoutGuest_CarriesNoGuestDetails(): void
+    {
+        $this->checkout->expects($this->once())->method('start')
+            ->with($this->callback(fn(HeadlessStartRequest $r): bool => $r->guest === null))
+            ->willReturn($this->startResult());
+
+        $this->controller()->mollieCheckoutStart(new ID('ub-1'), true, 'https://app.example.com/return');
+    }
+
+    public function testStart_RegisteredEmail_IsAMollieCheckoutErrorWithAccountExists(): void
+    {
+        $this->checkout->method('start')->willThrowException(
+            new HeadlessCheckoutException(HeadlessCheckoutException::ACCOUNT_EXISTS, 'log in')
+        );
+
+        try {
+            $this->controller()->mollieCheckoutStart(
+                new ID('ub-1'),
+                true,
+                'https://app.example.com/return',
+                guest: new GuestDetails('ada@example.com', $this->guestAddress('Main St'))
+            );
+            self::fail('a registered e-mail is refused');
+        } catch (MollieCheckoutError $e) {
+            self::assertSame(HeadlessCheckoutException::ACCOUNT_EXISTS, $e->getExtensions()['errorCode']);
+        }
+    }
+
+    public function testReturnAndCancel_DoNotConsultTheCallersIdentity_TheContractTokenIsTheOnlyCredential(): void
+    {
+        $authentication = $this->createMock(Authentication::class);
+        $authentication->expects($this->never())->method('getUser');
+        $this->checkout->method('return')->with('ctr-1', 'tok-1', [])
+            ->willReturn(new HeadlessReturnResult('committed', 'order-1', '1001', 'committed'));
+        $this->checkout->method('cancel')->with('ctr-1', 'tok-1')
+            ->willReturn(new HeadlessCancelResult(true, 'ctr-1', 'cancelled'));
+        $controller = new MollieCheckout($this->checkout, $authentication);
+
+        self::assertSame('committed', $controller->mollieCheckoutReturn('ctr-1', 'tok-1')->status());
+        self::assertTrue($controller->mollieCheckoutCancel('ctr-1', 'tok-1')->cancelled());
+    }
+
+    public function testCancel_WrongToken_IsAClientSafeInvalidTokenError(): void
+    {
+        $this->checkout->method('cancel')->willThrowException(
+            new HeadlessCheckoutException(HeadlessCheckoutException::INVALID_TOKEN, 'bad token')
+        );
+
+        try {
+            $this->controller()->mollieCheckoutCancel('ctr-1', 'nope');
+            self::fail('a wrong token is refused');
+        } catch (MollieCheckoutError $e) {
+            self::assertSame(HeadlessCheckoutException::INVALID_TOKEN, $e->getExtensions()['errorCode']);
+        }
+    }
+
+    private function guestAddress(string $street): GuestAddress
+    {
+        return new GuestAddress('Ada', 'Lovelace', $street, '1', '79098', 'Freiburg', 'a7c40f631fc920687.20179984');
+    }
+
+    private function startResult(): HeadlessStartResult
+    {
+        return new HeadlessStartResult('ctr-1', 'tok-1', 'mollie', null, 'https://www.mollie.com/checkout/tr_1', null, 'redirect');
     }
 
     private function controller(): MollieCheckout

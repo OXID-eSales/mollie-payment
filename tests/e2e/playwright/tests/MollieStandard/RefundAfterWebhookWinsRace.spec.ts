@@ -23,8 +23,9 @@ import { AdminMollieOrderPage } from '../pages/admin/AdminMollieOrderPage';
  * Deterministic: the return request (`fnc=checkoutReturn`) is held back for a few seconds so the
  * webhook is guaranteed to land first. Expected: thank-you page, contract `fulfilled`, Refund form.
  */
-const ADMIN_USER = process.env.ADMIN_USER_EMAIL || 'noreply@oxid-esales.com';
-const ADMIN_PW = process.env.ADMIN_USER_PASSWORD || 'admin';
+const ADMIN_USER = process.env.ADMIN_USER_EMAIL ?? '';
+const ADMIN_PW = process.env.ADMIN_USER_PASSWORD ?? '';
+test.skip(!ADMIN_USER || !ADMIN_PW, 'ADMIN_USER_EMAIL / ADMIN_USER_PASSWORD not set (tests/e2e/playwright/.env, see .env.dist)');
 
 test.describe('MOL-17 — refund form after a paid payment when the webhook arrives first', () => {
     test('held-back return leg does not undo the webhook fulfilment', async ({ page, browser }) => {

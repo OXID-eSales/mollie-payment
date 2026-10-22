@@ -7,8 +7,8 @@ export interface UserCredentials {
 }
 
 export const TEST_USER: UserCredentials = {
-    email: process.env.TEST_USER_EMAIL || 'playwright.user@oxid-esales.dev',
-    password: process.env.TEST_USER_PASSWORD || 'useruser',
+    email: process.env.TEST_USER_EMAIL ?? '',
+    password: process.env.TEST_USER_PASSWORD ?? '',
 };
 
 export class LoginPage extends BasePage {
@@ -50,6 +50,9 @@ export class LoginPage extends BasePage {
     }
 
     async login(credentials: UserCredentials = TEST_USER): Promise<void> {
+        if (!credentials.email || !credentials.password) {
+            throw new Error('TEST_USER_EMAIL / TEST_USER_PASSWORD not set (tests/e2e/playwright/.env, see .env.dist)');
+        }
         console.log(`  Attempting login with email: ${credentials.email}`);
 
         if (await this.isLoggedIn()) {

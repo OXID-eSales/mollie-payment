@@ -3,8 +3,11 @@ import { AdminLoginPage } from '../pages/admin/AdminLoginPage';
 import { AdminOrdersPage } from '../pages/admin/AdminOrdersPage';
 import { AdminMollieOrderPage } from '../pages/admin/AdminMollieOrderPage';
 
-const ADMIN_USER = process.env.ADMIN_USER_EMAIL || 'noreply@oxid-esales.com';
-const ADMIN_PW = process.env.ADMIN_USER_PASSWORD || 'admin';
+const ADMIN_USER = process.env.ADMIN_USER_EMAIL ?? '';
+
+const ADMIN_PW = process.env.ADMIN_USER_PASSWORD ?? '';
+
+test.skip(!ADMIN_USER || !ADMIN_PW, 'ADMIN_USER_EMAIL / ADMIN_USER_PASSWORD not set (tests/e2e/playwright/.env, see .env.dist)');
 
 /**
  * Robust admin login. The OXID admin renders in a frameset and (on a staging shop) can show a

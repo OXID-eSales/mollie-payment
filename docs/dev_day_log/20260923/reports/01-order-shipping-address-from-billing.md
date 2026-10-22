@@ -14,7 +14,7 @@ npx playwright test --project=mollie-standard OrderShippingAddressFromBilling
 Against `SHOP_URL=https://daniil.oxiddev.de` (this repo's `.env`, tunnelled to the local
 `strpwt7-nov26` docker stack), Mollie test-mode key already configured in the shop
 (`sMollieTestKey` in `var/configuration/shops/1/modules/oe_payments_mollie.yaml`, sandbox
-key `test_G2HCRKHM7Qw3uJsng9zdP97fWT3C69`), admin login `noreply@oxid-esales.com` / `admin`
+key `test_<redacted>`), admin login `<admin-e-mail>` / `<admin-password>`
 (README's `ADMIN_USER_EMAIL` / `ADMIN_USER_PASSWORD`, already set in `.env`).
 
 ## Red assertion output (final run)
@@ -48,7 +48,7 @@ SELECT OXORDERNR, OXBILLLNAME, OXDELLNAME, OXPAYMENTTYPE FROM oxorder ORDER BY O
 
 ## Order number used
 
-**605** (customer `playwright.user@oxid-esales.dev`, "Marc Muster", billing address from
+**605** (customer `<test-user-e-mail>`, "Marc Muster", billing address from
 demodata — `Hugo-Junkers Str 3, Frankfurt am Main`; no `deladrid` selected, i.e. "use
 billing address for shipping" — the OXID default whenever `blshowshipaddress` is unset).
 

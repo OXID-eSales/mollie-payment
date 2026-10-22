@@ -13,7 +13,7 @@ import { shopDbQuery } from '../../fixtures/shop-db';
  *   SHOP_URL / MOLLIE_E2E_SHOP_URL   the shop (its origin is always an allowed return origin)
  *   HEADLESS_GRAPHQL_URL             GraphQL endpoint (default `${SHOP_URL}/graphql/`)
  *   HEADLESS_USER_EMAIL / HEADLESS_USER_PASSWORD   a customer in a country with a delivery set
- *                                    (default headless.user@oxid-esales.dev / useruser)
+ *                                    (no committed default)
  *   HEADLESS_PRODUCT_ID              an orderable article (default: "Panorama", 20.90 EUR)
  *
  * Mollie's webhook must reach the shop (the tunnel does); the spec waits for it
@@ -22,8 +22,9 @@ import { shopDbQuery } from '../../fixtures/shop-db';
 
 const SHOP_URL = (process.env.MOLLIE_E2E_SHOP_URL || process.env.SHOP_URL || 'https://localhost.local').replace(/\/?$/, '/');
 const GRAPHQL_URL = process.env.HEADLESS_GRAPHQL_URL || `${SHOP_URL}graphql/`;
-const USER_EMAIL = process.env.HEADLESS_USER_EMAIL || 'headless.user@oxid-esales.dev';
-const USER_PASSWORD = process.env.HEADLESS_USER_PASSWORD || 'useruser';
+const USER_EMAIL = process.env.HEADLESS_USER_EMAIL ?? '';
+const USER_PASSWORD = process.env.HEADLESS_USER_PASSWORD ?? '';
+test.skip(!USER_EMAIL || !USER_PASSWORD, 'HEADLESS_USER_EMAIL / HEADLESS_USER_PASSWORD not set');
 const PRODUCT_ID = process.env.HEADLESS_PRODUCT_ID || '5e6a374e212258abbfd76b6adf911772';
 const RETURN_URL = `${SHOP_URL}index.php?cl=start&headless=mollie-return`;
 // OXID disables the basket for user agents it takes for search engines; the
@@ -131,8 +132,9 @@ test.describe('GraphQL headless Mollie checkout (GRAPH-QL / MS6)', () => {
         expect(orderOf(start.contractId).transStatus).toBe('NOT_FINISHED');
 
         await payOnMollieTestPage(page, start.redirectUrl, 'Paid');
-        // Mollie sends the browser to the client's URL with our contract id
-        await page.waitForURL(new RegExp(`headless=mollie-return.*contract_id=${start.contractId}`), { timeout: 60_000 });
+        // Mollie sends the browser to the client's URL unchanged (138c): no contract id in it
+        await page.waitForURL(/headless=mollie-return/, { timeout: 60_000 });
+        expect(page.url(), 'no identifier in the return URL').not.toContain('contract_id');
 
         const state = await waitForContractToLeave(start.contractId, ['pending', 'not_finished']);
         expect(['committed', 'fulfilled'], 'the webhook committed the contract, no return leg involved').toContain(state);

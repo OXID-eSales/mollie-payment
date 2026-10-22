@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\GraphQL\Controller;
 
 use OxidEsales\GraphQL\Base\Service\Authentication;
+use OxidEsales\PaymentBase\Checkout\Headless\GuestDetails;
 use OxidEsales\PaymentBase\Checkout\Headless\HeadlessCheckoutException;
 use OxidEsales\PaymentBase\Checkout\Headless\HeadlessCheckoutServiceInterface;
 use OxidEsales\PaymentBase\Checkout\Headless\HeadlessStartRequest;
@@ -19,7 +20,6 @@ use OxidEsales\PaymentBase\GraphQL\DataType\CheckoutStartResult;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\GraphQL\Exception\MollieCheckoutError;
 use RuntimeException;
-use TheCodingMachine\GraphQLite\Annotations\Logged;
 use TheCodingMachine\GraphQLite\Annotations\Mutation;
 use TheCodingMachine\GraphQLite\Annotations\Right;
 use TheCodingMachine\GraphQLite\Types\ID;
@@ -28,9 +28,10 @@ use TheCodingMachine\GraphQLite\Types\ID;
  * The Mollie checkout for the GraphQL Storefront (GRAPH-QL / MS4, Option B):
  * core `placeOrder` is not used for Mollie baskets; these three mutations are.
  *
- *   mollieCheckoutStart(basketId, confirmTermsAndConditions, returnUrl, cancelUrl?, method?, uiMode?)
+ *   mollieCheckoutStart(basketId, confirmTermsAndConditions, returnUrl, cancelUrl?, method?, uiMode?, cardToken?,
+ *       guest?)
  *       → { contractId, contractToken, orderNumber, redirectUrl, renderMode: redirect }
- *   … shopper pays on Mollie's hosted page; Mollie sends them to returnUrl?contract_id=… …
+ *   … shopper pays on Mollie's hosted page; Mollie sends them to returnUrl (unchanged) …
  *   mollieCheckoutReturn(contractId, contractToken) → { status, orderId, orderNumber, contractState }
  *   mollieCheckoutCancel(contractId, contractToken) → { cancelled, contractId, contractState }
  *
@@ -39,6 +40,13 @@ use TheCodingMachine\GraphQLite\Types\ID;
  * `returnUrl` too and `mollieCheckoutReturn` answers `failed`. `method` is a
  * hint (ideal, creditcard, klarna, …): without it Mollie's page offers every
  * method. `uiMode` is `hosted` only (Mollie's page refuses framing).
+ *
+ * Anonymous tokens (140b) need only `PAYMENT_CHECKOUT`: they cannot `basketSetPayment`, so this mutation names
+ * its own payment (no `paymentId` argument is needed) and `guest` says who the shopper is. A registered e-mail is
+ * refused (`account_exists`), missing or invalid details are `guest_details_required` (raised by payment-base's
+ * shared `GuestCheckoutInput` while the arguments are resolved: this module defines no input type). Return and cancel
+ * never look at the caller: the contract token is the only credential, so another anonymous token may finish a
+ * guest's contract.
  *
  * Everything provider-neutral lives in payment-base's HeadlessCheckoutService;
  * this class adds the JWT user and the Mollie payment id, and turns refusals
@@ -56,7 +64,6 @@ final class MollieCheckout
     }
 
     #[Mutation]
-    #[Logged]
     #[Right('PAYMENT_CHECKOUT')]
     public function mollieCheckoutStart(
         ID $basketId,
@@ -65,7 +72,8 @@ final class MollieCheckout
         ?string $cancelUrl = null,
         ?string $method = null,
         string $uiMode = 'hosted',
-        ?string $cardToken = null
+        ?string $cardToken = null,
+        ?GuestDetails $guest = null
     ): CheckoutStartResult {
         try {
             return new CheckoutStartResult($this->checkout->start(new HeadlessStartRequest(
@@ -79,6 +87,7 @@ final class MollieCheckout
                 // basketSetPayment still starts; one set to another payment is refused.
                 paymentId: MollieDefinitions::PAYMENT_ID,
                 providerOptions: $this->providerOptions($method, $cardToken),
+                guest: $guest,
             )));
         } catch (HeadlessCheckoutException $e) {
             throw new MollieCheckoutError($e);
@@ -105,7 +114,6 @@ final class MollieCheckout
     }
 
     #[Mutation]
-    #[Logged]
     #[Right('PAYMENT_CHECKOUT')]
     public function mollieCheckoutReturn(string $contractId, string $contractToken): CheckoutReturnResult
     {
@@ -117,7 +125,6 @@ final class MollieCheckout
     }
 
     #[Mutation]
-    #[Logged]
     #[Right('PAYMENT_CHECKOUT')]
     public function mollieCheckoutCancel(string $contractId, string $contractToken): CheckoutCancelResult
     {

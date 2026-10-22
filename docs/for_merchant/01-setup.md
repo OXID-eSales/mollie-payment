@@ -6,7 +6,13 @@
 bin/oe-console oe:module:install extensions/mollie-payment
 bin/oe-console oe:module:activate oe_payments_mollie
 bin/oe-console oe:cache:clear
+vendor/bin/oe-console oe:graphql:cache-clear   # only with a GraphQL / headless storefront, see below
 ```
+
+If your shop serves a headless storefront (GraphQL), clear the GraphQL schema cache after every install,
+activation and update of this module (`vendor/bin/oe-console oe:graphql:cache-clear`; `bin/oe-console` in an SDK
+checkout). GraphQLite caches the schema on disk and never clears it itself; without the step the mutations stay
+missing (`Cannot query field …`) or the old schema stays live. Details: [headless setup](../for_developer/04-headless-graphql-setup.md).
 
 ## 2. Get your Mollie API keys
 

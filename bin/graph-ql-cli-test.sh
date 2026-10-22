@@ -18,14 +18,14 @@ set -euo pipefail
 
 GRAPHQL_URL="${GRAPHQL_URL:-http://localhost.local/graphql/}"
 SHOP_URL="${SHOP_URL:-$(printf '%s' "$GRAPHQL_URL" | sed -E 's#(https?://[^/]+).*#\1/#')}"
-USER_EMAIL="${USER_EMAIL:-headless.user@oxid-esales.dev}"
-USER_PASSWORD="${USER_PASSWORD:-useruser}"
+USER_EMAIL="${USER_EMAIL:?set USER_EMAIL to a shop customer (no committed default)}"
+USER_PASSWORD="${USER_PASSWORD:?set USER_PASSWORD (no committed default)}"
 PRODUCT_ID="${PRODUCT_ID:-5e6a374e212258abbfd76b6adf911772}"   # "Panorama", 20.90 EUR in the demo data
 DELIVERY_METHOD_ID="${DELIVERY_METHOD_ID:-oxidstandard}"
 STATE_FILE="${STATE_FILE:-${TMPDIR:-/tmp}/graph-ql-cli-test-mollie.state}"
 # The return / cancel URLs belong to the headless client; the shop does not
 # serve them. For a test by hand the shop's start page is a friendlier landing
-# than a 404: we append &contract_id=... to it (Mollie appends nothing).
+# than a 404. Nothing is appended to it: the contract id and token stay with the script (state file).
 RETURN_URL="${RETURN_URL:-${SHOP_URL}index.php?cl=start&headless=return}"
 # Mollie knows one redirect URL for every outcome; the mutation accepts cancelUrl for symmetry only.
 CANCEL_URL="${CANCEL_URL:-${SHOP_URL}index.php?cl=start&headless=cancel}"
@@ -57,8 +57,9 @@ environment (defaults in brackets):
   GRAPHQL_URL [$GRAPHQL_URL]   SHOP_URL [$SHOP_URL]
   USER_EMAIL [$USER_EMAIL]   USER_PASSWORD [***]
   PRODUCT_ID [$PRODUCT_ID]   DELIVERY_METHOD_ID [$DELIVERY_METHOD_ID]   MOLLIE_METHOD [${MOLLIE_METHOD:-<none>}]
-  RETURN_URL (must be under an allowed origin; the shop's own origin always is; Mollie appends nothing, we append contract_id)
+  RETURN_URL (must be under an allowed origin; the shop's own origin always is; nothing is appended to it)
   STATE_FILE [$STATE_FILE]   VERBOSE=1 prints every raw response
+  SCHEMA_CACHE_CLEAR_CMD / SKIP_SCHEMA_CACHE_CLEAR=1   how the schema cache is cleared before the first query (see below)
 USAGE
 }
 
@@ -160,7 +161,7 @@ cmd_pay() {
     note "   for a card/Klarna with manual capture: Authorized). Pick one."
     note "2. Mollie's webhook ends the order: paid -> committed + paid; authorized -> committed, capture later in the admin;"
     note "   failed/canceled/expired -> contract closed, order cancelled. Mollie then sends the browser to"
-    note "   ${RETURN_URL}&contract_id=<contractId>."
+    note "   ${RETURN_URL} (unchanged: no contract id in the URL)."
     note "3. run: $(basename "$0") return   — it reports the state the webhook left (or commits itself if no webhook arrived)"
 }
 
@@ -214,7 +215,29 @@ cmd_raw() {
     gql "$1" | jq .
 }
 
+# GraphQLite caches the schema on disk and never clears it by itself: after a module update the
+# old schema stays live ("Cannot query field ..."). Clear it before the first query when this
+# script runs inside the shop (module symlinked under <shop>/extensions/); from another host
+# run `vendor/bin/oe-console oe:graphql:cache-clear` on the shop yourself, or set
+# SCHEMA_CACHE_CLEAR_CMD (e.g. "ssh shop 'cd /var/www && vendor/bin/oe-console oe:graphql:cache-clear'");
+# SKIP_SCHEMA_CACHE_CLEAR=1 skips the step.
+clear_schema_cache() {
+    [ "${SKIP_SCHEMA_CACHE_CLEAR:-}" = 1 ] && return 0
+    local shop_root console
+    shop_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." 2>/dev/null && pwd)" || shop_root=""
+    for console in "$shop_root/vendor/bin/oe-console" "$shop_root/bin/oe-console"; do
+        [ -n "$shop_root" ] && [ -f "$console" ] && [ -z "${SCHEMA_CACHE_CLEAR_CMD:-}" ] && SCHEMA_CACHE_CLEAR_CMD="php $console oe:graphql:cache-clear"
+    done
+    if [ -z "${SCHEMA_CACHE_CLEAR_CMD:-}" ]; then
+        note "schema cache: not cleared (no shop next to this script) - run vendor/bin/oe-console oe:graphql:cache-clear on the shop after a module update"
+        return 0
+    fi
+    say "Clearing the GraphQL schema cache"
+    eval "$SCHEMA_CACHE_CLEAR_CMD" >&2 || note "schema cache clear failed - continuing"
+}
+
 need curl; need jq
+case "${1:-}" in -h|--help|help|"") ;; *) clear_schema_cache ;; esac
 case "${1:-}" in
     schema) cmd_schema ;;
     start) cmd_start "${2:-}" ;;

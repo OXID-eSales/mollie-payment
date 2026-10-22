@@ -6,8 +6,8 @@ export interface AdminCredentials {
 }
 
 export const DEFAULT_ADMIN_CREDENTIALS: AdminCredentials = {
-    email: 'noreply@oxid-esales.com',
-    password: 'admin',
+    email: process.env.ADMIN_USER_EMAIL ?? '',
+    password: process.env.ADMIN_USER_PASSWORD ?? '',
 };
 
 export class AdminLoginPage extends AdminBasePage {
@@ -18,6 +18,9 @@ export class AdminLoginPage extends AdminBasePage {
     };
 
     async login(credentials: AdminCredentials = DEFAULT_ADMIN_CREDENTIALS): Promise<void> {
+        if (!credentials.email || !credentials.password) {
+            throw new Error('ADMIN_USER_EMAIL / ADMIN_USER_PASSWORD not set (tests/e2e/playwright/.env, see .env.dist)');
+        }
         await this.page.locator(this.selectors.userInput).fill(credentials.email);
         await this.page.locator(this.selectors.passwordInput).fill(credentials.password);
         await this.page.locator(this.selectors.submitButton).click();

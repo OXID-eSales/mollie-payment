@@ -1,5 +1,10 @@
 import { chromium, expect } from '@playwright/test';
 
+if (!process.env.TEST_USER_EMAIL || !process.env.TEST_USER_PASSWORD) {
+  console.error('TEST_USER_EMAIL / TEST_USER_PASSWORD not set (tests/e2e/playwright/.env, see .env.dist)');
+  process.exit(1);
+}
+
 const browser = await chromium.launch({ headless: false });
 const page = await browser.newPage();
 
@@ -8,8 +13,8 @@ const shopUrl = 'https://daniil.oxiddev.de';
 // Login
 await page.goto(`${shopUrl}/index.php?cl=account`);
 await page.waitForLoadState('networkidle');
-await page.locator('#loginUser').fill('playwright.user@oxid-esales.dev');
-await page.locator('#loginPwd').fill('useruser');
+await page.locator('#loginUser').fill(process.env.TEST_USER_EMAIL);
+await page.locator('#loginPwd').fill(process.env.TEST_USER_PASSWORD);
 await page.locator('#loginButton').click();
 await page.waitForLoadState('networkidle');
 await page.waitForTimeout(1000);

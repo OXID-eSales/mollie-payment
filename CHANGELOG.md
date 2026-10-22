@@ -6,6 +6,14 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- Sprint 140b, guest checkout: the Mollie checkout mutations accept an anonymous token that carries `PAYMENT_CHECKOUT`
+  (`#[Logged]` removed from `mollieCheckoutStart/Return/Cancel`, `#[Right]` kept). `mollieCheckoutStart` gains the optional
+  `guest` argument (payment-base's shared `GuestCheckoutInput`, which builds its `GuestDetails`); the
+  mutation names its own payment, so no `basketSetPayment` is needed. `guest_details_required` and `account_exists` arrive as
+  `extensions.errorCode` (the first as payment-base's `GuestDetailsRefused`, raised while the arguments are resolved, the second as
+  `MollieCheckoutError`). Return/cancel with the contract token work from another anonymous token. Requires payment-base 1.5.
+  The input types are defined once, in payment-base, and shared with Stripe and PayPal (GraphQL type names are schema-wide); this
+  module defines none (the earlier `MollieGuest*Input` copies are removed, `NamespaceMapper` maps no type namespace).
 - `Service\MollieClientConfigProvider`: Mollie's provider for payment-base's sealed `paymentClientConfig` query (tag `payment_base.client_config_provider`). Publishes only `profileId` and `testMode` (empty without a profile id, so the storefront falls back to Mollie's hosted page); API keys are never part of it. Requires a payment-base release that ships `ClientConfigProviderInterface`.
 - A "Help" group at the end of the module Settings tab, after "Logging" (MOL-10): payment-base's contract-state
   table (OXID Contract Status · Meaning) with Mollie's third column, the Mollie payment status each state corresponds
@@ -16,6 +24,12 @@ All notable changes to this module are documented here. Format follows
   description and the three-column table (MOL-10).
 
 ### Changed
+- Sprint 139a: docs and CI run `oe:graphql:cache-clear` after module activation (new `docs/for_developer/04-headless-graphql-setup.md`, merchant setup, `bin/graph-ql-cli-test.sh` clears the schema cache before its first query).
+- Sprint 138c: a headless contract's Mollie redirect URL is the client's `returnUrl` unchanged; `contract_id` is no longer
+  appended (nothing identifying in browser history or access logs). The client already holds `contractId` and
+  `contractToken` from `mollieCheckoutStart` and passes them to `mollieCheckoutReturn`. The Twig / OPC flow keeps its URL.
+- `MollieClientConfigProvider` implements payment-base's `AllowListedClientConfigProviderInterface`
+  (`publicValueNames()` = `profileId`, `testMode`).
 - The admin order Payment tab labels the contract state "OXID Contract Status" ("OXID-Vertragsstatus") instead
   of "State" (MOL-10); the Help table uses the same label.
 - The whole Mollie block on the standard order step — the payment-method selection and the inline card

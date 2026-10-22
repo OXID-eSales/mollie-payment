@@ -36,7 +36,7 @@ mollieCheckoutCancel ──▶   ………………………………………�
 
   | Mutation | Arguments | Returns |
   |---|---|---|
-  | `mollieCheckoutStart` | `basketId: ID!`, `confirmTermsAndConditions: Boolean!`, `returnUrl: String!`, `cancelUrl: String` (accepted, unused — Mollie has one redirect URL), `method: String` (hint: ideal, creditcard, klarna, …), `uiMode: String` (`hosted` default, or `embedded` for inline Mollie Components card payments), `cardToken: String` (the single-use token Mollie Components minted in the browser; with `uiMode: embedded` and `method: creditcard`) | `CheckoutStartResult!` |
+  | `mollieCheckoutStart` | `basketId: ID!`, `confirmTermsAndConditions: Boolean!`, `returnUrl: String!`, `cancelUrl: String` (accepted, unused — Mollie has one redirect URL), `method: String` (hint: ideal, creditcard, klarna, …), `uiMode: String` (`hosted` default, or `embedded` for inline Mollie Components card payments), `cardToken: String` (the single-use token Mollie Components minted in the browser; with `uiMode: embedded` and `method: creditcard`), `guest: GuestCheckoutInput` (optional, anonymous tokens only: `email`, `invoiceAddress`, `deliveryAddress`) | `CheckoutStartResult!` |
   | `mollieCheckoutReturn` | `contractId: String!`, `contractToken: String!` | `CheckoutReturnResult!` |
   | `mollieCheckoutCancel` | `contractId: String!`, `contractToken: String!` | `CheckoutCancelResult!` |
 
@@ -47,10 +47,12 @@ mollieCheckoutCancel ──▶   ………………………………………�
   such as `origin_not_allowed`), `user_not_found`, `provider_failed` (+ Mollie's code, e.g.
   `MOLLIE_UI_MODE_UNSUPPORTED`, `MOLLIE_ITEMS_NOT_ORDERABLE`), `contract_not_found`, `invalid_token`.
 - The **contract token** is the client's proof of ownership for return and cancel; a wrong token changes nothing.
-- Mollie sends the shopper back to `returnUrl` **+ `contract_id=<contractId>`** (we append it; Mollie appends nothing),
-  for every outcome. The return URL need not exist in the shop; a real client owns it.
+- Mollie sends the shopper back to `returnUrl` **unchanged** (nothing is appended: no contract id in the URL; the client keeps
+  `contractId` and `contractToken` from the start and passes them to `mollieCheckoutReturn`), for every outcome. The return URL need not exist in the shop; a real client owns it.
 - `mollieCheckoutStart` names its payment itself (`oe_payments_mollie`): the client needs no `basketSetPayment` first.
   A basket explicitly set to another payment is refused with `payment_not_supported`.
+- The `guest` input types (`GuestCheckoutInput`, `GuestAddressInput`) are payment-base's, shared with Stripe and PayPal: this module
+  defines no GraphQL type. Their refusals (`guest_details_required`) come with `extensions.errorCode` like every other.
 - Inline card entry (Mollie Components) needs a browser and is not part of the headless flow; `uiMode` other than
   `hosted` is refused before anything is created.
 
@@ -60,7 +62,7 @@ mollieCheckoutCancel ──▶   ………………………………………�
   this module's `b-7.4.x-GRAPH-QL` active, a Mollie **test** API key and profile configured.
 - Mollie's webhook must reach the shop: `https://<shop>/index.php?cl=MollieWebhookController` (or `sMollieWebhookUrl`).
   The dev shop's tunnel `https://daniil.oxiddev.de` works; `localhost.local` does not.
-- A customer in a country with a delivery set. The dev shop has `headless.user@oxid-esales.dev` / `useruser`.
+- A customer in a country with a delivery set. Set `USER_EMAIL` / `USER_PASSWORD` to such a customer (no committed default).
 - `curl` and `jq` on the machine you run the script from (the host; the PHP container has no jq).
 
 ## Usage
@@ -85,12 +87,13 @@ Environment (all optional):
 |---|---|---|
 | `GRAPHQL_URL` | `http://localhost.local/graphql/` | the endpoint |
 | `SHOP_URL` | origin of `GRAPHQL_URL` | base of `RETURN_URL`. **Must be the shop's configured URL** (or an origin listed in `sPaymentBaseHeadlessReturnOrigins`), otherwise `return_url_rejected / origin_not_allowed`. Dev shop: `SHOP_URL=https://daniil.oxiddev.de/` |
-| `USER_EMAIL` / `USER_PASSWORD` | `headless.user@oxid-esales.dev` / `useruser` | the customer |
+| `USER_EMAIL` / `USER_PASSWORD` | — (required) | the customer |
 | `PRODUCT_ID` | `5e6a374e212258abbfd76b6adf911772` | "Panorama", 20.90 EUR |
 | `MOLLIE_METHOD` | empty | default method hint for `start` / `pay` |
 | `DELIVERY_METHOD_ID` | `oxidstandard` | used by `guard` only |
-| `RETURN_URL` | `${SHOP_URL}index.php?cl=start&headless=return` | the shop's start page, so a hand test lands on the shop; we append `&contract_id=…` |
+| `RETURN_URL` | `${SHOP_URL}index.php?cl=start&headless=return` | the shop's start page, so a hand test lands on the shop; nothing is appended |
 | `STATE_FILE` | `/tmp/graph-ql-cli-test-mollie.state` | the last start's contract id / token / basket id |
+| `SCHEMA_CACHE_CLEAR_CMD` | `php <shop>/vendor/bin/oe-console oe:graphql:cache-clear` when the script sits in a shop checkout (module under `extensions/`) | run before the first query: GraphQLite never clears its schema cache by itself, so after a module update the old schema stays live. From a host without the shop (or without `php`) set it to a command that clears it on the shop, e.g. `ssh shop 'cd /var/www && vendor/bin/oe-console oe:graphql:cache-clear'`, or clear it by hand and set `SKIP_SCHEMA_CACHE_CLEAR=1` |
 | `VERBOSE` | `0` | `1` prints every raw JSON response to stderr |
 
 ## Examples
@@ -135,7 +138,7 @@ Every `start` opens a real contract, a `NOT_FINISHED` order and a Mollie test pa
 ```bash
 SHOP_URL=https://daniil.oxiddev.de/ bin/graph-ql-cli-test.sh pay paypal
 # open the redirectUrl in a browser: Mollie's TEST page — pick "Paid", Continue
-# Mollie's webhook commits and fulfils the order; the browser lands on the shop start page with &contract_id=…
+# Mollie's webhook commits and fulfils the order; the browser lands on the shop start page (URL unchanged)
 SHOP_URL=https://daniil.oxiddev.de/ bin/graph-ql-cli-test.sh return
 ```
 

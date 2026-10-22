@@ -14,17 +14,17 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * GRAPH-QL / MS4 — graphql-base discovers the Mollie mutations through this
- * mapper; the result types are payment-base's, so no type namespace here.
+ * mapper; every type the mutations use (results, the `guest` input) is payment-base's, so none is mapped here.
  */
 final class NamespaceMapperTest extends TestCase
 {
-    public function testMapsTheControllerNamespaceToAnExistingDirectoryAndNoTypes(): void
+    public function testMapsTheControllerNamespaceToAnExistingDirectoryAndNoTypeNamespace(): void
     {
         $mapper = new NamespaceMapper();
 
         $controllers = $mapper->getControllerNamespaceMapping();
         self::assertArrayHasKey('OxidEsales\\Payments\\Mollie\\GraphQL\\Controller', $controllers);
         self::assertDirectoryExists($controllers['OxidEsales\\Payments\\Mollie\\GraphQL\\Controller']);
-        self::assertSame([], $mapper->getTypeNamespaceMapping());
+        self::assertSame([], $mapper->getTypeNamespaceMapping(), 'the input types live in payment-base, once');
     }
 }

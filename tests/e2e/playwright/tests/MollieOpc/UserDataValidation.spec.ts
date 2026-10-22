@@ -18,7 +18,8 @@ import { billingStreetOf, setBillingStreetOf } from '../../fixtures/shop-db';
  * Requires OPC on (`oeOnePageCheckoutEnabled: true`) and the iframe flag on (Mollie footer widget).
  * The invalid character is planted in the DB and restored in `finally`.
  */
-const USER_EMAIL = process.env.TEST_USER_EMAIL || 'playwright.user@oxid-esales.dev';
+const USER_EMAIL = process.env.TEST_USER_EMAIL ?? '';
+test.skip(!USER_EMAIL, 'TEST_USER_EMAIL not set (tests/e2e/playwright/.env, see .env.dist)');
 const BAD_STREET = 'Hugo-Junkers Str: <script>';
 
 test.describe('MOL-15 — OPC footer refuses an invalid address before processCheckout', () => {

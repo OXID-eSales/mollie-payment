@@ -35,8 +35,9 @@ import { AdminMollieOrderPage } from '../pages/admin/AdminMollieOrderPage';
  * shipping-last-name assertion until Story 4 wires the fix.
  */
 test.describe('Mollie order — shipping address copied from billing', () => {
-    const ADMIN_USER = process.env.ADMIN_USER_EMAIL || 'noreply@oxid-esales.com';
-    const ADMIN_PW = process.env.ADMIN_USER_PASSWORD || 'admin';
+    const ADMIN_USER = process.env.ADMIN_USER_EMAIL ?? '';
+    const ADMIN_PW = process.env.ADMIN_USER_PASSWORD ?? '';
+    test.skip(!ADMIN_USER || !ADMIN_PW, 'ADMIN_USER_EMAIL / ADMIN_USER_PASSWORD not set (tests/e2e/playwright/.env, see .env.dist)');
 
     test('customer with "use billing for shipping" pays with Mollie -> admin Addresses tab shows shipping address equal to billing', async ({ page }) => {
         await loginStorefront(page);
