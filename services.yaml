@@ -11,12 +11,20 @@ services:
   # Authentication, optional for this module. `@?` keeps the container compiling
   # without graphql-base (the controller then throws a clear error if it is ever
   # invoked, which it cannot be without graphql-base).
-  OxidEsales\Payments\Mollie\GraphQL\Controller\MollieCheckout:
+  oe_payments_mollie.graphql.checkout_controller:
+    class: OxidEsales\Payments\Mollie\GraphQL\Controller\MollieCheckout
     autowire: false
     autoconfigure: false
     arguments:
       $checkout: '@OxidEsales\PaymentBase\Checkout\Headless\HeadlessCheckoutServiceInterface'
       $authentication: '@?OxidEsales\GraphQL\Base\Service\Authentication'
+
+  # OXID 7.5+ RoutePass reflects the method attributes of every public service *definition* at container
+  # compile; on a shop without GraphQLite resolving those attribute classes kills the compile (module
+  # activation). So the definition is private and GraphQLite, which fetches the class by its FQCN from
+  # the container, reaches it through a public alias, which RoutePass does not visit.
+  OxidEsales\Payments\Mollie\GraphQL\Controller\MollieCheckout:
+    alias: oe_payments_mollie.graphql.checkout_controller
     public: true
 
   # graphql-base is optional: the mapper mirrors NamespaceMapperInterface
