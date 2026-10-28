@@ -10,11 +10,12 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\GraphQL\Admin\Service;
 
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminStepUpInterface;
+use OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminSuperadminCheckInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 
 /**
- * `adminMollieConfigModify`: step-up (switching to live, or writing an API key), optimistic lock, validation, then
- * the write. The right is the controller's; one audit row per call.
+ * `adminMollieConfigModify`: an API key only for a superadmin (checked first), step-up (switching to live, or writing
+ * an API key), optimistic lock, validation, then the write. The right is the controller's; one audit row per call.
  */
 final class MollieConfigModifier implements MollieConfigModifierInterface
 {
@@ -23,6 +24,7 @@ final class MollieConfigModifier implements MollieConfigModifierInterface
     public function __construct(
         private readonly MollieAdminSettingsInterface $settings,
         private readonly MollieConfigChangeValidator $validator,
+        private readonly AdminSuperadminCheckInterface $superadmin,
         private readonly AdminStepUpInterface $stepUp,
         private readonly MollieAdminAuditInterface $audit,
     ) {
@@ -39,6 +41,11 @@ final class MollieConfigModifier implements MollieConfigModifierInterface
 
     private function run(MollieConfigChange $change): MollieConfigResult
     {
+        $keyField = $change->firstKeyField();
+        if ($keyField !== null && !$this->superadmin->isSuperadmin()) {
+            // Before the step-up: nobody is asked for a second factor for something they may not do.
+            return MollieConfigResult::refused(MollieAdminRefusal::superadminRequired($keyField));
+        }
         $current = $this->settings->snapshot();
         if ($this->needsStepUp($change, $current)) {
             $this->stepUp->require();

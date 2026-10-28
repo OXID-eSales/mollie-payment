@@ -25,7 +25,7 @@ final class AdminMollieConfigTypesTest extends TestCase
 
         self::assertEqualsCanonicalizing([
             'mode', 'captureMode', 'multiCapture', 'profileId', 'webhookUrlOverride', 'effectiveWebhookUrl', 'logLevel',
-            'testKeySet', 'liveKeySet', 'version',
+            'testKeySet', 'liveKeySet', 'version', 'secretsEditable',
         ], $fields);
         foreach ($fields as $field) {
             self::assertDoesNotMatchRegularExpression('/key$/i', $field, 'no field may carry an API key value');
@@ -34,7 +34,7 @@ final class AdminMollieConfigTypesTest extends TestCase
 
     public function testConfig_ReadsFromTheSnapshot(): void
     {
-        $config = new AdminMollieConfig(ConfigFixtures::snapshot(['liveKeySet' => true, 'multiCapture' => true]));
+        $config = new AdminMollieConfig(ConfigFixtures::snapshot(['liveKeySet' => true, 'multiCapture' => true]), true);
 
         self::assertTrue($config->isLiveKeySet());
         self::assertTrue($config->isMultiCapture());

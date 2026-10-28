@@ -19,6 +19,7 @@ use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigResult;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionCheckerInterface;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionStatus;
 use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\ConfigFixtures;
+use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\FakeSuperadminCheck;
 use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\InMemoryMollieSettings;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -102,12 +103,19 @@ final class MollieAdminConfigControllerTest extends TestCase
         self::assertSame('live', $check->mode());
     }
 
-    private function controller(?MollieConfigModifierInterface $modifier = null, ?MollieConnectionCheckerInterface $checker = null): MollieAdminConfigController
+    public function testConfig_TellsWhetherTheKeysAreEditable_OnlyForASuperadmin(): void
+    {
+        self::assertTrue($this->controller(null, null, true)->adminMollieConfig()->isSecretsEditable());
+        self::assertFalse($this->controller(null, null, false)->adminMollieConfig()->isSecretsEditable());
+    }
+
+    private function controller(?MollieConfigModifierInterface $modifier = null, ?MollieConnectionCheckerInterface $checker = null, bool $superadmin = true): MollieAdminConfigController
     {
         return new MollieAdminConfigController(
             new InMemoryMollieSettings(ConfigFixtures::snapshot()),
             $modifier ?? $this->modifierRecording($ignored),
             $checker ?? $this->createStub(MollieConnectionCheckerInterface::class),
+            new FakeSuperadminCheck($superadmin),
         );
     }
 
