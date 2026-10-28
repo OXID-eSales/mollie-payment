@@ -74,6 +74,7 @@ $aLang = [
     'MOLLIE_ADMIN_REFUND_FAILED' => 'The refund could not be booked at Mollie. Please check the transaction history and try again.',
     'MOLLIE_ADMIN_CAPTURE_FAILED' => 'The capture could not be booked at Mollie. Please check the transaction history and the capturable amount, then try again.',
     'MOLLIE_ADMIN_RELEASE_FAILED' => 'The remaining authorization could not be released at Mollie. Please check the transaction history and try again.',
+    'MOLLIE_ADMIN_RELEASE_NOT_POSSIBLE' => 'The remaining authorization cannot be released: nothing has been captured yet, nothing is left to capture, or the payment is no longer an open authorization.',
     'MOLLIE_ADMIN_AMOUNT_INVALID' => 'The amount is invalid.',
 
     // Module configuration — group headings

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Admin;
 
 use OxidEsales\PaymentBase\Admin\Help\ContractStateHelp;
+use OxidEsales\PaymentBase\Admin\Help\ContractStateHelpProviderInterface;
 use OxidEsales\PaymentBase\Admin\Help\ContractStateHelpRow;
 use OxidEsales\Payments\Mollie\Admin\MollieContractStateHelp;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -29,6 +30,16 @@ final class MollieContractStateHelpTest extends TestCase
         $statuses = (new MollieContractStateHelp())->providerStatuses();
 
         self::assertSame($keys, array_keys($statuses), 'one Mollie status per shared row, in the shared order');
+    }
+
+    public function testItIsTheMollieProviderOfTheAdminApisStateHelp(): void
+    {
+        $help = new MollieContractStateHelp();
+
+        self::assertInstanceOf(ContractStateHelpProviderInterface::class, $help);
+        self::assertSame('mollie', $help->providerName());
+        self::assertSame('Mollie', $help->providerLabel());
+        self::assertSame('oe.payment.admin_state_help', ContractStateHelpProviderInterface::TAG);
     }
 
     public function testMapsTheContractStatesToMolliesPaymentStatuses(): void

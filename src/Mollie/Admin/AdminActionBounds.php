@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Admin;
 
+use OxidEsales\PaymentBase\Admin\Contract\AdminActionBounds as ProviderBounds;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
@@ -61,5 +62,24 @@ final class AdminActionBounds implements AdminActionBoundsInterface
     public function isAuthorizedHold(PaymentContractInterface $contract): bool
     {
         return $this->snapshots->snapshot($contract)?->status === MollieStatusMapper::STATUS_AUTHORIZED;
+    }
+
+    /**
+     * PAY-5: the bounds payment-base's admin API offers and enforces, from the same live payment read as the classic
+     * panel (multi-capture remainder, live refundable amount). Null while there is no Mollie payment to read yet
+     * (payment-base's own numbers stand); unavailable when Mollie cannot be read - a bound that cannot be read is
+     * never replaced by a guess.
+     */
+    public function boundsFor(PaymentContractInterface $contract): ?ProviderBounds
+    {
+        $providerOrderId = $contract->getProviderOrderId();
+        if ($providerOrderId === null || $providerOrderId === '') {
+            return null;
+        }
+        if ($this->snapshots->snapshot($contract) === null) {
+            return ProviderBounds::unavailable();
+        }
+
+        return new ProviderBounds($this->captureBound($contract), $this->refundBound($contract));
     }
 }

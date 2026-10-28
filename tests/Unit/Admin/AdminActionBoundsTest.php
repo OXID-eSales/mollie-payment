@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Admin;
 
+use OxidEsales\PaymentBase\Admin\Contract\AdminActionBounds as ProviderBounds;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminActionBounds;
 use OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider;
@@ -308,6 +309,69 @@ final class AdminActionBoundsTest extends TestCase
             $this->boundsWith($this->createMock(MolliePaymentsAdapterInterface::class), $logger)
                 ->refundBound($contract)
         );
+    }
+
+    // ── PAY-5: the bounds payment-base's admin API offers and enforces ──────────────────────────
+
+    public function testBoundsFor_AreTheLiveCaptureRemainderAndTheLiveRefundableAmount(): void
+    {
+        $contract = $this->contract('tr_multi', amount: 100.0, captured: 40.0, refunded: 0.0);
+        $this->paymentsAdapter->method('getPayment')->willReturn(new MolliePaymentDto(
+            id: 'tr_multi',
+            status: 'authorized',
+            amount: MollieAmountDto::fromComponents('EUR', 100.0),
+            amountCaptured: 40.0,
+        ));
+
+        $bounds = $this->bounds->boundsFor($contract);
+
+        self::assertSame(60.0, $bounds?->capturable, 'multi-capture: what is left of the authorization, not all or nothing');
+        self::assertSame(40.0, $bounds->refundable, 'the shop recorded 40 captured while Mollie still books it');
+        self::assertTrue($bounds->available);
+    }
+
+    public function testBoundsFor_ARefundAfterADashboardRefund_ReadsTheLiveRemainder(): void
+    {
+        $contract = $this->contract('tr_dash', amount: 100.0, captured: 100.0, refunded: 0.0);
+        $this->paymentsAdapter->method('getPayment')->willReturn(new MolliePaymentDto(
+            id: 'tr_dash',
+            status: 'paid',
+            amount: MollieAmountDto::fromComponents('EUR', 100.0),
+            amountRemaining: 70.0,
+        ));
+
+        $bounds = $this->bounds->boundsFor($contract);
+
+        self::assertSame(70.0, $bounds?->refundable, 'the refund made in the Mollie dashboard is not offered twice');
+        self::assertSame(0.0, $bounds->capturable);
+    }
+
+    public function testBoundsFor_MollieCannotBeRead_IsUnavailableNotZero(): void
+    {
+        $this->paymentsAdapter->method('getPayment')->willThrowException(new \RuntimeException('down'));
+
+        $bounds = $this->bounds->boundsFor($this->contract('tr_down', amount: 100.0, captured: null, refunded: null));
+
+        self::assertEquals(ProviderBounds::unavailable(), $bounds);
+        self::assertFalse($bounds->available);
+    }
+
+    public function testBoundsFor_NoMolliePaymentYet_LeavesPaymentBasesOwnNumbers(): void
+    {
+        $this->paymentsAdapter->expects(self::never())->method('getPayment');
+
+        self::assertNull($this->bounds->boundsFor($this->contract(null, amount: 100.0, captured: null, refunded: null)));
+    }
+
+    private function contract(?string $providerOrderId, float $amount, ?float $captured, ?float $refunded): PaymentContractInterface
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getProviderOrderId')->willReturn($providerOrderId);
+        $contract->method('getAmount')->willReturn($amount);
+        $contract->method('getCapturedAmount')->willReturn($captured);
+        $contract->method('getRefundedAmount')->willReturn($refunded);
+
+        return $contract;
     }
 
     /**

@@ -16,6 +16,9 @@ use OxidEsales\PaymentBase\EventSystem\Event\Request\AbstractProviderRequestEven
 use OxidEsales\PaymentBase\EventSystem\Event\Request\CancelAuthorizationRequestedEvent;
 use OxidEsales\PaymentBase\EventSystem\Event\Request\CaptureRequestedEvent;
 use OxidEsales\PaymentBase\EventSystem\Event\Request\RefundRequestedEvent;
+use OxidEsales\PaymentBase\EventSystem\Event\EventInterface;
+use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
+use OxidEsales\Payments\Mollie\EventSystem\Event\MollieReleaseAuthorizationRequestEvent;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\Payments\Mollie\Controller\Admin\OrderActionDispatcher;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
@@ -96,6 +99,40 @@ final class OrderActionDispatcherTest extends TestCase
             ->willReturnArgument(0);
 
         $this->dispatcher->refund($this->stubOrder('order-4'), null, null);
+    }
+
+    // ── PAY-5: release reports whether Mollie released the remainder ──────────────────────────
+
+    public function testRelease_ReportsTheOutcomeTheHandlerSetOnTheEvent(): void
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $this->contractRepository->method('findByOrderId')->willReturn($contract);
+        foreach ([true, false] as $handlerSucceeds) {
+            $dispatcher = $this->createMock(EventDispatcherInterface::class);
+            $dispatcher->expects(self::once())->method('dispatch')->willReturnCallback(
+                static function (EventInterface $event) use ($handlerSucceeds, $contract): EventInterface {
+                    self::assertInstanceOf(MollieReleaseAuthorizationRequestEvent::class, $event);
+                    self::assertSame($contract, $event->contract);
+                    $event->setResult($handlerSucceeds);
+
+                    return $event;
+                }
+            );
+
+            $released = (new OrderActionDispatcher($this->eventBroker, $this->contractRepository, $dispatcher))
+                ->release($this->stubOrder('order-r'), 'done');
+
+            self::assertSame($handlerSucceeds, $released);
+        }
+    }
+
+    public function testRelease_WithoutAContract_DispatchesNothingAndReportsFailure(): void
+    {
+        $this->contractRepository->method('findByOrderId')->willReturn(null);
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::never())->method('dispatch');
+
+        self::assertFalse((new OrderActionDispatcher($this->eventBroker, $this->contractRepository, $dispatcher))->release($this->stubOrder('o'), null));
     }
 
     private function stubOrder(string $id): Order

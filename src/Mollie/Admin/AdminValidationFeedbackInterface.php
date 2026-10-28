@@ -18,7 +18,11 @@ namespace OxidEsales\Payments\Mollie\Admin;
  */
 interface AdminValidationFeedbackInterface
 {
-    public function reject(string $orderId, string $field, string $code): void;
+    /**
+     * Stores the message for the next render and returns it, so a caller that also refuses over the admin API
+     * (a typed refusal) says the same sentence.
+     */
+    public function reject(string $orderId, string $field, string $code): string;
 
     /**
      * MOL-15: store an already formatted message (admin free text validated with the checkout rules

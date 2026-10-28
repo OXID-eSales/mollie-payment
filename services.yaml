@@ -728,6 +728,20 @@ services:
       $messageFormatter: '@OxidEsales\Payments\Mollie\Admin\AdminAmountValidationMessageFormatter'
     public: true
 
+  # PAY-5 S4: how the panel says no (classic feedback + the admin API's typed refusal). MOL-15: admin free text is
+  # formatted by the tagged user-data formatter (the amount formatter belongs to AdminValidationFeedback).
+  OxidEsales\Payments\Mollie\Admin\AdminActionRefusals:
+    arguments:
+      $textFormatter: '@OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter'
+    public: false
+
+  # PAY-5 S4: Mollie's column of payment-base's contract-state Help for the admin API (the classic screens build it
+  # through ViewConfig). Tag: oe.payment.admin_state_help.
+  OxidEsales\Payments\Mollie\Admin\MollieContractStateHelp:
+    tags:
+      - { name: oe.payment.admin_state_help }
+    public: false
+
   OxidEsales\Payments\Mollie\Admin\MolliePanelOrderLoader:
     public: false
 
@@ -741,10 +755,8 @@ services:
   OxidEsales\Payments\Mollie\Admin\MolliePaymentPanelProvider:
     arguments:
       $actionDispatcher: '@OxidEsales\Payments\Mollie\Controller\Admin\OrderActionDispatcher'
-      # MOL-15: capture reason / refund description validated with the checkout rules and formatted
-      # by the tagged user-data formatter (the amount formatter belongs to AdminValidationFeedback).
+      # MOL-15: capture reason / refund description validated with the checkout rules.
       $userDataValidator: '@OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface'
-      $textMessageFormatter: '@OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter'
       # MOL-32 S6: the Mollie-only release action.
       $extraActions: '@OxidEsales\Payments\Mollie\Controller\Admin\MollieExtraActionDispatcherInterface'
     tags:

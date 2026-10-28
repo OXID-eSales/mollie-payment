@@ -75,15 +75,18 @@ final class OrderActionDispatcher implements AdminActionDispatcherInterface, Mol
         $this->dispatch(new CancelAuthorizationRequestedEvent($this->buildContext($order), null, $reason));
     }
 
-    public function release(Order $order, ?string $reason = null): void
+    public function release(Order $order, ?string $reason = null): bool
     {
         $contract = $this->contractRepository->findByOrderId((string) $order->getId());
         if ($contract === null || $this->eventDispatcher === null) {
-            return;
+            return false;
         }
 
         // Mollie-only action, no generic request event — dispatch the provider event directly.
-        $this->eventDispatcher->dispatch(new MollieReleaseAuthorizationRequestEvent($contract, $reason));
+        $event = new MollieReleaseAuthorizationRequestEvent($contract, $reason);
+        $this->eventDispatcher->dispatch($event);
+
+        return $event->isSuccess();
     }
 
     private function buildContext(Order $order): EventContext

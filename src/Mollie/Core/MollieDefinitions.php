@@ -85,6 +85,16 @@ final class MollieDefinitions
         'sMollieProfileId',
     ];
 
+    /**
+     * What the admin Payment tab offers as the reason of a refund and of a cancellation (void), and how long its free
+     * texts (capture / release reason, refund description) may be: the values of the `<select>`s and the `maxlength`
+     * of the inputs of `mollie_panel.html.twig`. The admin API reads them from here (AdminActionOptions); a test
+     * pins the template to them, so the two cannot drift.
+     */
+    public const ADMIN_REFUND_REASONS = ['requested_by_customer', 'duplicate', 'fraudulent'];
+    public const ADMIN_VOID_REASONS = ['requested_by_customer', 'duplicate', 'fraudulent', 'abandoned'];
+    public const ADMIN_TEXT_MAX_LENGTH = 140;
+
     // Logging levels (metadata setting values). Mirrors Stripe's harmonised logging design.
     public const LOG_LEVEL_OFF = 'off';
     public const LOG_LEVEL_ERRORS = 'errors';
