@@ -6,6 +6,13 @@ All notable changes to this module are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- PAY-5, the Mollie admin API for `oxid-admin-graphql` (optional, see `docs/for_developer/06-admin-api.md`): `adminMollieConfig` /
+  `adminMollieConfigModify` (API keys write-only, step-up for live and keys, `expectedVersion` lock, audit), `adminMollieConnectionCheck`,
+  `AdminPaymentContract.mollie` (live details, fail closed) and `adminMolliePaymentRelease`. The panel provider implements payment-base's
+  `AdminActionOptionsProviderInterface` and `AdminActionBoundsProviderInterface`, `MollieContractStateHelp` is a state-help provider, and
+  validation refusals are thrown as `AdminActionRefusedException`. Requires payment-base with the PAY-1 provider API. Changed:
+  `MollieExtraActionDispatcherInterface::release()` returns bool, `AdminValidationFeedbackInterface::reject()` returns the sentence,
+  the release action refuses a hold with nothing captured (it used to cancel it), `MollieWebhookUrlProviderInterface::urlFor()`.
 - Sprint 140b, guest checkout: the Mollie checkout mutations accept an anonymous token that carries `PAYMENT_CHECKOUT`
   (`#[Logged]` removed from `mollieCheckoutStart/Return/Cancel`, `#[Right]` kept). `mollieCheckoutStart` gains the optional
   `guest` argument (payment-base's shared `GuestCheckoutInput`, which builds its `GuestDetails`); the

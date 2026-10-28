@@ -109,4 +109,45 @@ final class MollieAdminPaymentOperationsIntegrationTest extends IntegrationTestC
         self::assertNull($fine->refusal(), (string) $fine->refusal()?->message);
         self::assertSame(['capture:60'], $this->actionsRun);
     }
+
+    public function testRelease_GivesTheRemainderBackOnceAndARetryWithTheSameKeyDoesNotCallMollieAgain(): void
+    {
+        $this->saveCommittedMollieContract(self::ORDER_ID, 100.0, 40.0, 'tr_pay5_rel', fulfilled: false);
+        $this->scriptLivePayment(['id' => 'tr_pay5_rel', 'status' => 'authorized', 'amount' => ['currency' => 'EUR', 'value' => '100.00'], 'amountCaptured' => '40.00']);
+
+        $first = $this->releaseOperation()->release(self::ORDER_ID, 'customer keeps 40', 'pay5-rel-key-1');
+        $retry = $this->releaseOperation()->release(self::ORDER_ID, 'customer keeps 40', 'pay5-rel-key-1');
+
+        self::assertNull($first->refusal(), (string) $first->refusal()?->message);
+        self::assertSame('fulfilled', $first->payment()->state);
+        self::assertNull($retry->refusal());
+        self::assertSame(['release:customer keeps 40'], $this->actionsRun, 'the retry does not reach Mollie again');
+        self::assertSame(2, $this->stepUps);
+    }
+
+    public function testRelease_WithNothingCapturedYet_IsRefusedByTheClassicRuleAndNothingIsCancelled(): void
+    {
+        $this->saveCommittedMollieContract(self::ORDER_ID, 100.0, null, 'tr_pay5_rel2', fulfilled: false);
+        $this->scriptLivePayment(['id' => 'tr_pay5_rel2', 'status' => 'authorized', 'amount' => ['currency' => 'EUR', 'value' => '100.00']]);
+
+        $refusal = $this->releaseOperation()->release(self::ORDER_ID, null, 'pay5-rel-key-2')->refusal();
+
+        self::assertSame('provider_refused', $refusal?->code);
+        self::assertStringContainsString('MOLLIE_ADMIN_RELEASE_NOT_POSSIBLE', (string) $refusal->message);
+        self::assertSame([], $this->actionsRun);
+    }
+
+    public function testRelease_MollieRefusesTheRelease_IsAProviderRefusalAndTheKeyCanBeRetried(): void
+    {
+        $this->saveCommittedMollieContract(self::ORDER_ID, 100.0, 40.0, 'tr_pay5_rel3', fulfilled: false);
+        $this->scriptLivePayment(['id' => 'tr_pay5_rel3', 'status' => 'authorized', 'amount' => ['currency' => 'EUR', 'value' => '100.00'], 'amountCaptured' => '40.00']);
+        $this->releaseSucceeds = false;
+
+        $refusal = $this->releaseOperation()->release(self::ORDER_ID, null, 'pay5-rel-key-3')->refusal();
+        $this->releaseSucceeds = true;
+        $retry = $this->releaseOperation()->release(self::ORDER_ID, null, 'pay5-rel-key-3');
+
+        self::assertSame('provider_refused', $refusal?->code);
+        self::assertNull($retry->refusal(), 'a refused call releases its key');
+    }
 }

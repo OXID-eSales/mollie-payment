@@ -906,3 +906,30 @@ services:
   OxidEsales\Payments\Mollie\GraphQL\Admin\Relation\AdminPaymentContractMollieRelation:
     alias: oe_payments_mollie.graphql.admin_payment_contract_relation
     public: true
+
+  # PAY-5 S5: the release operation reuses payment-base's admin payment services (reader, provider-action boundary,
+  # idempotency store, step-up, audit, shop scope); Mollie's panel provider runs the MOL-32 release itself.
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieReleaseOperationInterface:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieReleaseOperation
+    autowire: false
+    autoconfigure: false
+    public: true # the integration tests resolve it
+    arguments:
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentContractDetailsReaderInterface'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\ProviderActionRunnerInterface'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\OperationIdempotencyInterface'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminStepUpInterface'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminAuditInterface'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\RequestShopOrdersInterface'
+
+  oe_payments_mollie.graphql.admin_payment_controller:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Controller\MollieAdminPaymentController
+    autowire: false
+    autoconfigure: false
+    arguments:
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieReleaseOperationInterface'
+
+  # Private definition + public alias: see the RoutePass note at MollieCheckout.
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Controller\MollieAdminPaymentController:
+    alias: oe_payments_mollie.graphql.admin_payment_controller
+    public: true

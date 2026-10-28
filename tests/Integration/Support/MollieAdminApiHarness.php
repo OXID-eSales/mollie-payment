@@ -46,6 +46,7 @@ use OxidEsales\Payments\Mollie\Admin\MolliePaymentPanelProvider;
 use OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider;
 use OxidEsales\Payments\Mollie\Admin\ReleaseRule;
 use OxidEsales\Payments\Mollie\Controller\Admin\MollieExtraActionDispatcherInterface;
+use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieReleaseOperation;
 use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter;
 use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
@@ -98,6 +99,26 @@ trait MollieAdminApiHarness
             $this->passThroughAudit(),
             new DbalRequestShopOrders($connection),
             new NullLogger(),
+        );
+    }
+
+    private function releaseOperation(): MollieReleaseOperation
+    {
+        $connection = $this->connection();
+        $registry = new PaymentPanelRegistry([$this->panel()]);
+
+        return new MollieReleaseOperation(
+            new PaymentContractDetailsReader(
+                $this->contracts(),
+                new DoctrineTransactionRepository($connection),
+                new PanelActionOptionsResolver($registry, new NullLogger()),
+                new PanelActionBoundsResolver($registry, new NullLogger()),
+            ),
+            new PanelProviderActionRunner($registry, $this->contracts(), new NullLogger()),
+            new OperationIdempotency(new DoctrineIdempotencyRepository($connection)),
+            $this->countingStepUp(),
+            $this->passThroughAudit(),
+            new DbalRequestShopOrders($connection),
         );
     }
 

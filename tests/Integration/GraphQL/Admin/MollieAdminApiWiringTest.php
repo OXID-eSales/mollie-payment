@@ -81,6 +81,14 @@ final class MollieAdminApiWiringTest extends IntegrationTestCase
         );
     }
 
+    public function testSchema_HasTheReleaseMutationAnsweringLikePaymentBasesOperations(): void
+    {
+        self::assertMatchesRegularExpression(
+            '/adminMolliePaymentRelease\(orderId: ID!, reason: String = null, idempotencyKey: String = null\): AdminPaymentOperationPayload!/',
+            AdminSchemaProbe::sdl(),
+        );
+    }
+
     public function testContainer_HandsOutTheContractExtensionByItsClassName(): void
     {
         self::assertInstanceOf(
