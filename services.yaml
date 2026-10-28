@@ -787,3 +787,59 @@ services:
   OxidEsales\PaymentBase\Service\StockRestorationServiceInterface:
     alias: OxidEsales\Payments\Mollie\Service\OxidStockRestorationService
     public: false
+
+  # ===========================================================================
+  # PAY-5 - the Mollie admin API (oxid-admin-graphql): `adminMollieConfig`, `adminMollieConfigModify`,
+  # `adminMollieConnectionCheck`, `AdminPaymentContract.mollie` and `adminMolliePaymentRelease`.
+  #
+  # Every integration is optional (payment-base's approach). The admin API's services are reached only through
+  # `@?` (null when it is not installed), nothing here is autowired, and the classes implement nothing of the
+  # admin API: the container reflects every service class at module activation. NamespaceMapper maps the
+  # controllers, the types and the contract extension only when the admin API (and payment-base's admin payment
+  # API, which owns the rights, the step-up and AdminPaymentContract) is there. The API keys never leave the
+  # settings service: no type has a field for one, no audit row carries a value.
+  # ===========================================================================
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\OxidMollieAdminSettings
+    autowire: false
+    autoconfigure: false
+    public: true # the integration tests resolve it
+    arguments:
+      - '@OxidEsales\EshopCommunity\Internal\Framework\Module\Facade\ModuleSettingServiceInterface'
+      - '@OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface'
+
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigChangeValidator:
+    autowire: false
+    autoconfigure: false
+
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminAuditInterface:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\OxidMollieAdminAudit
+    autowire: false
+    autoconfigure: false
+    public: true # the integration tests resolve it
+    arguments:
+      - '@?OxidEsales\GraphQL\Admin\Audit\Service\AuditRecorder'
+
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifierInterface:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifier
+    autowire: false
+    autoconfigure: false
+    arguments:
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface'
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigChangeValidator'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminStepUpInterface'
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminAuditInterface'
+
+  # Fetched by GraphQLite's container (graphql-base), hence public. Private definition + public alias: see the
+  # RoutePass note at MollieCheckout.
+  oe_payments_mollie.graphql.admin_config_controller:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Controller\MollieAdminConfigController
+    autowire: false
+    autoconfigure: false
+    arguments:
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface'
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifierInterface'
+
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Controller\MollieAdminConfigController:
+    alias: oe_payments_mollie.graphql.admin_config_controller
+    public: true

@@ -41,7 +41,11 @@ final class MollieWebhookUrlProvider implements MollieWebhookUrlProviderInterfac
 
     public function getWebhookUrl(): string
     {
-        $override = $this->config->getWebhookUrlOverride();
+        return $this->urlFor($this->config->getWebhookUrlOverride());
+    }
+
+    public function urlFor(string $override): string
+    {
         $url = $override !== '' ? $override : $this->deriveFromShopUrl();
 
         $this->warnIfNotHttps($url, $override !== '');

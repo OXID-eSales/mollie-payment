@@ -47,9 +47,9 @@ if (!class_exists(\TheCodingMachine\GraphQLite\Annotations\Mutation::class, fals
         . '#[\\Attribute(\\Attribute::TARGET_METHOD)] class Mutation { public function __construct(mixed ...$args) {} } '
         . '#[\\Attribute(\\Attribute::TARGET_METHOD)] class Query { public function __construct(mixed ...$args) {} } '
         . '#[\\Attribute(\\Attribute::TARGET_METHOD)] class Logged { public function __construct(mixed ...$args) {} } '
-        . '#[\\Attribute(\\Attribute::TARGET_METHOD)] class Right { public function __construct(mixed ...$args) {} } '
+        . '#[\\Attribute(\\Attribute::TARGET_METHOD | \\Attribute::TARGET_PROPERTY)] class Right { public function __construct(mixed ...$args) {} } '
         . '#[\\Attribute(\\Attribute::TARGET_CLASS)] class Type { public function __construct(mixed ...$args) {} } '
-        . '#[\\Attribute(\\Attribute::TARGET_METHOD)] class Field { public function __construct(mixed ...$args) {} } '
+        . '#[\\Attribute(\\Attribute::TARGET_METHOD | \\Attribute::TARGET_PROPERTY)] class Field { public function __construct(mixed ...$args) {} } '
         . '#[\\Attribute(\\Attribute::TARGET_METHOD)] class Factory { public function __construct(mixed ...$args) {} }'
     );
 }
@@ -94,3 +94,6 @@ if (!class_exists(\OxidEsales\GraphQL\Base\Exception\Error::class, false)) {
         . 'class ErrorCategories { public const PERMISSIONERRORS = "permissionerror"; public const TOKENERRORS = "tokenerror"; public const CONFIGURATIONERROR = "configurationerror"; public const REQUESTERROR = "requesterror"; }'
     );
 }
+
+// PAY-5 - stand-ins of the optional oxid-admin-graphql classes the Mollie admin API relies on.
+require_once __DIR__ . '/../Support/admin-api-stubs.php';
