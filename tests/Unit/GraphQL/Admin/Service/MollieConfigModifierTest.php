@@ -15,8 +15,10 @@ use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigChangeValidator
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifier;
 use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\ConfigFixtures;
 use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\CountingStepUp;
+use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\FakeSuperadminCheck;
 use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\InMemoryMollieSettings;
 use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\RecordingMollieAudit;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
@@ -25,12 +27,14 @@ final class MollieConfigModifierTest extends TestCase
     private InMemoryMollieSettings $settings;
     private CountingStepUp $stepUp;
     private RecordingMollieAudit $audit;
+    private FakeSuperadminCheck $superadmin;
 
     protected function setUp(): void
     {
         $this->settings = new InMemoryMollieSettings(ConfigFixtures::snapshot());
         $this->stepUp = new CountingStepUp();
         $this->audit = new RecordingMollieAudit();
+        $this->superadmin = new FakeSuperadminCheck();
     }
 
     public function testModify_AHarmlessField_IsSavedWithoutAStepUp(): void
@@ -173,9 +177,55 @@ final class MollieConfigModifierTest extends TestCase
         self::assertStringNotContainsString('ZyXwVuTs', (string) json_encode($this->audit->rows));
     }
 
+    /**
+     * @return iterable<string, array{array<string, string>, string}>
+     */
+    public static function keyChanges(): iterable
+    {
+        yield 'test key' => [['testKey' => 'test_PAY10notarealkey0000000000000000'], 'testKey'];
+        yield 'live key' => [['liveKey' => 'live_PAY10notarealkey0000000000000000'], 'liveKey'];
+    }
+
+    /**
+     * @param array<string, string> $key
+     */
+    #[DataProvider('keyChanges')]
+    public function testModify_AKeyFromANonSuperadmin_IsRefusedAtTheFieldBeforeAnyStepUpAndNothingIsSaved(array $key, string $field): void
+    {
+        $this->superadmin = new FakeSuperadminCheck(false);
+
+        $result = $this->modifier()->modify($this->change(...$key, captureMode: 'manual'));
+
+        self::assertSame('superadmin_required', $result->refusal()?->code);
+        self::assertSame($field, $result->refusal()->field);
+        self::assertSame(0, $this->stepUp->required, 'no second factor is asked for something the admin may not do');
+        self::assertSame('automatic', $this->settings->snapshot()->captureMode, 'the whole call is refused');
+        self::assertSame('superadmin_required', $this->audit->rows[0]['outcome'], 'audited as the refusal it is');
+        self::assertStringNotContainsString('PAY10notarealkey', (string) json_encode($this->audit->rows));
+    }
+
+    public function testModify_AHarmlessChangeOrAnEmptyKeyFromANonSuperadmin_IsSaved(): void
+    {
+        $this->superadmin = new FakeSuperadminCheck(false);
+
+        $result = $this->modifier()->modify($this->change(captureMode: 'manual', testKey: '', logLevel: 'debug'));
+
+        self::assertNull($result->refusal());
+        self::assertSame('manual', $this->settings->snapshot()->captureMode);
+        self::assertSame(0, $this->superadmin->asked);
+    }
+
+    public function testModify_AKeyFromASuperadmin_StillAsksForTheStepUp(): void
+    {
+        $result = $this->modifier()->modify($this->change(testKey: 'test_PAY10notarealkey0000000000000000'));
+
+        self::assertNull($result->refusal());
+        self::assertSame(1, $this->stepUp->required);
+    }
+
     private function modifier(): MollieConfigModifier
     {
-        return new MollieConfigModifier($this->settings, new MollieConfigChangeValidator(), $this->stepUp, $this->audit);
+        return new MollieConfigModifier($this->settings, new MollieConfigChangeValidator(), $this->superadmin, $this->stepUp, $this->audit);
     }
 
     private function change(

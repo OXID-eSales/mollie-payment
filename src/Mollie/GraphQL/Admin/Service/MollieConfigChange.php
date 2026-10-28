@@ -47,8 +47,20 @@ final readonly class MollieConfigChange
 
     public function writesKey(): bool
     {
-        return $this->keyFor(MollieDefinitions::MODE_TEST) !== null
-            || $this->keyFor(MollieDefinitions::MODE_LIVE) !== null;
+        return $this->firstKeyField() !== null;
+    }
+
+    /**
+     * The first API key this change carries (non-empty), test before live; null when it carries none. A field name,
+     * never a value.
+     */
+    public function firstKeyField(): ?string
+    {
+        if ($this->keyFor(MollieDefinitions::MODE_TEST) !== null) {
+            return 'testKey';
+        }
+
+        return $this->keyFor(MollieDefinitions::MODE_LIVE) !== null ? 'liveKey' : null;
     }
 
     /**

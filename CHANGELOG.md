@@ -5,6 +5,13 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+- **API keys: superadmin only (PAY-10 S3).** `adminMollieConfigModify` with a non-empty `testKey` / `liveKey` is refused for
+  anyone but a superadmin: payload `errors` entry `validation_failed` with `code: superadmin_required` (`field` = the key
+  sent); nothing written, audited as refused, checked before the step-up. New field `AdminMollieConfig.secretsEditable:
+  Boolean!`. Non-secret fields stay with `ADMIN_PAYMENT_CONFIG`. Needs payment-base with `AdminSuperadminCheckInterface`.
+  After upgrading: `bin/oe-console oe:graphql:cache-clear`.
+
 ### Added
 - PAY-5, the Mollie admin API for `oxid-admin-graphql` (optional, see `docs/for_developer/06-admin-api.md`): `adminMollieConfig` /
   `adminMollieConfigModify` (API keys write-only, step-up for live and keys, `expectedVersion` lock, audit), `adminMollieConnectionCheck`,

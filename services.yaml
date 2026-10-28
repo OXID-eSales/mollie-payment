@@ -854,6 +854,7 @@ services:
     arguments:
       - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface'
       - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigChangeValidator'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminSuperadminCheckInterface'
       - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminStepUpInterface'
       - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminAuditInterface'
 
@@ -867,6 +868,7 @@ services:
       - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface'
       - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifierInterface'
       - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionCheckerInterface'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminSuperadminCheckInterface'
 
   OxidEsales\Payments\Mollie\GraphQL\Admin\Controller\MollieAdminConfigController:
     alias: oe_payments_mollie.graphql.admin_config_controller

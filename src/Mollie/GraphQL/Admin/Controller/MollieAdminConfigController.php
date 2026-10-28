@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\GraphQL\Admin\Controller;
 
+use OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminSuperadminCheckInterface;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentRightsProvider;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\DataType\AdminMollieConfig;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\DataType\AdminMollieConfigInput;
@@ -33,6 +34,7 @@ final class MollieAdminConfigController
         private readonly MollieAdminSettingsInterface $settings,
         private readonly MollieConfigModifierInterface $modifier,
         private readonly MollieConnectionCheckerInterface $connectionChecker,
+        private readonly AdminSuperadminCheckInterface $superadmin,
     ) {
     }
 
@@ -43,18 +45,20 @@ final class MollieAdminConfigController
     #[Right(PaymentRightsProvider::CONFIG)]
     public function adminMollieConfig(): AdminMollieConfig
     {
-        return new AdminMollieConfig($this->settings->snapshot());
+        return new AdminMollieConfig($this->settings->snapshot(), $this->superadmin->isSuperadmin());
     }
 
     /**
-     * Changes settings. API keys are write-only (empty = unchanged) and must carry the prefix of their mode; switching
-     * to live and writing a key need a step-up.
+     * Changes settings. API keys are write-only (empty = unchanged), the superadmin's alone (`superadmin_required`) and
+     * must carry the prefix of their mode; switching to live and writing a key need a step-up.
      */
     #[Mutation]
     #[Right(PaymentRightsProvider::CONFIG)]
     public function adminMollieConfigModify(AdminMollieConfigInput $input): AdminMollieConfigPayload
     {
-        return AdminMollieConfigPayload::of($this->modifier->modify($input->toChange()));
+        $result = $this->modifier->modify($input->toChange());
+
+        return AdminMollieConfigPayload::of($result, $this->superadmin->isSuperadmin());
     }
 
     /**

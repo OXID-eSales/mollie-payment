@@ -17,6 +17,7 @@ final readonly class MollieAdminRefusal
 {
     public const INVALID = 'invalid';
     public const CONFLICT = 'conflict';
+    public const SUPERADMIN_REQUIRED = 'superadmin_required';
 
     private function __construct(
         public string $kind,
@@ -31,6 +32,14 @@ final readonly class MollieAdminRefusal
     public static function invalid(string $field, string $code, string $message): self
     {
         return new self(self::INVALID, $field, $code, $message);
+    }
+
+    /**
+     * API keys are the superadmin's: ADMIN_PAYMENT_CONFIG is not enough.
+     */
+    public static function superadminRequired(string $field): self
+    {
+        return self::invalid($field, self::SUPERADMIN_REQUIRED, 'Only a superadmin can change API keys');
     }
 
     public static function conflict(string $expectedVersion, string $actualVersion): self

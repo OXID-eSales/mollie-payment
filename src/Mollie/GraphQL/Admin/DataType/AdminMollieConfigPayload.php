@@ -25,14 +25,14 @@ final class AdminMollieConfigPayload implements PayloadWithErrors
     {
     }
 
-    public static function of(MollieConfigResult $result): self
+    public static function of(MollieConfigResult $result, bool $secretsEditable): self
     {
         $refusal = $result->refusal();
         if ($refusal !== null) {
             return new self(null, [MollieAdminErrors::from($refusal)]);
         }
 
-        return new self(new AdminMollieConfig($result->config()), []);
+        return new self(new AdminMollieConfig($result->config(), $secretsEditable), []);
     }
 
     #[Field]

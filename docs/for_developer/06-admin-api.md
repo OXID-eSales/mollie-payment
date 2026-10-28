@@ -35,6 +35,17 @@ The input takes `testKey` / `liveKey`; **empty or absent means unchanged**. A ke
 value; `MollieConfigChange` marks its keys `#[SensitiveParameter]`; validation messages never quote a value; the
 connection check's log carries only the outcome and the HTTP status.
 
+### API keys: superadmin only (PAY-10)
+
+`ADMIN_PAYMENT_CONFIG` stays enough for every non-secret field (mode, capture mode, multi-capture, profile id, webhook URL
+override, logging). A modify that carries a **non-empty** `testKey` or `liveKey` needs the built-in **superadmin** role
+(payment-base's `AdminSuperadminCheckInterface`). Otherwise the whole call is refused, nothing is written (not the harmless
+fields of the same call either) and the payload's `errors` holds `ValidationError { errorCode: validation_failed, field,
+code: superadmin_required }` with `field` = `testKey` / `liveKey` (the first one sent). The audit row is the refused call,
+field names only. `AdminMollieConfig.secretsEditable: Boolean!` is true only for a superadmin. Order of checks: right,
+**superadmin**, step-up (a non-superadmin is never asked for a second factor), lock, validation. Without the admin module the
+answer is "no". `adminMolliePaymentRelease` and the connection check are unchanged.
+
 ### `adminMollieConfigModify`
 
 1. **Step-up** (payment-base's `AdminStepUpInterface`) when the call switches to `live` or writes any key.

@@ -23,8 +23,18 @@ use TheCodingMachine\GraphQLite\Annotations\Type;
 #[Type(name: 'AdminMollieConfig')]
 final class AdminMollieConfig
 {
-    public function __construct(private readonly MollieConfigSnapshot $config)
+    public function __construct(private readonly MollieConfigSnapshot $config, private readonly bool $secretsEditable)
     {
+    }
+
+    /**
+     * Whether the admin of the request may change the API keys: only a superadmin. The rest of the settings need
+     * ADMIN_PAYMENT_CONFIG alone.
+     */
+    #[Field]
+    public function isSecretsEditable(): bool
+    {
+        return $this->secretsEditable;
     }
 
     /** `test` or `live`: the API key the shop uses. */
