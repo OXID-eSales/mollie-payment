@@ -16,6 +16,8 @@ use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminRefusal;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigChange;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifierInterface;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigResult;
+use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionCheckerInterface;
+use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionStatus;
 use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\ConfigFixtures;
 use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\InMemoryMollieSettings;
 use PHPUnit\Framework\TestCase;
@@ -28,7 +30,7 @@ final class MollieAdminConfigControllerTest extends TestCase
 {
     public function testEveryOperationNeedsTheConfigRightAndNoneIsLogged(): void
     {
-        foreach (['adminMollieConfig' => Query::class, 'adminMollieConfigModify' => Mutation::class] as $method => $operation) {
+        foreach (['adminMollieConfig' => Query::class, 'adminMollieConfigModify' => Mutation::class, 'adminMollieConnectionCheck' => Query::class] as $method => $operation) {
             $reflection = new ReflectionMethod(MollieAdminConfigController::class, $method);
 
             $rights = $reflection->getAttributes(Right::class);
@@ -84,11 +86,28 @@ final class MollieAdminConfigControllerTest extends TestCase
         self::assertInstanceOf(ConflictError::class, $payload->errors()[0]);
     }
 
-    private function controller(?MollieConfigModifierInterface $modifier = null): MollieAdminConfigController
+    public function testAdminMollieConnectionCheck_ReportsTheVerdict(): void
+    {
+        $checker = new class implements MollieConnectionCheckerInterface {
+            public function check(): MollieConnectionStatus
+            {
+                return new MollieConnectionStatus(MollieConnectionStatus::UNREACHABLE, 'live');
+            }
+        };
+
+        $check = $this->controller(null, $checker)->adminMollieConnectionCheck();
+
+        self::assertSame('unreachable', $check->status());
+        self::assertFalse($check->ok());
+        self::assertSame('live', $check->mode());
+    }
+
+    private function controller(?MollieConfigModifierInterface $modifier = null, ?MollieConnectionCheckerInterface $checker = null): MollieAdminConfigController
     {
         return new MollieAdminConfigController(
             new InMemoryMollieSettings(ConfigFixtures::snapshot()),
             $modifier ?? $this->modifierRecording($ignored),
+            $checker ?? $this->createStub(MollieConnectionCheckerInterface::class),
         );
     }
 

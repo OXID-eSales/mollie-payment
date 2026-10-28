@@ -162,6 +162,15 @@ services:
     alias: OxidEsales\Payments\Mollie\Adapter\LazyMollieAdapter
     public: true
 
+  # PAY-5 S2: the admin API's connection check. Its own slice: not part of any payment flow.
+  OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapterFactory:
+    public: false
+
+  OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapterInterface:
+    class: OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapter
+    factory: ['@OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapterFactory', 'create']
+    public: false
+
   # ===========================================================================
   # Sprint 3: OXID shop-glue adapters implementing payment-base contracts.
   # Registered explicitly (the Adapter/ tree also holds SDK-coupled classes that
@@ -839,7 +848,17 @@ services:
     arguments:
       - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface'
       - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifierInterface'
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionCheckerInterface'
 
   OxidEsales\Payments\Mollie\GraphQL\Admin\Controller\MollieAdminConfigController:
     alias: oe_payments_mollie.graphql.admin_config_controller
     public: true
+
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionCheckerInterface:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionChecker
+    autowire: false
+    autoconfigure: false
+    arguments:
+      - '@OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface'
+      - '@OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapterInterface'
+      - '@oxid_esales.monolog.logger'

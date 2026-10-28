@@ -58,12 +58,14 @@ final class MollieAdminApiWiringTest extends IntegrationTestCase
         self::assertInstanceOf(OxidMollieAdminAudit::class, $this->service(MollieAdminAuditInterface::class));
     }
 
-    public function testSchema_HasTheConfigOperations(): void
+    public function testSchema_HasTheConfigAndConnectionCheckOperations(): void
     {
         $schema = AdminSchemaProbe::sdl();
 
         self::assertMatchesRegularExpression('/adminMollieConfig: AdminMollieConfig!/', $schema);
         self::assertMatchesRegularExpression('/adminMollieConfigModify\(input: AdminMollieConfigInput!\): AdminMollieConfigPayload!/', $schema);
+        self::assertMatchesRegularExpression('/adminMollieConnectionCheck: AdminMollieConnectionCheck!/', $schema);
+        self::assertMatchesRegularExpression('/type AdminMollieConnectionCheck \{[^}]*status: String![^}]*ok: Boolean![^}]*mode: String!/s', $schema);
     }
 
     public function testSchema_TheConfigTypeHasNoFieldThatCouldCarryAKey_TheInputOnlyTakesOne(): void
