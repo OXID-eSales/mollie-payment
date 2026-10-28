@@ -11,10 +11,14 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Admin;
 
 use OxidEsales\Eshop\Application\Model\Order;
 use OxidEsales\PaymentBase\Admin\Contract\AdminActionDispatcherInterface;
+use OxidEsales\PaymentBase\Admin\Panel\AdminActionRefusedException;
 use OxidEsales\PaymentBase\Admin\Panel\PaymentPanelContext;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminActionBoundsInterface;
+use OxidEsales\Payments\Mollie\Admin\AdminActionRefusals;
+use OxidEsales\Payments\Mollie\Admin\ReleaseRule;
+use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminAmountValidator;
 use OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface;
 use OxidEsales\Payments\Mollie\Admin\MolliePanelOrderLoader;
@@ -41,6 +45,7 @@ final class MolliePaymentPanelProviderTest extends TestCase
     private UserDataValidatorInterface&MockObject $userDataValidator;
     private MessageFormatterInterface&MockObject $textMessageFormatter;
     private MollieExtraActionDispatcherInterface&MockObject $extraActions;
+    private LanguageTranslatorInterface&MockObject $translator;
     private MolliePaymentPanelProvider $provider;
 
     protected function setUp(): void
@@ -53,6 +58,8 @@ final class MolliePaymentPanelProviderTest extends TestCase
         $this->validationFeedback = $this->createMock(AdminValidationFeedbackInterface::class);
         $this->userDataValidator = $this->createMock(UserDataValidatorInterface::class);
         $this->textMessageFormatter = $this->createMock(MessageFormatterInterface::class);
+        $this->translator = $this->createMock(LanguageTranslatorInterface::class);
+        $this->translator->method('translateString')->willReturnArgument(0);
 
         $this->extraActions = $this->createMock(MollieExtraActionDispatcherInterface::class);
 
@@ -63,26 +70,128 @@ final class MolliePaymentPanelProviderTest extends TestCase
             $this->contracts,
             $this->bounds,
             new AdminAmountValidator(),
-            $this->validationFeedback,
             $this->userDataValidator,
-            $this->textMessageFormatter,
+            new AdminActionRefusals($this->validationFeedback, $this->textMessageFormatter, $this->translator),
+            new ReleaseRule($this->bounds),
             $this->extraActions,
         );
     }
 
-    public function testHandleAction_Release_DispatchesTheReleaseAction(): void
+    public function testHandleAction_Release_DispatchesTheReleaseActionAndResetsTheViewCache(): void
     {
         $order = $this->stubOrder('order-rel');
         $this->orderLoader->order = $order;
+        $contract = $this->releasableContract();
         $this->userDataValidator->method('validateFieldMap')->willReturn([]); // reason accepted
 
-        $this->extraActions->expects(self::once())->method('release')->with($order, 'done capturing');
+        $this->extraActions->expects(self::once())->method('release')->with($order, 'done capturing')->willReturn(true);
+        $this->viewDataBuilder->expects(self::once())->method('resetViewCache');
 
         $this->provider->handleAction('release', ['release_reason' => 'done capturing'], new PaymentPanelContext(
             'order-rel',
             MollieDefinitions::PAYMENT_ID,
-            null,
+            $contract,
         ));
+    }
+
+    public function testHandleAction_Release_WhenNothingMayBeReleased_RefusesWithoutCallingMollie(): void
+    {
+        $this->orderLoader->order = $this->stubOrder('order-rel-2');
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getCapturedAmount')->willReturn(null); // nothing captured: release would cancel the hold
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('isAuthorizedHold')->willReturn(true);
+        $this->bounds->method('captureBound')->willReturn(100.0);
+        $this->extraActions->expects(self::never())->method('release');
+
+        try {
+            $this->provider->handleAction('release', [], new PaymentPanelContext('order-rel-2', MollieDefinitions::PAYMENT_ID, $contract));
+            self::fail('a release that is not possible must be refused');
+        } catch (AdminActionRefusedException $refusal) {
+            self::assertSame('not_releasable', $refusal->refusalCode());
+            self::assertSame('MOLLIE_ADMIN_RELEASE_NOT_POSSIBLE', $refusal->getMessage());
+            self::assertFalse($refusal->feedbackRecorded(), 'nothing was recorded for the classic tab, so it shows the sentence');
+        }
+    }
+
+    public function testHandleAction_Release_WhenMollieFails_RefusesWithTheRecordedSentence(): void
+    {
+        $this->orderLoader->order = $this->stubOrder('order-rel-3');
+        $contract = $this->releasableContract();
+        $this->userDataValidator->method('validateFieldMap')->willReturn([]);
+        $this->extraActions->method('release')->willReturn(false);
+
+        try {
+            $this->provider->handleAction('release', [], new PaymentPanelContext('order-rel-3', MollieDefinitions::PAYMENT_ID, $contract));
+            self::fail('a failed release must be refused');
+        } catch (AdminActionRefusedException $refusal) {
+            self::assertSame('release_failed', $refusal->refusalCode());
+            self::assertSame('MOLLIE_ADMIN_RELEASE_FAILED', $refusal->getMessage());
+            self::assertTrue($refusal->feedbackRecorded(), 'the release handler recorded it for the classic tab already');
+        }
+    }
+
+    public function testHandleAction_Release_WithAnInvalidReason_RefusesWithoutCallingMollie(): void
+    {
+        $this->orderLoader->order = $this->stubOrder('order-rel-4');
+        $contract = $this->releasableContract();
+        $this->userDataValidator->method('validateFieldMap')
+            ->willReturn([new FieldValidationFailure('captureReason', 'admin', 'blocked_character', ';', null)]);
+        $this->textMessageFormatter->method('format')->willReturn('Not valid');
+        $this->validationFeedback->expects(self::once())->method('rejectWithMessage')->with('order-rel-4', 'Not valid');
+        $this->extraActions->expects(self::never())->method('release');
+
+        try {
+            $this->provider->handleAction('release', ['release_reason' => 'a;b'], new PaymentPanelContext('order-rel-4', MollieDefinitions::PAYMENT_ID, $contract));
+            self::fail('an invalid reason must be refused');
+        } catch (AdminActionRefusedException $refusal) {
+            self::assertSame('blocked_character', $refusal->refusalCode());
+            self::assertSame('Not valid', $refusal->getMessage());
+            self::assertTrue($refusal->feedbackRecorded());
+        }
+    }
+
+    public function testHandleAction_Refund_ExceedingBound_RefusesWithTheSentenceItRecordedForTheClassicTab(): void
+    {
+        $this->orderLoader->order = $this->stubOrder('order-amt');
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('refundBound')->willReturn(10.0);
+        $this->validationFeedback->method('reject')->willReturn('The amount is more than the 10.00 that can be refunded');
+
+        try {
+            $this->provider->handleAction('refund', ['refund_amount' => '99.00'], new PaymentPanelContext('order-amt', MollieDefinitions::PAYMENT_ID, $contract));
+            self::fail('the amount must be refused');
+        } catch (AdminActionRefusedException $refusal) {
+            self::assertSame('amount_exceeds_bound', $refusal->refusalCode());
+            self::assertSame('The amount is more than the 10.00 that can be refunded', $refusal->getMessage());
+            self::assertTrue($refusal->feedbackRecorded());
+        }
+    }
+
+    public function testActionOptions_AreTheReasonsAndLimitsOfThePanelsForm(): void
+    {
+        $options = $this->provider->actionOptions($this->createStub(PaymentContractInterface::class));
+
+        self::assertSame(['requested_by_customer', 'duplicate', 'fraudulent'], $options->refundReasons);
+        self::assertSame(['requested_by_customer', 'duplicate', 'fraudulent', 'abandoned'], $options->voidReasons);
+        self::assertTrue($options->refundDescription);
+        self::assertSame(140, $options->reasonMaxLength);
+    }
+
+    public function testBoundsFor_AreTheBoundsTheClassicPanelUses(): void
+    {
+        $contract = $this->createStub(PaymentContractInterface::class);
+        $expected = new \OxidEsales\PaymentBase\Admin\Contract\AdminActionBounds(60.0, 12.5);
+        $this->bounds->expects(self::once())->method('boundsFor')->with($contract)->willReturn($expected);
+
+        self::assertSame($expected, $this->provider->boundsFor($contract));
+    }
+
+    public function testTheProviderImplementsPaymentBasesOptionalProviderInterfaces(): void
+    {
+        self::assertInstanceOf(\OxidEsales\PaymentBase\Admin\Contract\AdminActionOptionsProviderInterface::class, $this->provider);
+        self::assertInstanceOf(\OxidEsales\PaymentBase\Admin\Contract\AdminActionBoundsProviderInterface::class, $this->provider);
     }
 
     // ── MOL-15: admin free text runs through the same character-level rules as the address ──────
@@ -105,6 +214,8 @@ final class MolliePaymentPanelProviderTest extends TestCase
         $this->validationFeedback->expects(self::once())->method('rejectWithMessage')
             ->with('order-7', 'The refund description field is not valid. Allowed symbols are: letters');
 
+        $this->expectException(AdminActionRefusedException::class);
+
         $this->provider->handleAction('refund', [
             'refund_amount' => '25.00',
             'refund_description' => 'chargeback <x>',
@@ -125,6 +236,8 @@ final class MolliePaymentPanelProviderTest extends TestCase
 
         $this->actionDispatcher->expects(self::never())->method('capture');
         $this->validationFeedback->expects(self::once())->method('rejectWithMessage')->with('order-8', 'msg');
+
+        $this->expectException(AdminActionRefusedException::class);
 
         $this->provider->handleAction('capture', ['capture_reason' => 'ship; now'], new PaymentPanelContext(
             'order-8',
@@ -234,6 +347,8 @@ final class MolliePaymentPanelProviderTest extends TestCase
         $this->actionDispatcher->expects(self::never())->method('refund');
         $this->validationFeedback->expects(self::once())->method('reject')
             ->with('order-3', 'refund_amount', 'amountExceedsBound');
+
+        $this->expectException(AdminActionRefusedException::class);
 
         $this->provider->handleAction('refund', ['refund_amount' => '99.00'], new PaymentPanelContext(
             'order-3',
@@ -360,11 +475,24 @@ final class MolliePaymentPanelProviderTest extends TestCase
         $this->viewDataBuilder->expects(self::never())->method('resetViewCache');
         $this->validationFeedback->expects(self::once())->method('reject');
 
+        $this->expectException(AdminActionRefusedException::class);
+
         $this->provider->handleAction('refund', ['refund_amount' => '99.00'], new PaymentPanelContext(
             'order-cache-4',
             MollieDefinitions::PAYMENT_ID,
             $contract,
         ));
+    }
+
+    private function releasableContract(): PaymentContractInterface
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getCapturedAmount')->willReturn(40.0);
+        $this->contracts->method('findByOrderId')->willReturn($contract);
+        $this->bounds->method('isAuthorizedHold')->willReturn(true);
+        $this->bounds->method('captureBound')->willReturn(60.0);
+
+        return $contract;
     }
 
     private function stubOrder(string $id): Order

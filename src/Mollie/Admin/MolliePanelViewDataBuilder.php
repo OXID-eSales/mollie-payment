@@ -13,7 +13,6 @@ use OxidEsales\Eshop\Application\Model\Order;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
-use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use OxidEsales\Payments\Mollie\Service\MollieUrlBuilder;
 use OxidEsales\Payments\Mollie\Service\TransactionHistoryServiceInterface;
 
@@ -34,8 +33,9 @@ class MolliePanelViewDataBuilder
         // Sprint 136: shared with AdminActionBounds, so the whole render is one
         // live Mollie read rather than one per question asked.
         private readonly MolliePaymentSnapshotProviderInterface $snapshots,
-        private readonly LanguageTranslatorInterface $translator,
+        private readonly PaymentMethodLabelResolver $methodLabels,
         private readonly RefundedAmountResolver $refundedAmounts,
+        private readonly ReleaseRule $releaseRule,
     ) {
     }
 
@@ -79,7 +79,7 @@ class MolliePanelViewDataBuilder
 
         // MOL-32: raw figures for the capture/release/cancel gating and the "released" display.
         $capturedSoFar = $contract->getCapturedAmount() ?? 0.0;
-        $releasedAmount = round(max(0.0, $contract->getAmount() - $capturedSoFar), 2);
+        $releasedAmount = $this->releaseRule->releasedAmount($contract);
 
         return [
             'orderId' => $orderId,
@@ -103,10 +103,10 @@ class MolliePanelViewDataBuilder
             // (a hold the shop fully captured a moment ago still reads `authorized`, 2026-10-01).
             'isCancellable' => $authorizedHold && $captureBound > 0.0 && $capturedSoFar <= 0.0,
             // MOL-32 S6/S7: release the still-authorized remainder after one or more partial captures.
-            'isReleasable' => $authorizedHold && $captureBound > 0.0 && $capturedSoFar > 0.0,
+            'isReleasable' => $this->releaseRule->isReleasable($contract),
             // After a release the order is fulfilled with less than the authorized amount — show what
             // went back to the customer so "Captured 40 of 100" is not mistaken for a loss.
-            'isReleased' => $contract->getState()->isFulfilled() && $capturedSoFar > 0.0 && $releasedAmount > 0.0,
+            'isReleased' => $this->releaseRule->isReleased($contract),
             'releasedAmount' => $releasedAmount,
             'releasedAmountFormatted' => $this->money($releasedAmount),
             'dashboardUrl' => $this->dashboardUrl($providerOrderId),
@@ -180,34 +180,10 @@ class MolliePanelViewDataBuilder
 
         return [
             'isKnown' => $descriptor->isKnown(),
-            'label' => $this->paymentMethodLabel($descriptor),
+            'label' => $this->methodLabels->label($descriptor),
             'detail' => $descriptor->detail(),
             'raw' => $descriptor->rawType,
         ];
-    }
-
-    /**
-     * Translated method name, falling back to the raw Mollie code whenever there
-     * is no key for it or the key has no translation — OXID returns the ident
-     * itself in that case, and "MOLLIE_PAYMENT_METHOD_IDEAL" must never reach an
-     * operator.
-     */
-    private function paymentMethodLabel(PaymentMethodDescriptor $descriptor): string
-    {
-        $fallback = (string) $descriptor->displayType();
-        $key = $descriptor->labelKey();
-
-        if ($key === null) {
-            return $fallback;
-        }
-
-        $translated = $this->translator->translateString($key);
-
-        if ($translated === '' || $translated === $key) {
-            return $fallback;
-        }
-
-        return $translated;
     }
 
     private function money(?float $amount): string

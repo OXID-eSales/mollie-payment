@@ -18,5 +18,8 @@ use OxidEsales\Eshop\Application\Model\Order;
  */
 interface MollieExtraActionDispatcherInterface
 {
-    public function release(Order $order, ?string $reason = null): void;
+    /**
+     * @return bool true when Mollie released the remainder; false when nothing was dispatched or the release failed
+     */
+    public function release(Order $order, ?string $reason = null): bool;
 }

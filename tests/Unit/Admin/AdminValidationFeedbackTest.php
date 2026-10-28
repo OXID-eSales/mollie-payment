@@ -51,8 +51,9 @@ final class AdminValidationFeedbackTest extends TestCase
             ->with('refund_amount', 'amountExceedsBound', null)
             ->willReturn('Refund amount exceeds the refundable balance.');
 
-        $this->feedback->reject('order-1', 'refund_amount', 'amountExceedsBound');
+        $message = $this->feedback->reject('order-1', 'refund_amount', 'amountExceedsBound');
 
+        self::assertSame('Refund amount exceeds the refundable balance.', $message, 'PAY-5: the caller gets the sentence back');
         self::assertSame(
             ['Refund amount exceeds the refundable balance.'],
             $this->feedback->consume('order-1'),

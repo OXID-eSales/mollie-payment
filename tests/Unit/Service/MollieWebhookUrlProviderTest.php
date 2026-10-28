@@ -35,6 +35,21 @@ final class MollieWebhookUrlProviderTest extends TestCase
         self::assertSame('https://hooks.shop.test/mollie', $provider->getWebhookUrl());
     }
 
+    /**
+     * PAY-5: the admin API shows the URL that applies for the override it has just read, not the one of the
+     * (per-request cached) configuration service.
+     */
+    public function testUrlForTakesTheOverrideItIsGivenNotTheConfiguredOne(): void
+    {
+        $provider = $this->provider(override: 'https://configured.test/hook', shopUrl: 'https://shop.test');
+
+        self::assertSame('https://given.test/hook', $provider->urlFor('https://given.test/hook'));
+        self::assertSame(
+            'https://shop.test/index.php?cl=' . MollieDefinitions::WEBHOOK_CONTROLLER_ID,
+            $provider->urlFor(''),
+        );
+    }
+
     public function testDerivesFromShopUrlWhenNoOverride(): void
     {
         $provider = $this->provider(override: '', shopUrl: 'https://shop.test/');

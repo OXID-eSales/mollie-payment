@@ -162,6 +162,15 @@ services:
     alias: OxidEsales\Payments\Mollie\Adapter\LazyMollieAdapter
     public: true
 
+  # PAY-5 S2: the admin API's connection check. Its own slice: not part of any payment flow.
+  OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapterFactory:
+    public: false
+
+  OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapterInterface:
+    class: OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapter
+    factory: ['@OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapterFactory', 'create']
+    public: false
+
   # ===========================================================================
   # Sprint 3: OXID shop-glue adapters implementing payment-base contracts.
   # Registered explicitly (the Adapter/ tree also holds SDK-coupled classes that
@@ -693,6 +702,12 @@ services:
   OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider:
     public: true
 
+  # One name for the method a customer paid with and one release rule, shared by the classic panel and the admin API.
+  OxidEsales\Payments\Mollie\Admin\PaymentMethodLabelResolver:
+    public: true
+  OxidEsales\Payments\Mollie\Admin\ReleaseRule:
+    public: true
+
   OxidEsales\Payments\Mollie\Admin\AdminAmountValidator:
     public: true
 
@@ -713,6 +728,20 @@ services:
       $messageFormatter: '@OxidEsales\Payments\Mollie\Admin\AdminAmountValidationMessageFormatter'
     public: true
 
+  # PAY-5 S4: how the panel says no (classic feedback + the admin API's typed refusal). MOL-15: admin free text is
+  # formatted by the tagged user-data formatter (the amount formatter belongs to AdminValidationFeedback).
+  OxidEsales\Payments\Mollie\Admin\AdminActionRefusals:
+    arguments:
+      $textFormatter: '@OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter'
+    public: false
+
+  # PAY-5 S4: Mollie's column of payment-base's contract-state Help for the admin API (the classic screens build it
+  # through ViewConfig). Tag: oe.payment.admin_state_help.
+  OxidEsales\Payments\Mollie\Admin\MollieContractStateHelp:
+    tags:
+      - { name: oe.payment.admin_state_help }
+    public: false
+
   OxidEsales\Payments\Mollie\Admin\MolliePanelOrderLoader:
     public: false
 
@@ -726,10 +755,8 @@ services:
   OxidEsales\Payments\Mollie\Admin\MolliePaymentPanelProvider:
     arguments:
       $actionDispatcher: '@OxidEsales\Payments\Mollie\Controller\Admin\OrderActionDispatcher'
-      # MOL-15: capture reason / refund description validated with the checkout rules and formatted
-      # by the tagged user-data formatter (the amount formatter belongs to AdminValidationFeedback).
+      # MOL-15: capture reason / refund description validated with the checkout rules.
       $userDataValidator: '@OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface'
-      $textMessageFormatter: '@OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter'
       # MOL-32 S6: the Mollie-only release action.
       $extraActions: '@OxidEsales\Payments\Mollie\Controller\Admin\MollieExtraActionDispatcherInterface'
     tags:
@@ -787,3 +814,122 @@ services:
   OxidEsales\PaymentBase\Service\StockRestorationServiceInterface:
     alias: OxidEsales\Payments\Mollie\Service\OxidStockRestorationService
     public: false
+
+  # ===========================================================================
+  # PAY-5 - the Mollie admin API (oxid-admin-graphql): `adminMollieConfig`, `adminMollieConfigModify`,
+  # `adminMollieConnectionCheck`, `AdminPaymentContract.mollie` and `adminMolliePaymentRelease`.
+  #
+  # Every integration is optional (payment-base's approach). The admin API's services are reached only through
+  # `@?` (null when it is not installed), nothing here is autowired, and the classes implement nothing of the
+  # admin API: the container reflects every service class at module activation. NamespaceMapper maps the
+  # controllers, the types and the contract extension only when the admin API (and payment-base's admin payment
+  # API, which owns the rights, the step-up and AdminPaymentContract) is there. The API keys never leave the
+  # settings service: no type has a field for one, no audit row carries a value.
+  # ===========================================================================
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\OxidMollieAdminSettings
+    autowire: false
+    autoconfigure: false
+    public: true # the integration tests resolve it
+    arguments:
+      - '@OxidEsales\EshopCommunity\Internal\Framework\Module\Facade\ModuleSettingServiceInterface'
+      - '@OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface'
+
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigChangeValidator:
+    autowire: false
+    autoconfigure: false
+
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminAuditInterface:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\OxidMollieAdminAudit
+    autowire: false
+    autoconfigure: false
+    public: true # the integration tests resolve it
+    arguments:
+      - '@?OxidEsales\GraphQL\Admin\Audit\Service\AuditRecorder'
+
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifierInterface:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifier
+    autowire: false
+    autoconfigure: false
+    arguments:
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface'
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigChangeValidator'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminStepUpInterface'
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminAuditInterface'
+
+  # Fetched by GraphQLite's container (graphql-base), hence public. Private definition + public alias: see the
+  # RoutePass note at MollieCheckout.
+  oe_payments_mollie.graphql.admin_config_controller:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Controller\MollieAdminConfigController
+    autowire: false
+    autoconfigure: false
+    arguments:
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface'
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifierInterface'
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionCheckerInterface'
+
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Controller\MollieAdminConfigController:
+    alias: oe_payments_mollie.graphql.admin_config_controller
+    public: true
+
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionCheckerInterface:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionChecker
+    autowire: false
+    autoconfigure: false
+    arguments:
+      - '@OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface'
+      - '@OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapterInterface'
+      - '@oxid_esales.monolog.logger'
+
+  # PAY-5 S3: one live read of the payment per request (the classic panel's shared snapshot provider), one rule for
+  # what a release may give back (ReleaseRule), one label for the method (PaymentMethodLabelResolver).
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MolliePaymentDetailsReaderInterface:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MolliePaymentDetailsReader
+    autowire: false
+    autoconfigure: false
+    arguments:
+      - '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
+      - '@OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProviderInterface'
+      - '@OxidEsales\Payments\Mollie\Admin\PaymentMethodLabelResolver'
+      - '@OxidEsales\Payments\Mollie\Admin\ReleaseRule'
+      - '@OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface'
+      - '@OxidEsales\Payments\Mollie\Service\MollieUrlBuilder'
+
+  oe_payments_mollie.graphql.admin_payment_contract_relation:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Relation\AdminPaymentContractMollieRelation
+    autowire: false
+    autoconfigure: false
+    arguments:
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MolliePaymentDetailsReaderInterface'
+
+  # Private definition + public alias: see the RoutePass note at MollieCheckout.
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Relation\AdminPaymentContractMollieRelation:
+    alias: oe_payments_mollie.graphql.admin_payment_contract_relation
+    public: true
+
+  # PAY-5 S5: the release operation reuses payment-base's admin payment services (reader, provider-action boundary,
+  # idempotency store, step-up, audit, shop scope); Mollie's panel provider runs the MOL-32 release itself.
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieReleaseOperationInterface:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieReleaseOperation
+    autowire: false
+    autoconfigure: false
+    public: true # the integration tests resolve it
+    arguments:
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentContractDetailsReaderInterface'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\ProviderActionRunnerInterface'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\OperationIdempotencyInterface'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminStepUpInterface'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminAuditInterface'
+      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\RequestShopOrdersInterface'
+
+  oe_payments_mollie.graphql.admin_payment_controller:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Controller\MollieAdminPaymentController
+    autowire: false
+    autoconfigure: false
+    arguments:
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieReleaseOperationInterface'
+
+  # Private definition + public alias: see the RoutePass note at MollieCheckout.
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Controller\MollieAdminPaymentController:
+    alias: oe_payments_mollie.graphql.admin_payment_controller
+    public: true

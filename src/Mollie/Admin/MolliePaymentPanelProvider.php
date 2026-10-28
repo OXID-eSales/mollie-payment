@@ -10,12 +10,17 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Admin;
 
 use OxidEsales\Eshop\Application\Model\Order;
+use OxidEsales\PaymentBase\Admin\Contract\AdminActionBounds as ProviderBounds;
+use OxidEsales\PaymentBase\Admin\Contract\AdminActionBoundsProviderInterface;
 use OxidEsales\PaymentBase\Admin\Contract\AdminActionDispatcherInterface;
+use OxidEsales\PaymentBase\Admin\Contract\AdminActionOptions;
+use OxidEsales\PaymentBase\Admin\Contract\AdminActionOptionsProviderInterface;
 use OxidEsales\PaymentBase\Admin\Contract\PaymentPanelProviderInterface;
+use OxidEsales\PaymentBase\Admin\Panel\AdminActionRefusedException;
 use OxidEsales\PaymentBase\Admin\Panel\PaymentPanelContext;
 use OxidEsales\PaymentBase\Admin\Panel\PaymentPanelRenderable;
+use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
-use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
 use OxidEsales\Payments\Mollie\Controller\Admin\MollieExtraActionDispatcherInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
@@ -32,7 +37,10 @@ use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
  * inputs are gated through {@see AdminAmountValidator} before ever reaching the dispatcher
  * (Story 3): an invalid amount never triggers a Mollie API call.
  */
-final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
+final class MolliePaymentPanelProvider implements
+    PaymentPanelProviderInterface,
+    AdminActionOptionsProviderInterface,
+    AdminActionBoundsProviderInterface
 {
     public const PROVIDER_KEY = MollieDefinitions::PROVIDER_NAME;
 
@@ -45,9 +53,10 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
         private readonly ContractRepositoryInterface $contracts,
         private readonly AdminActionBoundsInterface $bounds,
         private readonly AdminAmountValidator $amountValidator,
-        private readonly AdminValidationFeedbackInterface $validationFeedback,
         private readonly UserDataValidatorInterface $userDataValidator,
-        private readonly MessageFormatterInterface $textMessageFormatter,
+        // PAY-5: how this panel says no - the classic tab's feedback and the admin API's typed refusal in one.
+        private readonly AdminActionRefusals $refusals,
+        private readonly ReleaseRule $releaseRule,
         // MOL-32 S6: Mollie-only release action (optional so older wiring keeps working).
         private readonly ?MollieExtraActionDispatcherInterface $extraActions = null,
     ) {
@@ -93,7 +102,9 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
 
     /**
      * MOL-32 S6: release the remaining authorized amount after one or more partial captures. No
-     * amount — Mollie releases the whole remainder; the reason is validated like the other free text.
+     * amount - Mollie releases the whole remainder; the reason is validated like the other free text.
+     * PAY-5: the same {@see ReleaseRule} that decides whether the classic tab offers the button decides whether the
+     * action runs (without a capture, "release" would cancel the whole hold - that is Cancel's business).
      *
      * @param array<string, mixed> $request
      */
@@ -103,11 +114,20 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
             return;
         }
 
-        $reason = $this->parseString($request['release_reason'] ?? null);
-        if ($this->refusesText($order, 'captureReason', $reason)) {
-            return;
+        $orderId = (string) $order->getId();
+        $contract = $this->contracts->findByOrderId($orderId);
+        if ($contract === null || !$this->releaseRule->isReleasable($contract)) {
+            throw $this->refusals->notReleasable();
         }
-        $this->extraActions->release($order, $reason);
+        $reason = $this->parseString($request['release_reason'] ?? null);
+        $this->assertTextAccepted($orderId, 'captureReason', $reason);
+
+        $released = $this->extraActions->release($order, $reason);
+        // The admin API answers right after the action with the payment as it stands: no pre-action memo.
+        $this->viewDataBuilder->resetViewCache();
+        if (!$released) {
+            throw $this->refusals->releaseFailed();
+        }
     }
 
     /**
@@ -117,15 +137,12 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
     {
         $amountResult = $this->validateAmount($order, 'refund', $request['refund_amount'] ?? null);
         if (!$amountResult->isOk()) {
-            $this->reject($order, 'refund_amount', $amountResult);
-            return;
+            throw $this->refusals->amount((string) $order->getId(), 'refund_amount', (string) $amountResult->code);
         }
 
         // Story 3 (Sprint 9): Optional admin description for audit trail.
         $description = $this->parseString($request['refund_description'] ?? null);
-        if ($this->refusesText($order, 'refundDescription', $description)) {
-            return;
-        }
+        $this->assertTextAccepted((string) $order->getId(), 'refundDescription', $description);
         $extras = $description !== null ? ['description' => $description] : [];
 
         $this->actionDispatcher->refund(
@@ -147,14 +164,11 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
     {
         $amountResult = $this->validateAmount($order, 'capture', $request['capture_amount'] ?? null);
         if (!$amountResult->isOk()) {
-            $this->reject($order, 'capture_amount', $amountResult);
-            return;
+            throw $this->refusals->amount((string) $order->getId(), 'capture_amount', (string) $amountResult->code);
         }
 
         $reason = $this->parseString($request['capture_reason'] ?? null);
-        if ($this->refusesText($order, 'captureReason', $reason)) {
-            return;
-        }
+        $this->assertTextAccepted((string) $order->getId(), 'captureReason', $reason);
         $this->actionDispatcher->capture($order, $amountResult->amount, $reason);
 
         // Story 2 (Sprint 9): Bust the per-request cache after capture.
@@ -196,27 +210,38 @@ final class MolliePaymentPanelProvider implements PaymentPanelProviderInterface
      * MOL-15: admin free text goes to Mollie with the capture / refund, so it runs through the same
      * character-level rules as the shopper's address (rules file entries `captureReason` and
      * `refundDescription`, address kind `admin`). Refused text is reported like a refused amount.
+     *
+     * @throws AdminActionRefusedException
      */
-    private function refusesText(Order $order, string $field, ?string $value): bool
+    private function assertTextAccepted(string $orderId, string $field, ?string $value): void
     {
         if ($value === null) {
-            return false;
+            return;
         }
 
         $failures = $this->userDataValidator->validateFieldMap([$field => $value], FieldValidationFailure::KIND_ADMIN);
-        foreach ($failures as $failure) {
-            $this->validationFeedback->rejectWithMessage(
-                (string) $order->getId(),
-                $this->textMessageFormatter->format($failure->field, $failure->code, $failure->offendingChar),
-            );
+        if ($failures !== []) {
+            throw $this->refusals->text($orderId, array_values($failures));
         }
-
-        return $failures !== [];
     }
 
-    private function reject(Order $order, string $field, AmountValidationResult $result): void
+    /**
+     * PAY-5: what the Payment tab offers, so the admin API offers (and enforces) the same: the refund and cancel
+     * reasons of the panel's selects, a refund description, and the 140 characters of its inputs.
+     */
+    public function actionOptions(PaymentContractInterface $contract): AdminActionOptions
     {
-        $this->validationFeedback->reject((string) $order->getId(), $field, (string) $result->code);
+        return new AdminActionOptions(
+            MollieDefinitions::ADMIN_REFUND_REASONS,
+            MollieDefinitions::ADMIN_VOID_REASONS,
+            true,
+            MollieDefinitions::ADMIN_TEXT_MAX_LENGTH,
+        );
+    }
+
+    public function boundsFor(PaymentContractInterface $contract): ?ProviderBounds
+    {
+        return $this->bounds->boundsFor($contract);
     }
 
     private function parseString(mixed $value): ?string
