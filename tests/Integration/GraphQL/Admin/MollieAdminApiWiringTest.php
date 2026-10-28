@@ -16,6 +16,7 @@ use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
 use OxidEsales\EshopCommunity\Internal\Framework\Module\Facade\ModuleSettingServiceInterface;
 use OxidEsales\EshopCommunity\Tests\Integration\IntegrationTestCase;
 use OxidEsales\GraphQL\Admin\Authorization\Service\RightsCatalogue;
+use OxidEsales\Payments\Mollie\GraphQL\Admin\Relation\AdminPaymentContractMollieRelation;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminAuditInterface;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\OxidMollieAdminAudit;
 use OxidEsales\Payments\Mollie\GraphQL\Service\NamespaceMapper;
@@ -66,6 +67,26 @@ final class MollieAdminApiWiringTest extends IntegrationTestCase
         self::assertMatchesRegularExpression('/adminMollieConfigModify\(input: AdminMollieConfigInput!\): AdminMollieConfigPayload!/', $schema);
         self::assertMatchesRegularExpression('/adminMollieConnectionCheck: AdminMollieConnectionCheck!/', $schema);
         self::assertMatchesRegularExpression('/type AdminMollieConnectionCheck \{[^}]*status: String![^}]*ok: Boolean![^}]*mode: String!/s', $schema);
+    }
+
+    public function testSchema_TheContractTypeIsExtendedWithTheMollieDetails(): void
+    {
+        $schema = AdminSchemaProbe::sdl();
+
+        self::assertMatchesRegularExpression('/type AdminPaymentContract \{[^}]*mollie: AdminMolliePaymentDetails/s', $schema);
+        self::assertMatchesRegularExpression(
+            '/type AdminMolliePaymentDetails \{[^}]*paymentId: String[^}]*dashboardUrl: String[^}]*methodLabel: String[^}]*methodDetail: String'
+            . '[^}]*mollieStatus: String[^}]*amountReleased: Float![^}]*amountReleasable: Float[^!}][^}]*multiCapture: Boolean![^}]*apiError: String/s',
+            $schema,
+        );
+    }
+
+    public function testContainer_HandsOutTheContractExtensionByItsClassName(): void
+    {
+        self::assertInstanceOf(
+            AdminPaymentContractMollieRelation::class,
+            $this->service(AdminPaymentContractMollieRelation::class),
+        );
     }
 
     public function testSchema_TheConfigTypeHasNoFieldThatCouldCarryAKey_TheInputOnlyTakesOne(): void

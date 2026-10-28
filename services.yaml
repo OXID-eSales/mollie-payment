@@ -702,6 +702,12 @@ services:
   OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider:
     public: true
 
+  # One name for the method a customer paid with and one release rule, shared by the classic panel and the admin API.
+  OxidEsales\Payments\Mollie\Admin\PaymentMethodLabelResolver:
+    public: true
+  OxidEsales\Payments\Mollie\Admin\ReleaseRule:
+    public: true
+
   OxidEsales\Payments\Mollie\Admin\AdminAmountValidator:
     public: true
 
@@ -862,3 +868,29 @@ services:
       - '@OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface'
       - '@OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapterInterface'
       - '@oxid_esales.monolog.logger'
+
+  # PAY-5 S3: one live read of the payment per request (the classic panel's shared snapshot provider), one rule for
+  # what a release may give back (ReleaseRule), one label for the method (PaymentMethodLabelResolver).
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MolliePaymentDetailsReaderInterface:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MolliePaymentDetailsReader
+    autowire: false
+    autoconfigure: false
+    arguments:
+      - '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
+      - '@OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProviderInterface'
+      - '@OxidEsales\Payments\Mollie\Admin\PaymentMethodLabelResolver'
+      - '@OxidEsales\Payments\Mollie\Admin\ReleaseRule'
+      - '@OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface'
+      - '@OxidEsales\Payments\Mollie\Service\MollieUrlBuilder'
+
+  oe_payments_mollie.graphql.admin_payment_contract_relation:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Relation\AdminPaymentContractMollieRelation
+    autowire: false
+    autoconfigure: false
+    arguments:
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MolliePaymentDetailsReaderInterface'
+
+  # Private definition + public alias: see the RoutePass note at MollieCheckout.
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Relation\AdminPaymentContractMollieRelation:
+    alias: oe_payments_mollie.graphql.admin_payment_contract_relation
+    public: true

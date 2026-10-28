@@ -17,6 +17,8 @@ use OxidEsales\Payments\Mollie\Admin\AdminActionBoundsInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminActionBounds;
 use OxidEsales\Payments\Mollie\Admin\MolliePanelViewDataBuilder;
+use OxidEsales\Payments\Mollie\Admin\PaymentMethodLabelResolver;
+use OxidEsales\Payments\Mollie\Admin\ReleaseRule;
 use OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider;
 use OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProviderInterface;
 use OxidEsales\Payments\Mollie\Admin\RefundedAmountResolver;
@@ -62,8 +64,9 @@ final class MolliePanelViewDataBuilderTest extends TestCase
             $this->urlBuilder,
             $this->validationFeedback,
             $this->snapshots,
-            $this->translatorStub(),
+            new PaymentMethodLabelResolver($this->translatorStub()),
             new RefundedAmountResolver(),
+            new ReleaseRule($this->bounds),
         );
     }
 
@@ -280,8 +283,9 @@ final class MolliePanelViewDataBuilderTest extends TestCase
             $this->urlBuilder,
             $this->validationFeedback,
             $snapshots,
-            $this->translatorStub(),
+            new PaymentMethodLabelResolver($this->translatorStub()),
             new RefundedAmountResolver(),
+            new ReleaseRule(new AdminActionBounds($snapshots)),
         );
 
         $viewData = $builder->build($order);
@@ -333,8 +337,9 @@ final class MolliePanelViewDataBuilderTest extends TestCase
             $this->urlBuilder,
             $this->validationFeedback,
             $snapshots,
-            $this->translatorStub(),
+            new PaymentMethodLabelResolver($this->translatorStub()),
             new RefundedAmountResolver(),
+            new ReleaseRule($bounds),
         );
 
         // The action handler validates against the bound first (this is the read that gets memoized)…
@@ -517,8 +522,9 @@ final class MolliePanelViewDataBuilderTest extends TestCase
             $this->urlBuilder,
             $this->validationFeedback,
             $this->snapshots,
-            $translator,
+            new PaymentMethodLabelResolver($translator),
             new RefundedAmountResolver(),
+            new ReleaseRule($this->bounds),
         );
 
         self::assertSame('ideal', $builder->build($order)['paymentMethod']['label']);
@@ -550,8 +556,9 @@ final class MolliePanelViewDataBuilderTest extends TestCase
             $this->urlBuilder,
             $this->validationFeedback,
             $snapshots,
-            $this->translatorStub(),
+            new PaymentMethodLabelResolver($this->translatorStub()),
             new RefundedAmountResolver(),
+            new ReleaseRule(new AdminActionBounds($snapshots)),
         );
 
         $viewData = $builder->build($order);
