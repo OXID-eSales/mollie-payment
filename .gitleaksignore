@@ -1,27 +1,13 @@
-# Historical findings pinned by exact fingerprint (commit:file:rule:line), one per line.
-# Written 2026-10-22 (subsprint 138a). Every entry below was redacted in the working tree
-# in the same subsprint or is a documented false positive; none of them narrows the scan.
-# A history rewrite is the user's decision (138a A4); until then these keep the full-history
-# scan green without hiding anything new.
-
-# 12650231: the demo-shop login (customer or admin) as an e2e fallback or in docs; the tree reads it from the environment since 138a
-126502313b0047bdd00c45cda49a8fe20539ceea:tests/e2e/playwright/tests/pages/admin/AdminLoginPage.ts:credential-pair-email-then-password:9
-126502313b0047bdd00c45cda49a8fe20539ceea:tests/e2e/playwright/tests/pages/frontend/LoginPage.ts:credential-pair-email-then-password:10
-
-# 76059238: the demo-shop login (customer or admin) as an e2e fallback or in docs; the tree reads it from the environment since 138a
-76059238568b3e67ba1c6b60c618ab2d54e63333:tests/e2e/playwright/tests/admin/mollie-admin-panel-rebuild-after-refund.spec.ts:credential-pair-email-then-password:27
-
-# c85c9cd5: the demo-shop login (customer or admin) as an e2e fallback or in docs; the tree reads it from the environment since 138a
-c85c9cd55c995d1ea682bfc2e5cfc97974c85dc8:bin/graph-ql-cli-test.sh:credential-pair-email-then-password:21
-c85c9cd55c995d1ea682bfc2e5cfc97974c85dc8:tests/e2e/playwright/tests/GraphQL/mollie-headless-checkout.spec.ts:credential-pair-email-then-password:25
-
-# c8c40bc6: the demo-shop login (customer or admin) as an e2e fallback or in docs; the tree reads it from the environment since 138a
-c8c40bc66bc1b1c02ab0f87c1dacb392795d4b0c:tests/e2e/playwright/.env.dist:credential-pair-email-then-password:14
-c8c40bc66bc1b1c02ab0f87c1dacb392795d4b0c:tests/e2e/playwright/.env.dist:credential-pair-email-then-password:9
-
-# d0fd861c: the demo-shop login (customer or admin) as an e2e fallback or in docs; the tree reads it from the environment since 138a
-d0fd861c47d178e773e4fa3fd9551977fd436982:docs/dev_day_log/20260713/walkthrough/01-e2e-refund-flow.md:credential-pair-email-then-password:83
-d0fd861c47d178e773e4fa3fd9551977fd436982:tests/e2e/playwright/tests/pages/admin/AdminLoginPage.ts:credential-pair-email-then-password:9
-
-# e12ee799: a Mollie sandbox key with the admin login in a dev-log report; redacted in the tree by 138a, key and login to be rotated (A3)
-e12ee799f6bfe7293e0c518bd6e325e07ad22002:docs/dev_day_log/20260923/reports/01-order-shipping-address-from-billing.md:mollie-api-key:17
+# Verified fake API keys in test fixtures of two published PAY-10 commits
+# (f1ae8a9, f6f2b35). The working tree carries fixture-shaped keys since
+# c5e3a23; these exact historical findings stay waived because rewriting the
+# published b-7.4.x history would need a force push. One fingerprint per line
+# (commit:file:rule:line) - never add a path or a pattern here.
+f1ae8a9d534400b5ef82053d0dec626ea7f189d2:tests/Integration/GraphQL/Admin/MollieAdminApiWiringTest.php:mollie-api-key:123
+f1ae8a9d534400b5ef82053d0dec626ea7f189d2:tests/Unit/GraphQL/Admin/Service/MollieConfigModifierTest.php:mollie-api-key:185
+f1ae8a9d534400b5ef82053d0dec626ea7f189d2:tests/Unit/GraphQL/Admin/Service/MollieConfigModifierTest.php:mollie-api-key:186
+f1ae8a9d534400b5ef82053d0dec626ea7f189d2:tests/Unit/GraphQL/Admin/Service/MollieConfigModifierTest.php:mollie-api-key:220
+f6f2b352d8fad83d2370b164fe033af1cd8ac300:tests/Unit/GraphQL/Admin/Service/OxidMollieAdminSettingsTest.php:mollie-api-key:20
+f6f2b352d8fad83d2370b164fe033af1cd8ac300:tests/Unit/GraphQL/Admin/Service/OxidMollieAdminSettingsTest.php:mollie-api-key:82
+f6f2b352d8fad83d2370b164fe033af1cd8ac300:tests/Unit/GraphQL/Admin/Service/MollieConfigModifierTest.php:mollie-api-key:67
+f6f2b352d8fad83d2370b164fe033af1cd8ac300:tests/Unit/GraphQL/Admin/Service/MollieConfigModifierTest.php:mollie-api-key:163
