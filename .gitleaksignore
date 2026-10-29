@@ -11,3 +11,19 @@ f6f2b352d8fad83d2370b164fe033af1cd8ac300:tests/Unit/GraphQL/Admin/Service/OxidMo
 f6f2b352d8fad83d2370b164fe033af1cd8ac300:tests/Unit/GraphQL/Admin/Service/OxidMollieAdminSettingsTest.php:mollie-api-key:82
 f6f2b352d8fad83d2370b164fe033af1cd8ac300:tests/Unit/GraphQL/Admin/Service/MollieConfigModifierTest.php:mollie-api-key:67
 f6f2b352d8fad83d2370b164fe033af1cd8ac300:tests/Unit/GraphQL/Admin/Service/MollieConfigModifierTest.php:mollie-api-key:163
+
+# 2026-10-29 (OPC-175 merge): history findings on b-7.4.x before that merge.
+# e12ee79 held the dev shop's real Mollie sandbox key (redacted in a85f70c);
+# the key was ROTATED on 2026-10-29, so the old value is dead. The rest are
+# e2e/dev-log demo logins (process.env references, .env.dist placeholders,
+# the local demo admin). One fingerprint per line - never a path or a pattern.
+c85c9cd55c995d1ea682bfc2e5cfc97974c85dc8:tests/e2e/playwright/tests/GraphQL/mollie-headless-checkout.spec.ts:credential-pair-email-then-password:25
+c85c9cd55c995d1ea682bfc2e5cfc97974c85dc8:bin/graph-ql-cli-test.sh:credential-pair-email-then-password:21
+e12ee799f6bfe7293e0c518bd6e325e07ad22002:docs/dev_day_log/20260923/reports/01-order-shipping-address-from-billing.md:mollie-api-key:17
+76059238568b3e67ba1c6b60c618ab2d54e63333:tests/e2e/playwright/tests/admin/mollie-admin-panel-rebuild-after-refund.spec.ts:credential-pair-email-then-password:27
+d0fd861c47d178e773e4fa3fd9551977fd436982:docs/dev_day_log/20260713/walkthrough/01-e2e-refund-flow.md:credential-pair-email-then-password:83
+d0fd861c47d178e773e4fa3fd9551977fd436982:tests/e2e/playwright/tests/pages/admin/AdminLoginPage.ts:credential-pair-email-then-password:9
+126502313b0047bdd00c45cda49a8fe20539ceea:tests/e2e/playwright/tests/pages/admin/AdminLoginPage.ts:credential-pair-email-then-password:9
+126502313b0047bdd00c45cda49a8fe20539ceea:tests/e2e/playwright/tests/pages/frontend/LoginPage.ts:credential-pair-email-then-password:10
+c8c40bc66bc1b1c02ab0f87c1dacb392795d4b0c:tests/e2e/playwright/.env.dist:credential-pair-email-then-password:9
+c8c40bc66bc1b1c02ab0f87c1dacb392795d4b0c:tests/e2e/playwright/.env.dist:credential-pair-email-then-password:14
