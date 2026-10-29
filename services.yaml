@@ -819,8 +819,8 @@ services:
     public: false
 
   # ===========================================================================
-  # PAY-5 - the Mollie admin API (oxid-admin-graphql): `adminMollieConfig`, `adminMollieConfigModify`,
-  # `adminMollieConnectionCheck`, `AdminPaymentContract.mollie` and `adminMolliePaymentRelease`.
+  # PAY-5 - the Mollie admin API (oxid-admin-graphql): `adminMollieConfig` and
+  # `adminMollieConnectionCheck` (read-only: the settings change in the classic admin, CFG-1), `AdminPaymentContract.mollie` and `adminMolliePaymentRelease`.
   #
   # Every integration is optional (payment-base's approach). The admin API's services are reached only through
   # `@?` (null when it is not installed), nothing here is autowired, and the classes implement nothing of the
@@ -838,29 +838,6 @@ services:
       - '@OxidEsales\EshopCommunity\Internal\Framework\Module\Facade\ModuleSettingServiceInterface'
       - '@OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface'
 
-  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigChangeValidator:
-    autowire: false
-    autoconfigure: false
-
-  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminAuditInterface:
-    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\OxidMollieAdminAudit
-    autowire: false
-    autoconfigure: false
-    public: true # the integration tests resolve it
-    arguments:
-      - '@?OxidEsales\GraphQL\Admin\Audit\Service\AuditRecorder'
-
-  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifierInterface:
-    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifier
-    autowire: false
-    autoconfigure: false
-    arguments:
-      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface'
-      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigChangeValidator'
-      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminSuperadminCheckInterface'
-      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminStepUpInterface'
-      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminAuditInterface'
-
   # Fetched by GraphQLite's container (graphql-base), hence public. Private definition + public alias: see the
   # RoutePass note at MollieCheckout.
   oe_payments_mollie.graphql.admin_config_controller:
@@ -869,9 +846,7 @@ services:
     autoconfigure: false
     arguments:
       - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface'
-      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifierInterface'
       - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionCheckerInterface'
-      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminSuperadminCheckInterface'
 
   OxidEsales\Payments\Mollie\GraphQL\Admin\Controller\MollieAdminConfigController:
     alias: oe_payments_mollie.graphql.admin_config_controller

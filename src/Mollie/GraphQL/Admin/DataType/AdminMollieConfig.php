@@ -14,27 +14,16 @@ use TheCodingMachine\GraphQLite\Annotations\Field;
 use TheCodingMachine\GraphQLite\Annotations\Type;
 
 /**
- * The Mollie settings of the shop. API keys are write-only: `testKeySet` / `liveKeySet` say whether one is stored,
- * and no field carries its value, ever. `version` is the token `adminMollieConfigModify` wants back
- * (`expectedVersion`), so that two admins do not overwrite each other.
+ * The Mollie settings of the shop. `testKeySet` / `liveKeySet` say whether an API key is stored, and no field carries its value,
+ * ever. `version` identifies the state of the settings that was read.
  *
  * The getters carry the GraphQL field names (graphqlite strips get/is).
  */
 #[Type(name: 'AdminMollieConfig')]
 final class AdminMollieConfig
 {
-    public function __construct(private readonly MollieConfigSnapshot $config, private readonly bool $secretsEditable)
+    public function __construct(private readonly MollieConfigSnapshot $config)
     {
-    }
-
-    /**
-     * Whether the admin of the request may change the API keys: only a superadmin. The rest of the settings need
-     * ADMIN_PAYMENT_CONFIG alone.
-     */
-    #[Field]
-    public function isSecretsEditable(): bool
-    {
-        return $this->secretsEditable;
     }
 
     /** `test` or `live`: the API key the shop uses. */

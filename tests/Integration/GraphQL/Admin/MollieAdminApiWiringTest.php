@@ -17,9 +17,7 @@ use OxidEsales\EshopCommunity\Internal\Framework\Module\Facade\ModuleSettingServ
 use OxidEsales\EshopCommunity\Tests\Integration\IntegrationTestCase;
 use OxidEsales\GraphQL\Admin\Authorization\Service\RightsCatalogue;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Relation\AdminPaymentContractMollieRelation;
-use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminAuditInterface;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface;
-use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\OxidMollieAdminAudit;
 use OxidEsales\Payments\Mollie\GraphQL\Service\NamespaceMapper;
 use OxidEsales\Payments\Mollie\Module;
 use OxidEsales\Payments\Mollie\Tests\Integration\Support\AdminSchemaProbe;

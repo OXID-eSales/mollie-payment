@@ -15,10 +15,9 @@ use OxidEsales\Payments\Mollie\Module;
 use OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface;
 
 /**
- * The Mollie module settings through OXID's module setting service (the project configuration), the same path as
- * the classic module configuration form. Read fresh on every call (the module's own configuration service caches
- * per request, which would show the old values right after a change). API keys are read only by `key()` and written
- * only when a change carries a new one.
+ * The Mollie module settings through OXID's module setting service (the project configuration), the store of the
+ * classic module configuration form. Read-only (CFG-1): nothing here writes. Read fresh on every call (the module's own
+ * configuration service caches per request). API keys are read only to say whether one is set.
  */
 final class OxidMollieAdminSettings implements MollieAdminSettingsInterface
 {
@@ -65,25 +64,6 @@ final class OxidMollieAdminSettings implements MollieAdminSettingsInterface
     private function key(string $mode): string
     {
         return trim($this->string(self::KEY_NAMES[$mode] ?? self::KEY_NAMES[MollieDefinitions::MODE_TEST]));
-    }
-
-    public function apply(MollieConfigChange $change): void
-    {
-        foreach (self::STRINGS as $field => $setting) {
-            $value = $change->$field;
-            if ($value !== null) {
-                $this->settings->saveString($setting, $value, Module::MODULE_ID);
-            }
-        }
-        if ($change->multiCapture !== null) {
-            $this->settings->saveBoolean(self::MULTI_CAPTURE, $change->multiCapture, Module::MODULE_ID);
-        }
-        foreach (self::KEY_NAMES as $mode => $setting) {
-            $key = $change->keyFor($mode);
-            if ($key !== null) {
-                $this->settings->saveString($setting, $key, Module::MODULE_ID);
-            }
-        }
     }
 
     private function logLevel(): string
