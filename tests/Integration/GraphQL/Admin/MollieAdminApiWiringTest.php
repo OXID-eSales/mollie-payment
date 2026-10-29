@@ -32,7 +32,7 @@ use PHPUnit\Framework\Attributes\Group;
 final class MollieAdminApiWiringTest extends IntegrationTestCase
 {
     private const CONFIG_FIELDS = 'mode captureMode multiCapture profileId webhookUrlOverride effectiveWebhookUrl logLevel '
-        . 'testKeySet liveKeySet version secretsEditable';
+        . 'testKeySet liveKeySet version';
 
     public function setUp(): void
     {
@@ -55,19 +55,22 @@ final class MollieAdminApiWiringTest extends IntegrationTestCase
         self::assertTrue($this->service(RightsCatalogue::class)->has('ADMIN_PAYMENT_CONFIG'));
     }
 
-    public function testContainer_WiresTheAuditToTheRealRecorder(): void
-    {
-        self::assertInstanceOf(OxidMollieAdminAudit::class, $this->service(MollieAdminAuditInterface::class));
-    }
-
     public function testSchema_HasTheConfigAndConnectionCheckOperations(): void
     {
         $schema = AdminSchemaProbe::sdl();
 
         self::assertMatchesRegularExpression('/adminMollieConfig: AdminMollieConfig!/', $schema);
-        self::assertMatchesRegularExpression('/adminMollieConfigModify\(input: AdminMollieConfigInput!\): AdminMollieConfigPayload!/', $schema);
         self::assertMatchesRegularExpression('/adminMollieConnectionCheck: AdminMollieConnectionCheck!/', $schema);
         self::assertMatchesRegularExpression('/type AdminMollieConnectionCheck \{[^}]*status: String![^}]*ok: Boolean![^}]*mode: String!/s', $schema);
+    }
+
+    public function testSchema_OffersNoOperationThatChangesTheSettings(): void
+    {
+        $schema = AdminSchemaProbe::sdl();
+
+        foreach (['adminMollieConfigModify', 'AdminMollieConfigInput', 'AdminMollieConfigPayload', 'secretsEditable'] as $removed) {
+            self::assertStringNotContainsString($removed, $schema, 'the settings change only in the classic admin');
+        }
     }
 
     public function testSchema_TheContractTypeIsExtendedWithTheMollieDetails(): void
@@ -98,44 +101,18 @@ final class MollieAdminApiWiringTest extends IntegrationTestCase
         );
     }
 
-    public function testSchema_TheConfigTypeHasNoFieldThatCouldCarryAKey_TheInputOnlyTakesOne(): void
+    public function testSchema_TheConfigTypeHasNoFieldThatCouldCarryAKey(): void
     {
         $schema = AdminSchemaProbe::sdl();
 
         preg_match('/type AdminMollieConfig \{([^}]*)\}/s', $schema, $type);
         self::assertNotEmpty($type, 'type AdminMollieConfig');
-        self::assertMatchesRegularExpression('/secretsEditable: Boolean!/', $type[1]);
         self::assertMatchesRegularExpression('/testKeySet: Boolean!/', $type[1]);
         self::assertMatchesRegularExpression('/liveKeySet: Boolean!/', $type[1]);
         preg_match_all('/^\s*(\w+)[(:]/m', $type[1], $fields);
         foreach ($fields[1] as $field) {
-            self::assertDoesNotMatchRegularExpression('/key/i', (string) preg_replace('/(KeySet|^secretsEditable)$/', '', $field), 'field ' . $field);
+            self::assertDoesNotMatchRegularExpression('/key/i', (string) preg_replace('/KeySet$/', '', $field), 'field ' . $field);
         }
-        self::assertMatchesRegularExpression('/input AdminMollieConfigInput \{[^}]*testKey: String[^!]/s', $schema);
-        self::assertMatchesRegularExpression('/input AdminMollieConfigInput \{[^}]*expectedVersion: String!/s', $schema);
-    }
-
-    public function testMutation_AKeyWithoutASuperadminSession_IsRefusedAtTheFieldAndNothingIsWritten(): void
-    {
-        $before = $this->service(MollieAdminSettingsInterface::class)->snapshot();
-
-        $response = AdminSchemaProbe::execute(
-            'mutation { adminMollieConfigModify(input: { expectedVersion: "' . $before->version() . '", testKey: "test_AAAAAAAAAAPAY10notarealkey0000000000000000", captureMode: "manual" }) '
-            . '{ config { version } errors { errorCode ... on ValidationError { field code } } } }'
-        );
-
-        self::assertArrayNotHasKey('errors', $response);
-        $error = $response['data']['adminMollieConfigModify']['errors'][0] ?? [];
-        self::assertSame(['validation_failed', 'testKey', 'superadmin_required'], [$error['errorCode'] ?? null, $error['field'] ?? null, $error['code'] ?? null]);
-        self::assertSame($before->captureMode, $this->service(MollieAdminSettingsInterface::class)->snapshot()->captureMode, 'the whole call is refused');
-        self::assertStringNotContainsString('PAY10notarealkey', (string) json_encode($response));
-    }
-
-    public function testQuery_SecretsEditableIsFalseWithoutASuperadminSession(): void
-    {
-        $response = AdminSchemaProbe::execute('{ adminMollieConfig { secretsEditable } }');
-
-        self::assertFalse($response['data']['adminMollieConfig']['secretsEditable'] ?? null);
     }
 
     public function testQuery_AdminMollieConfig_ReturnsEveryFieldAndNeverTheStoredKeys(): void
