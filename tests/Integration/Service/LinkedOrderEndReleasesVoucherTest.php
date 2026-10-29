@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\Tests\Integration\Service;
 use Doctrine\DBAL\Connection;
 use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
 use OxidEsales\EshopCommunity\Internal\Framework\Database\ConnectionProviderInterface;
+use OxidEsales\PaymentBase\Adapter\LinkedOrderEndingInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\OxidContractLinkedOrderUpdater;
 use PHPUnit\Framework\Attributes\Group;
@@ -63,7 +64,7 @@ final class LinkedOrderEndReleasesVoucherTest extends TestCase
         $orderId = $this->insertOrder(paid: false);
         $voucherId = $this->insertVoucherUsedBy($orderId);
 
-        (new OxidContractLinkedOrderUpdater())->markCancelled($orderId);
+        $this->updater()->markCancelled($orderId);
 
         self::assertSame('CANCELLED', $this->orderField($orderId, 'OXTRANSSTATUS'));
         self::assertSame('1', $this->orderField($orderId, 'OXSTORNO'), 'G6: the order is not stornoed');
@@ -75,7 +76,7 @@ final class LinkedOrderEndReleasesVoucherTest extends TestCase
         $orderId = $this->insertOrder(paid: false);
         $voucherId = $this->insertVoucherUsedBy($orderId);
 
-        (new OxidContractLinkedOrderUpdater())->markFailed($orderId, 'failed');
+        $this->updater()->markFailed($orderId, 'failed');
 
         self::assertSame('FAILED', $this->orderField($orderId, 'OXTRANSSTATUS'));
         self::assertSame('1', $this->orderField($orderId, 'OXSTORNO'), 'G6: the order is not stornoed');
@@ -87,9 +88,16 @@ final class LinkedOrderEndReleasesVoucherTest extends TestCase
         $orderId = $this->insertOrder(paid: true);
         $voucherId = $this->insertVoucherUsedBy($orderId);
 
-        (new OxidContractLinkedOrderUpdater())->markCancelled($orderId);
+        $this->updater()->markCancelled($orderId);
 
         self::assertSame($orderId, $this->voucherField($voucherId, 'OXORDERID'));
+    }
+
+    private function updater(): OxidContractLinkedOrderUpdater
+    {
+        return new OxidContractLinkedOrderUpdater(
+            ContainerFactory::getInstance()->getContainer()->get(LinkedOrderEndingInterface::class)
+        );
     }
 
     private function orderField(string $orderId, string $column): string

@@ -9,59 +9,30 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Service;
 
-use OxidEsales\Eshop\Application\Model\Order;
-use OxidEsales\Eshop\Core\Field;
+use OxidEsales\PaymentBase\Adapter\LinkedOrderEndingInterface;
 
 /**
  * OXID-side {@see ContractLinkedOrderUpdaterInterface} implementation.
  *
- * Uses `oxNew(Order::class)` for the model lookup so OXID's class extension chain is honoured.
+ * OPC-175 / S4 (G6): the order ends the shared way (payment-base
+ * {@see LinkedOrderEndingInterface}): an unpaid order is stornoed, its stock and
+ * vouchers come back. Before, only OXTRANSSTATUS was set - the coupon stayed
+ * used for good and the cleanup command (NOT_FINISHED only) never saw the order.
  */
 class OxidContractLinkedOrderUpdater implements ContractLinkedOrderUpdaterInterface
 {
-    private const TRANSSTATUS_CANCELLED = 'CANCELLED';
-    private const TRANSSTATUS_FAILED = 'FAILED';
+    public function __construct(
+        private readonly LinkedOrderEndingInterface $ending
+    ) {
+    }
 
     public function markCancelled(string $orderId): void
     {
-        $order = $this->loadOrder($orderId);
-        if ($order === null) {
-            return;
-        }
-
-        $order->oxorder__oxtransstatus = new Field(self::TRANSSTATUS_CANCELLED, Field::T_RAW);
-        $order->save();
+        $this->ending->end($orderId, LinkedOrderEndingInterface::STATUS_CANCELLED);
     }
 
     public function markFailed(string $orderId, string $reason): void
     {
-        $order = $this->loadOrder($orderId);
-        if ($order === null) {
-            return;
-        }
-
-        $order->oxorder__oxtransstatus = new Field(self::TRANSSTATUS_FAILED, Field::T_RAW);
-        $order->save();
-    }
-
-    /**
-     * Load an Order by ID.
-     *
-     * Protected so a testable subclass can inject a fake Order without requiring a full OXID
-     * framework bootstrap (oxNew seam).
-     */
-    protected function loadOrder(string $orderId): ?Order
-    {
-        if ($orderId === '') {
-            return null;
-        }
-
-        /** @var Order $order */
-        $order = oxNew(Order::class);
-        if (!$order->load($orderId)) {
-            return null;
-        }
-
-        return $order;
+        $this->ending->end($orderId, LinkedOrderEndingInterface::STATUS_FAILED);
     }
 }
