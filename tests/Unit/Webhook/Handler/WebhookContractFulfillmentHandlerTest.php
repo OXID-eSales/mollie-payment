@@ -21,6 +21,7 @@ use OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface;
+use OxidEsales\Payments\Mollie\Service\MollieLatePaymentRefunder;
 use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentResult;
@@ -38,11 +39,13 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
     private ContractLinkedOrderUpdaterInterface&MockObject $orderUpdater;
     private TransactionRepositoryInterface&MockObject $transactionRepository;
     private TransactionAuditRecorder $auditRecorder;
+    private MollieLatePaymentRefunder&MockObject $lateMoney;
     private WebhookContractFulfillmentHandler $handler;
 
     protected function setUp(): void
     {
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
+        $this->lateMoney = $this->createMock(MollieLatePaymentRefunder::class);
         $this->contractFulfillmentService = $this->createMock(ContractFulfillmentServiceInterface::class);
         $this->orderUpdater = $this->createMock(ContractLinkedOrderUpdaterInterface::class);
         $this->transactionRepository = $this->createMock(TransactionRepositoryInterface::class);
@@ -56,6 +59,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
             $this->orderUpdater,
             $this->auditRecorder,
             new NullLogger(),
+            $this->lateMoney,
         );
     }
 
@@ -66,6 +70,25 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
 
         self::assertSame(FulfillmentOutcome::ContractNotFound, $this->handler->handlePaymentPaid('tr_missing')->outcome);
+    }
+
+    public function testHandlePaymentPaid_PaymentOfReplacedAttempt_IsGivenBackAndAnsweredNoOp(): void
+    {
+        $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
+        $this->lateMoney->expects($this->once())->method('settleIfReplaced')->with('tr_old')->willReturn('ctr-1');
+
+        $result = $this->handler->handlePaymentPaid('tr_old');
+
+        self::assertSame(FulfillmentOutcome::NoOp, $result->outcome);
+        self::assertSame('ctr-1', $result->contractId);
+    }
+
+    public function testHandlePaymentAuthorized_PaymentOfReplacedAttempt_IsGivenBack(): void
+    {
+        $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
+        $this->lateMoney->expects($this->once())->method('settleIfReplaced')->with('tr_old')->willReturn('ctr-1');
+
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentAuthorized('tr_old')->outcome);
     }
 
     public function testHandlePaymentPaid_IsNoOpWhenAlreadyFulfilled(): void

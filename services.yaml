@@ -454,6 +454,14 @@ services:
 
   OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandler:
     public: true
+
+  # OPC-175 / S2g: money on a payment of a replaced checkout attempt goes back.
+  OxidEsales\Payments\Mollie\Service\MollieLatePaymentRefunder:
+    arguments:
+      $finder: '@OxidEsales\PaymentBase\Repository\ReplacedAttemptFinderInterface'
+      $payments: '@OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface'
+      $refunds: '@OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface'
+      $logger: '@oxid_esales.monolog.logger'
   OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandlerInterface:
     alias: OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandler
     public: true

@@ -20,6 +20,7 @@ use OxidEsales\PaymentBase\Service\Commit\PaymentConfirmation;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface;
+use OxidEsales\Payments\Mollie\Service\MollieLatePaymentRefunder;
 use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use Psr\Log\LoggerInterface;
 
@@ -50,6 +51,8 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         private readonly ContractLinkedOrderUpdaterInterface $orderUpdater,
         private readonly TransactionAuditRecorder $auditRecorder,
         private readonly LoggerInterface $logger,
+        // OPC-175 / S2g: money on a payment of an attempt the contract replaced goes back.
+        private readonly MollieLatePaymentRefunder $lateMoney,
         // GRAPH-QL / MS3: optional so a consumer whose services.yaml predates it keeps the
         // AUTHORIZED-only behaviour; autowired from payment-base otherwise.
         private readonly ?ContractCommitServiceInterface $contractCommit = null,
@@ -112,11 +115,21 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         }
     }
 
+    /**
+     * OPC-175 / S2g: a payment no contract names now may be one of a replaced attempt.
+     */
+    private function settledReplacedAttempt(string $providerOrderId): FulfillmentResult
+    {
+        $contractId = $this->lateMoney->settleIfReplaced($providerOrderId);
+
+        return $contractId === null ? FulfillmentResult::contractNotFound() : FulfillmentResult::noOp($contractId);
+    }
+
     private function doPaymentPaid(string $providerOrderId): FulfillmentResult
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
-            return FulfillmentResult::contractNotFound();
+            return $this->settledReplacedAttempt($providerOrderId);
         }
 
         if ($contract->getState()->isFulfilled()) {
@@ -250,7 +263,7 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
-            return FulfillmentResult::contractNotFound();
+            return $this->settledReplacedAttempt($providerOrderId);
         }
 
         if (!$contract->getState()->isNotFinished() && !$contract->getState()->isPending()) {
