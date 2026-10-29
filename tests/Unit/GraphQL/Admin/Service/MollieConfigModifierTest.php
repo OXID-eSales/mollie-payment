@@ -68,7 +68,7 @@ final class MollieConfigModifierTest extends TestCase
 
     public function testModify_ANewKey_IsStoredAfterAStepUpAndNeverReturned(): void
     {
-        $newKey = 'test_ZyXwVuTsRqPoNmLkJiHgFeDcBa9876';
+        $newKey = 'test_AAAAAAAAAAZyXwVuTsRqPoNmLkJiHgFeDcBa9876';
 
         $result = $this->modifier()->modify($this->change(testKey: $newKey));
 
@@ -164,7 +164,7 @@ final class MollieConfigModifierTest extends TestCase
 
     public function testModify_EveryCallIsAuditedOnceWithFieldNamesOnly(): void
     {
-        $this->modifier()->modify($this->change(captureMode: 'manual', testKey: 'test_ZyXwVuTsRqPoNmLkJiHgFeDcBa9876'));
+        $this->modifier()->modify($this->change(captureMode: 'manual', testKey: 'test_AAAAAAAAAAZyXwVuTsRqPoNmLkJiHgFeDcBa9876'));
         $this->modifier()->modify($this->change(captureMode: 'later'));
 
         self::assertSame(
@@ -182,8 +182,8 @@ final class MollieConfigModifierTest extends TestCase
      */
     public static function keyChanges(): iterable
     {
-        yield 'test key' => [['testKey' => 'test_PAY10notarealkey0000000000000000'], 'testKey'];
-        yield 'live key' => [['liveKey' => 'live_PAY10notarealkey0000000000000000'], 'liveKey'];
+        yield 'test key' => [['testKey' => 'test_AAAAAAAAAAPAY10notarealkey0000000000000000'], 'testKey'];
+        yield 'live key' => [['liveKey' => 'live_AAAAAAAAAAPAY10notarealkey0000000000000000'], 'liveKey'];
     }
 
     /**
@@ -217,7 +217,7 @@ final class MollieConfigModifierTest extends TestCase
 
     public function testModify_AKeyFromASuperadmin_StillAsksForTheStepUp(): void
     {
-        $result = $this->modifier()->modify($this->change(testKey: 'test_PAY10notarealkey0000000000000000'));
+        $result = $this->modifier()->modify($this->change(testKey: 'test_AAAAAAAAAAPAY10notarealkey0000000000000000'));
 
         self::assertNull($result->refusal());
         self::assertSame(1, $this->stepUp->required);
