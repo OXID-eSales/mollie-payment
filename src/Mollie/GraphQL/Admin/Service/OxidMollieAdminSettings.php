@@ -37,6 +37,7 @@ final class OxidMollieAdminSettings implements MollieAdminSettingsInterface
     public function __construct(
         private readonly ModuleSettingServiceInterface $settings,
         private readonly MollieWebhookUrlProviderInterface $webhookUrls,
+        private readonly ClassicSettingsUrlInterface $classicSettingsUrl,
     ) {
     }
 
@@ -58,6 +59,7 @@ final class OxidMollieAdminSettings implements MollieAdminSettingsInterface
             logLevel: $this->logLevel(),
             testKeySet: $this->key(MollieDefinitions::MODE_TEST) !== '',
             liveKeySet: $this->key(MollieDefinitions::MODE_LIVE) !== '',
+            classicSettingsUrl: $this->classicSettingsUrl->url(),
         );
     }
 

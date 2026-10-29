@@ -829,6 +829,11 @@ services:
   # API, which owns the rights, the step-up and AdminPaymentContract) is there. The API keys never leave the
   # settings service: no type has a field for one, no audit row carries a value.
   # ===========================================================================
+  OxidEsales\Payments\Mollie\GraphQL\Admin\Service\ClassicSettingsUrlInterface:
+    class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\OxidClassicSettingsUrl
+    autowire: false
+    autoconfigure: false
+
   OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface:
     class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\OxidMollieAdminSettings
     autowire: false
@@ -837,6 +842,7 @@ services:
     arguments:
       - '@OxidEsales\EshopCommunity\Internal\Framework\Module\Facade\ModuleSettingServiceInterface'
       - '@OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface'
+      - '@OxidEsales\Payments\Mollie\GraphQL\Admin\Service\ClassicSettingsUrlInterface'
 
   # Fetched by GraphQLite's container (graphql-base), hence public. Private definition + public alias: see the
   # RoutePass note at MollieCheckout.

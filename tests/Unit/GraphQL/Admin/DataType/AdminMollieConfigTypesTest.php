@@ -24,7 +24,7 @@ final class AdminMollieConfigTypesTest extends TestCase
 
         self::assertEqualsCanonicalizing([
             'mode', 'captureMode', 'multiCapture', 'profileId', 'webhookUrlOverride', 'effectiveWebhookUrl', 'logLevel',
-            'testKeySet', 'liveKeySet', 'version',
+            'testKeySet', 'liveKeySet', 'classicSettingsUrl', 'version',
         ], $fields);
         foreach ($fields as $field) {
             self::assertDoesNotMatchRegularExpression('/key$/i', $field, 'no field may carry an API key value');
@@ -38,6 +38,10 @@ final class AdminMollieConfigTypesTest extends TestCase
         self::assertTrue($config->isLiveKeySet());
         self::assertTrue($config->isMultiCapture());
         self::assertSame('pfl_AbC123', $config->getProfileId());
+        self::assertSame(
+            'https://shop.test/admin/index.php?cl=module_config&oxid=oe_payments_mollie&shp=1',
+            $config->getClassicSettingsUrl()
+        );
         self::assertSame('https://shop.test/index.php?cl=MollieWebhookController', $config->getEffectiveWebhookUrl());
         self::assertSame(ConfigFixtures::snapshot(['liveKeySet' => true, 'multiCapture' => true])->version(), $config->getVersion());
     }

@@ -87,6 +87,16 @@ final class AdminMollieConfig
         return $this->config->liveKeySet;
     }
 
+    /**
+     * The classic admin's settings page of this module for the current shop: the settings change there. No secret and
+     * no session token in it.
+     */
+    #[Field]
+    public function getClassicSettingsUrl(): string
+    {
+        return $this->config->classicSettingsUrl;
+    }
+
     #[Field]
     public function getVersion(): string
     {

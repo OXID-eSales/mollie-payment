@@ -21,7 +21,7 @@ Requires payment-base with its PAY-1 provider API (`AdminActionOptionsProviderIn
 
 | Operation | Right | Step-up | Does |
 | --- | --- | --- | --- |
-| `adminMollieConfig: AdminMollieConfig!` | `ADMIN_PAYMENT_CONFIG` | no | `mode` (`test`/`live`), `captureMode`, `multiCapture`, `profileId`, `webhookUrlOverride`, `effectiveWebhookUrl` (read-only), `logLevel`, `testKeySet`, `liveKeySet`, `version` |
+| `adminMollieConfig: AdminMollieConfig!` | `ADMIN_PAYMENT_CONFIG` | no | `mode` (`test`/`live`), `captureMode`, `multiCapture`, `profileId`, `webhookUrlOverride`, `effectiveWebhookUrl` (read-only), `logLevel`, `testKeySet`, `liveKeySet`, `classicSettingsUrl` (the classic admin's settings page of this module for the current shop, `{shopUrl}{adminDir}/index.php?cl=module_config&oxid=oe_payments_mollie&shp=<shopId>`; where the settings change, no secret in it), `version` |
 | `adminMollieConnectionCheck: AdminMollieConnectionCheck!` | `ADMIN_PAYMENT_CONFIG` | no | `GET /v2/profiles/me` with the active key: `status` `ok` / `invalid_key` / `unreachable` / `not_configured`, `ok`, `mode` |
 | `AdminPaymentContract.mollie: AdminMolliePaymentDetails` | `ADMIN_PAYMENT_VIEW` | no | `paymentId`, `dashboardUrl`, `methodLabel`, `methodDetail`, `mollieStatus`, `amountReleased`, `amountReleasable`, `multiCapture`, `apiError` (null for a contract of another provider) |
 | `adminMolliePaymentRelease(orderId: ID!, reason: String, idempotencyKey: String): AdminPaymentOperationPayload!` | `ADMIN_PAYMENT_CAPTURE` | yes | releases the still-authorized remainder after partial captures (MOL-32) |

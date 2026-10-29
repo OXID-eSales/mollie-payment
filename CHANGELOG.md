@@ -18,6 +18,9 @@ All notable changes to this module are documented here. Format follows
   `bin/oe-console oe:graphql:cache-clear`.
 
 ### Added
+- `AdminMollieConfig.classicSettingsUrl`: the classic admin's settings page of the module for the current shop (as Stripe and
+  PayPal have since PAY-8), so the admin app can link to where the settings change. After upgrading:
+  `bin/oe-console oe:graphql:cache-clear`.
 - PAY-5, the Mollie admin API for `oxid-admin-graphql` (optional, see `docs/for_developer/06-admin-api.md`): `adminMollieConfig`,
   `adminMollieConnectionCheck` (read-only, see Removed),
   `AdminPaymentContract.mollie` (live details, fail closed) and `adminMolliePaymentRelease`. The panel provider implements payment-base's

@@ -30,7 +30,7 @@ use PHPUnit\Framework\Attributes\Group;
 final class MollieAdminApiWiringTest extends IntegrationTestCase
 {
     private const CONFIG_FIELDS = 'mode captureMode multiCapture profileId webhookUrlOverride effectiveWebhookUrl logLevel '
-        . 'testKeySet liveKeySet version';
+        . 'testKeySet liveKeySet version classicSettingsUrl';
 
     public function setUp(): void
     {
@@ -135,6 +135,17 @@ final class MollieAdminApiWiringTest extends IntegrationTestCase
         foreach ($storedKeys as $key) {
             self::assertFalse(str_contains($body, $key), 'a stored API key appears in the response');
         }
+    }
+
+    public function testQuery_AdminMollieConfig_ReturnsTheClassicSettingsPageOfTheModule(): void
+    {
+        $response = AdminSchemaProbe::execute('{ adminMollieConfig { classicSettingsUrl } }');
+
+        self::assertArrayNotHasKey('errors', $response);
+        self::assertMatchesRegularExpression(
+            '#^https?://[^?]+/[^/?]+/index\.php\?cl=module_config&oxid=oe_payments_mollie&shp=\d+$#',
+            $response['data']['adminMollieConfig']['classicSettingsUrl']
+        );
     }
 
     public function testQuery_TheSchemaOffersNoWayToAskForAKeyByName(): void

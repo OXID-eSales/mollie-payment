@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Service;
 
+use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\ClassicSettingsUrlInterface;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\OxidMollieAdminSettings;
 use OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface;
 use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\InMemoryModuleSettings;
@@ -54,9 +55,14 @@ final class OxidMollieAdminSettingsTest extends TestCase
         self::assertSame('effective-for:https://hooks.example.com/m', $this->settings()->snapshot()->effectiveWebhookUrl);
     }
 
+    public function testSnapshot_CarriesTheClassicSettingsUrlOfTheModule(): void
+    {
+        self::assertSame('https://shop.test/admin/index.php?classic', $this->settings()->snapshot()->classicSettingsUrl);
+    }
+
     public function testSnapshot_UnsetOrUnknownValuesFallBackToTheModulesDefaults(): void
     {
-        $settings = new OxidMollieAdminSettings(new InMemoryModuleSettings(['sMollieMode' => 'staging', 'sMollieLogLevel' => 'loud']), $this->urls());
+        $settings = new OxidMollieAdminSettings(new InMemoryModuleSettings(['sMollieMode' => 'staging', 'sMollieLogLevel' => 'loud']), $this->urls(), $this->classicUrl());
 
         $snapshot = $settings->snapshot();
 
@@ -69,7 +75,17 @@ final class OxidMollieAdminSettingsTest extends TestCase
 
     private function settings(): OxidMollieAdminSettings
     {
-        return new OxidMollieAdminSettings($this->store, $this->urls());
+        return new OxidMollieAdminSettings($this->store, $this->urls(), $this->classicUrl());
+    }
+
+    private function classicUrl(): ClassicSettingsUrlInterface
+    {
+        return new class implements ClassicSettingsUrlInterface {
+            public function url(): string
+            {
+                return 'https://shop.test/admin/index.php?classic';
+            }
+        };
     }
 
     private function urls(): MollieWebhookUrlProviderInterface
