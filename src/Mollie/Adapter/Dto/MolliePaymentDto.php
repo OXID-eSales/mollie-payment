@@ -50,6 +50,8 @@ final readonly class MolliePaymentDto
         public ?string $cardLast4 = null,
         public ?string $walletType = null,
         public ?float $amountCaptured = null,
+        // OPC-175: whether Mollie lets the shop cancel the payment now (`isCancelable`).
+        public bool $isCancelable = false,
     ) {
     }
 

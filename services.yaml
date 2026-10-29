@@ -162,6 +162,13 @@ services:
     alias: OxidEsales\Payments\Mollie\Adapter\LazyMollieAdapter
     public: true
 
+  # OPC-175: closes the Mollie payment page of an attempt the customer leaves.
+  OxidEsales\Payments\Mollie\Service\MollieAttemptCloser:
+    arguments:
+      $payments: '@OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface'
+    tags:
+      - { name: oe.payment.attempt_closer }
+
   # PAY-5 S2: the admin API's connection check. Its own slice: not part of any payment flow.
   OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapterFactory:
     public: false
