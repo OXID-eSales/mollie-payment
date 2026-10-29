@@ -344,6 +344,47 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentCanceled('tr_canceled', 'customer_canceled')->outcome);
     }
 
+    /**
+     * OPC-175 / S2b. The order was kept for a new contract after the customer
+     * changed the payment method; a late cancel / fail of the old contract
+     * must not end it.
+     */
+    public function testHandlePaymentCanceled_ContractReplacedOnItsOrder_LeavesTheOrderAlone(): void
+    {
+        $contract = $this->contractWithState(terminal: false);
+        $contract->method('getOrderId')->willReturn('order-kept');
+        $contract->method('getId')->willReturn('ctr-old');
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+        $this->contractRepository->method('findByOrderId')->with('order-kept')->willReturn($this->activeContract('ctr-new'));
+
+        $contract->expects(self::once())->method('cancel');
+        $this->orderUpdater->expects(self::never())->method('markCancelled');
+
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentCanceled('tr_old', 'customer_canceled')->outcome);
+    }
+
+    public function testHandlePaymentFailed_ContractReplacedOnItsOrder_LeavesTheOrderAlone(): void
+    {
+        $contract = $this->contractWithState(terminal: false);
+        $contract->method('getOrderId')->willReturn('order-kept');
+        $contract->method('getId')->willReturn('ctr-old');
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+        $this->contractRepository->method('findByOrderId')->willReturn($this->activeContract('ctr-new'));
+
+        $contract->expects(self::once())->method('fail');
+        $this->orderUpdater->expects(self::never())->method('markFailed');
+
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentFailed('tr_old', 'declined')->outcome);
+    }
+
+    private function activeContract(string $id): PaymentContractInterface
+    {
+        $active = $this->createMock(PaymentContractInterface::class);
+        $active->method('getId')->willReturn($id);
+
+        return $active;
+    }
+
     // --- handlePaymentAuthorized ---
 
     public function testHandlePaymentAuthorized_ReturnsNullWhenContractNotFound(): void

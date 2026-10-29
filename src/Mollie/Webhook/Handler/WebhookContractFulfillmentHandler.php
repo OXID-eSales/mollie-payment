@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\Webhook\Handler;
 use DomainException;
 use OxidEsales\PaymentBase\Contract\ContractCondition;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
+use OxidEsales\PaymentBase\Repository\ContractOrderOwnership;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Repository\StaleContractException;
 use OxidEsales\PaymentBase\Service\Commit\CommitOutcome;
@@ -53,8 +54,14 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         // GRAPH-QL / MS3: optional so a consumer whose services.yaml predates it keeps the
         // AUTHORIZED-only behaviour; autowired from payment-base otherwise.
         private readonly ?ContractCommitServiceInterface $contractCommit = null,
+        // OPC-175: optional so the existing wiring keeps working; built from the
+        // repository above when not given.
+        ?ContractOrderOwnership $orderOwnership = null,
     ) {
+        $this->orderOwnership = $orderOwnership ?? new ContractOrderOwnership($contractRepository);
     }
+
+    private readonly ContractOrderOwnership $orderOwnership;
 
     public function handlePaymentAuthorized(string $providerOrderId): FulfillmentResult
     {
@@ -421,6 +428,18 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
     {
         $orderId = $contract->getOrderId();
         if ($orderId === null || $orderId === '') {
+            return;
+        }
+
+        // OPC-175: the customer changed the payment method, the order was kept
+        // and a new contract took it over. The old contract's ending stays on
+        // the old contract; the order is the new contract's.
+        if (!$this->orderOwnership->ownsItsOrder($contract)) {
+            $this->logger->info('[WebhookContractFulfillmentHandler] replaced contract: ending not mirrored onto the order', [
+                'contractId' => $contract->getId(),
+                'orderId' => $orderId,
+            ]);
+
             return;
         }
 
