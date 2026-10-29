@@ -16,7 +16,6 @@ use OxidEsales\PaymentBase\Controller\SessionWriterInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-use OxidEsales\Payments\Mollie\Service\AbandonedAttemptCleanup;
 use OxidEsales\Payments\Mollie\Service\ContractTokenService;
 use OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver;
 use OxidEsales\Payments\Mollie\Service\Return\PendingReturnProbe;
@@ -74,7 +73,8 @@ trait HandlesMollieCheckoutReturn
             if ($this->returnIsPending($contract)) {
                 return $this->onReturnPending($contract);
             }
-            $this->resolveService(AbandonedAttemptCleanup::class)?->retire($contractId);
+            // OPC-175: the attempt stays open - one order, one contract; the
+            // next start continues it with the payment method picked now.
             return $this->onReturnError('return_not_finalised');
         }
 

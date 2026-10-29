@@ -120,7 +120,7 @@ final class MollieAdminApiWiringTest extends IntegrationTestCase
         $before = $this->service(MollieAdminSettingsInterface::class)->snapshot();
 
         $response = AdminSchemaProbe::execute(
-            'mutation { adminMollieConfigModify(input: { expectedVersion: "' . $before->version() . '", testKey: "test_PAY10notarealkey0000000000000000", captureMode: "manual" }) '
+            'mutation { adminMollieConfigModify(input: { expectedVersion: "' . $before->version() . '", testKey: "test_AAAAAAAAAAPAY10notarealkey0000000000000000", captureMode: "manual" }) '
             . '{ config { version } errors { errorCode ... on ValidationError { field code } } } }'
         );
 

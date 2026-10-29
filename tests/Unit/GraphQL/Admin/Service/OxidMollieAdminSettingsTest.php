@@ -17,7 +17,7 @@ use PHPUnit\Framework\TestCase;
 
 final class OxidMollieAdminSettingsTest extends TestCase
 {
-    private const TEST_KEY = 'test_StoredTestKeyValue0123456789ab';
+    private const TEST_KEY = 'test_AAAAAAAAAAStoredTestKeyValue0123456789ab';
 
     private InMemoryModuleSettings $store;
 
@@ -79,7 +79,7 @@ final class OxidMollieAdminSettingsTest extends TestCase
 
     public function testApply_AnEmptyKeyIsNotWritten_ANewOneIs(): void
     {
-        $this->settings()->apply(new MollieConfigChange(expectedVersion: 'v', testKey: '', liveKey: 'live_NewLiveKey0123456789abcdefghij'));
+        $this->settings()->apply(new MollieConfigChange(expectedVersion: 'v', testKey: '', liveKey: 'live_AAAAAAAAAANewLiveKey0123456789abcdefghij'));
 
         self::assertSame(['sMollieLiveKey'], $this->store->saved);
         self::assertSame(self::TEST_KEY, $this->store->values['sMollieTestKey']);

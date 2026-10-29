@@ -300,6 +300,8 @@ final class MollieAdapter implements
             // Nullable by design: Mollie omits it for methods without captures, and the
             // refundable ceiling must treat "omitted" (settled in full) differently from 0.00.
             amountCaptured: MollieValueMapper::toOptionalAmountValue($payment->amountCaptured),
+            // OPC-175: an attempt the customer leaves is cancelled only when Mollie allows it.
+            isCancelable: (bool) $payment->isCancelable,
         );
     }
 
