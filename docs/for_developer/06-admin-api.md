@@ -22,40 +22,22 @@ Requires payment-base with its PAY-1 provider API (`AdminActionOptionsProviderIn
 | Operation | Right | Step-up | Does |
 | --- | --- | --- | --- |
 | `adminMollieConfig: AdminMollieConfig!` | `ADMIN_PAYMENT_CONFIG` | no | `mode` (`test`/`live`), `captureMode`, `multiCapture`, `profileId`, `webhookUrlOverride`, `effectiveWebhookUrl` (read-only), `logLevel`, `testKeySet`, `liveKeySet`, `version` |
-| `adminMollieConfigModify(input: AdminMollieConfigInput!): AdminMollieConfigPayload!` | `ADMIN_PAYMENT_CONFIG` | switching to live, writing any key | changes settings; `{ config, errors }` |
 | `adminMollieConnectionCheck: AdminMollieConnectionCheck!` | `ADMIN_PAYMENT_CONFIG` | no | `GET /v2/profiles/me` with the active key: `status` `ok` / `invalid_key` / `unreachable` / `not_configured`, `ok`, `mode` |
 | `AdminPaymentContract.mollie: AdminMolliePaymentDetails` | `ADMIN_PAYMENT_VIEW` | no | `paymentId`, `dashboardUrl`, `methodLabel`, `methodDetail`, `mollieStatus`, `amountReleased`, `amountReleasable`, `multiCapture`, `apiError` (null for a contract of another provider) |
 | `adminMolliePaymentRelease(orderId: ID!, reason: String, idempotencyKey: String): AdminPaymentOperationPayload!` | `ADMIN_PAYMENT_CAPTURE` | yes | releases the still-authorized remainder after partial captures (MOL-32) |
 
-### API keys are write-only
+### Read-only: the settings change in the classic admin only (CFG-1)
+
+The admin API **cannot change any Mollie setting**: `adminMollieConfigModify` was removed, with its input and payload types,
+the modifier, validator, audit and step-up wiring, and `AdminMollieConfig.secretsEditable`. Use the classic admin's module
+configuration; the form is unchanged. What stays: `adminMollieConfig` and `adminMollieConnectionCheck` (read),
+`AdminPaymentContract.mollie` and `adminMolliePaymentRelease` (money).
+
+### API keys never leave the shop
 
 No type has a field that could carry a key: the config says `testKeySet` / `liveKeySet` and nothing else
 (`AdminMollieConfigTypesTest`, the schema test, and the integration test that greps a real answer for the shop's stored keys).
-The input takes `testKey` / `liveKey`; **empty or absent means unchanged**. A key is a field name in the audit log, never a
-value; `MollieConfigChange` marks its keys `#[SensitiveParameter]`; validation messages never quote a value; the
-connection check's log carries only the outcome and the HTTP status.
-
-### API keys: superadmin only (PAY-10)
-
-`ADMIN_PAYMENT_CONFIG` stays enough for every non-secret field (mode, capture mode, multi-capture, profile id, webhook URL
-override, logging). A modify that carries a **non-empty** `testKey` or `liveKey` needs the built-in **superadmin** role
-(payment-base's `AdminSuperadminCheckInterface`). Otherwise the whole call is refused, nothing is written (not the harmless
-fields of the same call either) and the payload's `errors` holds `ValidationError { errorCode: validation_failed, field,
-code: superadmin_required }` with `field` = `testKey` / `liveKey` (the first one sent). The audit row is the refused call,
-field names only. `AdminMollieConfig.secretsEditable: Boolean!` is true only for a superadmin. Order of checks: right,
-**superadmin**, step-up (a non-superadmin is never asked for a second factor), lock, validation. Without the admin module the
-answer is "no". `adminMolliePaymentRelease` and the connection check are unchanged.
-
-### `adminMollieConfigModify`
-
-1. **Step-up** (payment-base's `AdminStepUpInterface`) when the call switches to `live` or writes any key.
-2. **Optimistic lock**: `expectedVersion` is the `version` of the config read (a hash of the settings, not of the derived
-   webhook URL). A mismatch is a `ConflictError`, nothing is written.
-3. **Validation** (`MollieConfigChangeValidator`): enums (`not_allowed`), key prefix `test_` / `live_` (`invalid_prefix`) and
-   format (`invalid_format`, at least 30 characters), `pfl_` profile id (empty removes it), http(s) webhook override (empty
-   removes it), switching to a mode without a stored key (`key_missing`). Nothing is saved when any check fails.
-4. The write goes through OXID's module setting service, the path of the classic form. One audit row per call
-   (`adminMollieConfigModify`, entity `paymentProvider` / `mollie`, field names only), success or failure.
+The connection check's log carries only the outcome and the HTTP status.
 
 ### `AdminPaymentContract.mollie`
 
