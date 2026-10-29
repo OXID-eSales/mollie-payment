@@ -219,14 +219,6 @@ services:
       - { name: payment.event_handler }
     public: true
 
-  # STRP-171 - retires the attempt of a shopper who returned from Mollie
-  # unpaid and did not retry. Public: MollieOrderController is an OXID
-  # controller, so it fetches this through the container at runtime.
-  OxidEsales\Payments\Mollie\Service\AbandonedAttemptCleanup:
-    arguments:
-      - '@OxidEsales\PaymentBase\Checkout\PreviousCheckoutAttemptCleanerInterface'
-    public: true
-
   # MOL-18: "Order now" clicked twice - the second submission rejoins the attempt already in
   # flight instead of starting another. payment-base decides; this only reads the live basket
   # total for it. Public: MollieOrderController fetches it through the container at runtime.
@@ -256,14 +248,10 @@ services:
   OxidEsales\PaymentBase\EventSystem\Handler\EarlyOrderCreationHandler:
     arguments:
       $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
-      $shopOrderService: '@OxidEsales\PaymentBase\Adapter\ShopOrderServiceInterface'
-      # STRP-171 - retire the NOT_FINISHED order this session already
-      # left behind, instead of stacking another one beside it.
-      $previousAttemptCleaner: '@OxidEsales\PaymentBase\Checkout\PreviousCheckoutAttemptCleanerInterface'
+      # OPC-175: creates the order of a new contract, rewrites the order of a
+      # contract that continues the open attempt (one order, one contract).
+      $earlyOrders: '@OxidEsales\PaymentBase\Adapter\EarlyOrderWriterInterface'
       $openAttempts: '@OxidEsales\PaymentBase\Checkout\OpenCheckoutAttemptRegistryInterface'
-      # GRAPH-QL / MS2: a headless attempt has no session; its "previous attempt"
-      # is the open contract of the same user basket (payment-base S3).
-      $openAttemptFinder: '@OxidEsales\PaymentBase\Repository\OpenAttemptFinderInterface'
     tags:
       - { name: payment.event_handler, priority: 90 }
     public: false

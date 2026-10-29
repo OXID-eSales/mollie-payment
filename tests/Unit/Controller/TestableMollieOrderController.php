@@ -13,7 +13,6 @@ use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Controller\CheckoutReturnResponder;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
-use OxidEsales\Payments\Mollie\Service\AbandonedAttemptCleanup;
 use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
 use OxidEsales\Payments\Mollie\Service\CheckoutStartRequest;
 use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplayInterface;
@@ -42,7 +41,6 @@ final class TestableMollieOrderController extends MollieOrderController
     public array $basketErrorsShown = [];
 
     /** STRP-171 - the payment-base service that retires an abandoned attempt. */
-    public ?AbandonedAttemptCleanup $attemptCleaner = null;
     public array $userDataProblemsShown = [];
     /** MOL-22: the not-orderable failure the shopper was told about (null = never shown). */
     public ?NotOrderableCheckoutFailure $notOrderableShown = null;
@@ -113,7 +111,6 @@ final class TestableMollieOrderController extends MollieOrderController
             ContractRepositoryInterface::class => $this->contractRepository,
             MollieReturnResolver::class => $this->resolver,
             EventDispatcherInterface::class => $this->dispatcher,
-            AbandonedAttemptCleanup::class => $this->attemptCleaner,
             // The REAL ladder around the scripted knobs; no dispatcher = starter unavailable.
             CheckoutSessionStarter::class => $this->dispatcher === null ? null : new ScriptedLadderStarter(
                 $this->dispatcher,
