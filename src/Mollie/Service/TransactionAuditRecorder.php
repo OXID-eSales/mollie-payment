@@ -42,7 +42,10 @@ final class TransactionAuditRecorder
         ?string $providerTransactionId = null,
     ): void {
         // a provider's capture or refund is reported by the admin action and by a webhook: one row per id
-        if ($providerTransactionId !== null && $this->transactionRepository->findByProviderTransactionId($providerTransactionId) !== null) {
+        if (
+            $providerTransactionId !== null
+            && $this->transactionRepository->findByProviderTransactionId($providerTransactionId) !== null
+        ) {
             return;
         }
 

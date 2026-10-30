@@ -76,7 +76,7 @@ run_phpcs_docker() {
         return 0
     fi
     docker compose exec -w /var/www/extensions/mollie-payment -T php \
-        /var/www/vendor/bin/phpcs --standard=tests/phpcs.xml --warning-severity=0 src/
+        /var/www/vendor/bin/phpcs --standard=tests/phpcs.xml src/
 }
 
 run_phpstan_docker() {
