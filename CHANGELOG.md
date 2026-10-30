@@ -10,6 +10,15 @@ All notable changes to this module are documented here. Format follows
   not rejoined: the Mollie start continues that attempt (OPC-175), the order is written again with
   `OXPAYMENTTYPE = oe_payments_mollie`, and the browser goes to Mollie. Requires payment-base `>=v1.6`.
 
+### Fixed
+- **Manual capture and refund from the admin (CFG-1 S8, found by a Mollie test-mode run from the admin app).** An admin
+  capture and an admin refund moved the money and the contract but wrote no row to the transaction table, so the Payment tab
+  of the admin app did not list them (only a webhook that fulfils the contract wrote a capture row, without a reference).
+  Both now write their row with Mollie's capture / refund id as reference (once per id; a webhook later finds it).
+  Known and unchanged: with multi-capture on, a partial capture leaves the contract `committed` and a refund is refused
+  until the remainder is captured; and Mollie itself refuses a second refund of the same amount moments after the first
+  (409 "A duplicate refund has been detected"). After upgrading clear the container cache.
+
 ### Removed
 - **CFG-1: no GraphQL path changes the module's settings any more** (they change in the classic admin only):
   `adminMollieConfigModify`, with `AdminMollieConfigInput`, `AdminMollieConfigPayload`, `AdminMollieConfig.secretsEditable`,

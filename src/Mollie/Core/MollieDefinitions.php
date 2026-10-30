@@ -38,6 +38,7 @@ final class MollieDefinitions
 
     // Transaction types recorded via TransactionRepositoryInterface (Sprint 5 webhook pipeline).
     public const TRANSACTION_TYPE_CAPTURE = 'capture';
+    public const TRANSACTION_TYPE_REFUND = 'refund';
     public const TRANSACTION_TYPE_FAILURE = 'failure';
     public const TRANSACTION_TYPE_EXPIRATION = 'expiration';
     public const TRANSACTION_TYPE_CANCELLATION = 'cancellation';

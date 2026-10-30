@@ -15,6 +15,7 @@ use InvalidArgumentException;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
+use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Adapter\Dto\CaptureRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieCaptureDto;
@@ -46,6 +47,7 @@ final class CaptureService implements CaptureServiceInterface
         private readonly ContractRepositoryInterface $contractRepository,
         private readonly ContractFulfillmentServiceInterface $contractFulfillmentService,
         private readonly CaptureCompletionPolicyInterface $completionPolicy,
+        private readonly ?TransactionAuditRecorder $auditRecorder = null,
     ) {
     }
 
@@ -70,6 +72,14 @@ final class CaptureService implements CaptureServiceInterface
         ));
 
         $this->applyCapture($contract, (float) $capture->amount->value);
+        // the row the admin's Payment tab lists, with Mollie's capture id as its reference
+        $this->auditRecorder?->record(
+            $contract,
+            MollieDefinitions::TRANSACTION_TYPE_CAPTURE,
+            MollieDefinitions::TRANSACTION_STATUS_COMPLETED,
+            (float) $capture->amount->value,
+            $capture->id,
+        );
 
         return $capture;
     }

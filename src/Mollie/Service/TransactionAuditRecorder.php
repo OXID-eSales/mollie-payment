@@ -34,8 +34,18 @@ final class TransactionAuditRecorder
     ) {
     }
 
-    public function record(PaymentContractInterface $contract, string $type, string $status, float $amount): void
-    {
+    public function record(
+        PaymentContractInterface $contract,
+        string $type,
+        string $status,
+        float $amount,
+        ?string $providerTransactionId = null,
+    ): void {
+        // a provider's capture or refund is reported by the admin action and by a webhook: one row per id
+        if ($providerTransactionId !== null && $this->transactionRepository->findByProviderTransactionId($providerTransactionId) !== null) {
+            return;
+        }
+
         $transaction = new Transaction(
             id: $type . '_' . bin2hex(random_bytes(16)),
             shopId: (int) $this->shopAdapter->getShopId(),
@@ -48,6 +58,7 @@ final class TransactionAuditRecorder
             currency: $contract->getCurrency(),
         );
         $transaction->setProviderOrderId($contract->getProviderOrderId());
+        $transaction->setTransactionId($providerTransactionId);
 
         $this->transactionRepository->save($transaction);
     }

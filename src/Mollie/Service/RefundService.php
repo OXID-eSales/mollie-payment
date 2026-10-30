@@ -21,6 +21,7 @@ use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
+use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\Exception\MollieRefundNotYetAvailableException;
 use Psr\Log\LoggerInterface;
 
@@ -51,6 +52,7 @@ final class RefundService implements RefundServiceInterface
         private readonly ContractRefundRecorder $refundRecorder,
         private readonly StockRestorationServiceInterface $stockRestorationService,
         private readonly LoggerInterface $logger,
+        private readonly ?TransactionAuditRecorder $auditRecorder = null,
     ) {
     }
 
@@ -83,6 +85,14 @@ final class RefundService implements RefundServiceInterface
         $refund = $this->createRefund($request, $payment);
 
         $this->refundRecorder->record($contract, (float) $refund->amount->value, $contract->getId());
+        // the row the admin's Payment tab lists, with Mollie's refund id as its reference
+        $this->auditRecorder?->record(
+            $contract,
+            MollieDefinitions::TRANSACTION_TYPE_REFUND,
+            MollieDefinitions::TRANSACTION_STATUS_COMPLETED,
+            (float) $refund->amount->value,
+            $refund->id,
+        );
 
         $this->restoreStockIfOrderLinked($contract);
 

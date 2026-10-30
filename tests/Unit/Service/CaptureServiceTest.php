@@ -22,6 +22,7 @@ use OxidEsales\Payments\Mollie\Adapter\MollieCaptureAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Service\CaptureCompletionPolicy;
 use OxidEsales\Payments\Mollie\Service\CaptureService;
+use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -173,6 +174,28 @@ final class CaptureServiceTest extends TestCase
         self::assertSame('cp_c', $dto->id);
     }
 
+    /**
+     * CFG-1 S8: an admin capture moved the money and the contract but left no row in the transaction table, so the
+     * Payment tab of the admin app did not list it (only a webhook that fulfils the contract wrote one, without a reference).
+     */
+    public function testCapture_IsListedInTheTransactionTableWithMolliesCaptureId(): void
+    {
+        $contract = $this->committedContract('tr_c');
+        $this->paymentsAdapter->method('getPayment')->willReturn($this->payment('tr_c', 100.0, 100.0));
+        $this->captureAdapter->method('createCapture')->willReturn($this->captureDto('cpt_1', 'tr_c', 40.0));
+        $audit = $this->auditRecorderExpecting('capture', 40.0, 'cpt_1');
+        $service = new CaptureService(
+            $this->paymentsAdapter,
+            $this->captureAdapter,
+            $this->contractRepository,
+            $this->fulfillmentService,
+            $this->policy(multiCapture: true),
+            $audit,
+        );
+
+        $service->capture($contract, 40.0);
+    }
+
     // ---- MOL-32 S3: a partial capture under multi-capture must NOT fulfil / stamp OXPAID ----
 
     public function testCapture_MultiCapture_PartialOnCommitted_RecordsButDoesNotFulfil(): void
@@ -317,5 +340,19 @@ final class CaptureServiceTest extends TestCase
     private function captureDto(string $id, string $paymentId, float $amount): MollieCaptureDto
     {
         return new MollieCaptureDto($id, $paymentId, MollieAmountDto::fromComponents('EUR', $amount), 'succeeded');
+    }
+
+    private function auditRecorderExpecting(string $type, float $amount, string $reference): TransactionAuditRecorder
+    {
+        $shop = $this->createMock(\OxidEsales\PaymentBase\Adapter\ShopAdapterInterface::class);
+        $shop->method('getShopId')->willReturn('1');
+        $rows = $this->createMock(\OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface::class);
+        $rows->expects(self::once())->method('save')->with(self::callback(
+            static fn (\OxidEsales\PaymentBase\Contract\Transaction $row): bool => $row->getType() === $type
+                && $row->getAmount() === $amount
+                && $row->getTransactionId() === $reference
+        ));
+
+        return new TransactionAuditRecorder($rows, $shop);
     }
 }
