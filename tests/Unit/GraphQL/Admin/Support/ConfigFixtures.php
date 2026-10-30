@@ -31,6 +31,7 @@ final class ConfigFixtures
             'logLevel' => 'errors',
             'testKeySet' => true,
             'liveKeySet' => false,
+            'classicSettingsUrl' => 'https://shop.test/admin/index.php?cl=module_config&oxid=oe_payments_mollie&shp=1',
         ], $overrides));
     }
 }

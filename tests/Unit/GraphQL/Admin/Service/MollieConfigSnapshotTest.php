@@ -36,6 +36,14 @@ final class MollieConfigSnapshotTest extends TestCase
         );
     }
 
+    public function testVersion_IgnoresTheClassicSettingsUrl(): void
+    {
+        self::assertSame(
+            ConfigFixtures::snapshot()->version(),
+            ConfigFixtures::snapshot(['classicSettingsUrl' => 'https://other.test/admin/index.php'])->version(),
+        );
+    }
+
     public function testKeySet_AnswersPerMode(): void
     {
         $snapshot = ConfigFixtures::snapshot(['testKeySet' => true, 'liveKeySet' => false]);

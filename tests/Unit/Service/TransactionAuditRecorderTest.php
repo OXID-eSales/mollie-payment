@@ -57,6 +57,28 @@ final class TransactionAuditRecorderTest extends TestCase
         );
     }
 
+    public function testRecord_KeepsTheProvidersTransactionIdAsTheReference_OnceOnly(): void
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getCurrency')->willReturn('EUR');
+        $shopAdapter = $this->createMock(ShopAdapterInterface::class);
+        $shopAdapter->method('getShopId')->willReturn('1');
+        $saved = [];
+        $transactionRepository = $this->createMock(TransactionRepositoryInterface::class);
+        $transactionRepository->method('findByProviderTransactionId')
+            ->willReturnCallback(static fn (string $id) => $id === 'cpt_known' ? new Transaction('x', 1, 'o', null, 'mollie', 'capture', 'completed', 1.0, 'EUR') : null);
+        $transactionRepository->method('save')->willReturnCallback(static function (Transaction $transaction) use (&$saved): void {
+            $saved[] = $transaction;
+        });
+        $recorder = new TransactionAuditRecorder($transactionRepository, $shopAdapter);
+
+        $recorder->record($contract, 'capture', 'completed', 10.0, 'cpt_new');
+        $recorder->record($contract, 'capture', 'completed', 10.0, 'cpt_known');
+
+        self::assertCount(1, $saved);
+        self::assertSame('cpt_new', $saved[0]->getTransactionId());
+    }
+
     public function testRecord_FallsBackToEmptyOrderIdWhenContractHasNone(): void
     {
         $contract = $this->createMock(PaymentContractInterface::class);

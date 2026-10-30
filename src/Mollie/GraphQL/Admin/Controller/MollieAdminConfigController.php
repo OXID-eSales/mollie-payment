@@ -9,32 +9,25 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\GraphQL\Admin\Controller;
 
-use OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminSuperadminCheckInterface;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentRightsProvider;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\DataType\AdminMollieConfig;
-use OxidEsales\Payments\Mollie\GraphQL\Admin\DataType\AdminMollieConfigInput;
-use OxidEsales\Payments\Mollie\GraphQL\Admin\DataType\AdminMollieConfigPayload;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\DataType\AdminMollieConnectionCheck;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieAdminSettingsInterface;
-use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigModifierInterface;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionCheckerInterface;
-use TheCodingMachine\GraphQLite\Annotations\Mutation;
 use TheCodingMachine\GraphQLite\Annotations\Query;
 use TheCodingMachine\GraphQLite\Annotations\Right;
 
 /**
- * The Mollie settings screen of the admin: `adminMollieConfig`, `adminMollieConfigModify`,
- * `adminMollieConnectionCheck`. GraphQL mapping only;
- * the rules, step-up and audit are in the services. #[Right] without #[Logged], like every admin operation, so that
- * a refusal carries an errorCode. All three need ADMIN_PAYMENT_CONFIG (payment-base's right for provider settings).
+ * The Mollie settings as the admin reads them: `adminMollieConfig` and `adminMollieConnectionCheck`. Read-only: the
+ * settings change in the classic admin only (CFG-1), there is no mutation. GraphQL mapping only. #[Right] without
+ * #[Logged], like every admin operation, so that a refusal carries an errorCode. Both need ADMIN_PAYMENT_CONFIG
+ * (payment-base's right for provider settings).
  */
 final class MollieAdminConfigController
 {
     public function __construct(
         private readonly MollieAdminSettingsInterface $settings,
-        private readonly MollieConfigModifierInterface $modifier,
         private readonly MollieConnectionCheckerInterface $connectionChecker,
-        private readonly AdminSuperadminCheckInterface $superadmin,
     ) {
     }
 
@@ -45,20 +38,7 @@ final class MollieAdminConfigController
     #[Right(PaymentRightsProvider::CONFIG)]
     public function adminMollieConfig(): AdminMollieConfig
     {
-        return new AdminMollieConfig($this->settings->snapshot(), $this->superadmin->isSuperadmin());
-    }
-
-    /**
-     * Changes settings. API keys are write-only (empty = unchanged), the superadmin's alone (`superadmin_required`) and
-     * must carry the prefix of their mode; switching to live and writing a key need a step-up.
-     */
-    #[Mutation]
-    #[Right(PaymentRightsProvider::CONFIG)]
-    public function adminMollieConfigModify(AdminMollieConfigInput $input): AdminMollieConfigPayload
-    {
-        $result = $this->modifier->modify($input->toChange());
-
-        return AdminMollieConfigPayload::of($result, $this->superadmin->isSuperadmin());
+        return new AdminMollieConfig($this->settings->snapshot());
     }
 
     /**

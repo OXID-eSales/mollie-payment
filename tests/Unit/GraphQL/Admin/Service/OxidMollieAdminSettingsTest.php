@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Service;
 
-use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConfigChange;
+use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\ClassicSettingsUrlInterface;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\OxidMollieAdminSettings;
 use OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface;
 use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\InMemoryModuleSettings;
@@ -55,9 +55,14 @@ final class OxidMollieAdminSettingsTest extends TestCase
         self::assertSame('effective-for:https://hooks.example.com/m', $this->settings()->snapshot()->effectiveWebhookUrl);
     }
 
+    public function testSnapshot_CarriesTheClassicSettingsUrlOfTheModule(): void
+    {
+        self::assertSame('https://shop.test/admin/index.php?classic', $this->settings()->snapshot()->classicSettingsUrl);
+    }
+
     public function testSnapshot_UnsetOrUnknownValuesFallBackToTheModulesDefaults(): void
     {
-        $settings = new OxidMollieAdminSettings(new InMemoryModuleSettings(['sMollieMode' => 'staging', 'sMollieLogLevel' => 'loud']), $this->urls());
+        $settings = new OxidMollieAdminSettings(new InMemoryModuleSettings(['sMollieMode' => 'staging', 'sMollieLogLevel' => 'loud']), $this->urls(), $this->classicUrl());
 
         $snapshot = $settings->snapshot();
 
@@ -68,26 +73,19 @@ final class OxidMollieAdminSettingsTest extends TestCase
         self::assertFalse($snapshot->testKeySet);
     }
 
-    public function testApply_WritesOnlyTheFieldsTheChangeCarries(): void
-    {
-        $this->settings()->apply(new MollieConfigChange(expectedVersion: 'v', captureMode: 'automatic', multiCapture: false, webhookUrlOverride: ''));
-
-        self::assertSame(['sMollieCaptureMode', 'sMollieWebhookUrl', 'blMollieMultiCapture'], $this->store->saved);
-        self::assertSame(self::TEST_KEY, $this->store->values['sMollieTestKey']);
-        self::assertSame('', $this->store->values['sMollieWebhookUrl'], 'an empty override is a real value: it removes the override');
-    }
-
-    public function testApply_AnEmptyKeyIsNotWritten_ANewOneIs(): void
-    {
-        $this->settings()->apply(new MollieConfigChange(expectedVersion: 'v', testKey: '', liveKey: 'live_AAAAAAAAAANewLiveKey0123456789abcdefghij'));
-
-        self::assertSame(['sMollieLiveKey'], $this->store->saved);
-        self::assertSame(self::TEST_KEY, $this->store->values['sMollieTestKey']);
-    }
-
     private function settings(): OxidMollieAdminSettings
     {
-        return new OxidMollieAdminSettings($this->store, $this->urls());
+        return new OxidMollieAdminSettings($this->store, $this->urls(), $this->classicUrl());
+    }
+
+    private function classicUrl(): ClassicSettingsUrlInterface
+    {
+        return new class implements ClassicSettingsUrlInterface {
+            public function url(): string
+            {
+                return 'https://shop.test/admin/index.php?classic';
+            }
+        };
     }
 
     private function urls(): MollieWebhookUrlProviderInterface

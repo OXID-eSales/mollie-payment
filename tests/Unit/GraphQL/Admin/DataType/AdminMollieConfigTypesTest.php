@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\DataType;
 
 use OxidEsales\Payments\Mollie\GraphQL\Admin\DataType\AdminMollieConfig;
-use OxidEsales\Payments\Mollie\GraphQL\Admin\DataType\AdminMollieConfigInput;
 use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\ConfigFixtures;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -25,7 +24,7 @@ final class AdminMollieConfigTypesTest extends TestCase
 
         self::assertEqualsCanonicalizing([
             'mode', 'captureMode', 'multiCapture', 'profileId', 'webhookUrlOverride', 'effectiveWebhookUrl', 'logLevel',
-            'testKeySet', 'liveKeySet', 'version', 'secretsEditable',
+            'testKeySet', 'liveKeySet', 'classicSettingsUrl', 'version',
         ], $fields);
         foreach ($fields as $field) {
             self::assertDoesNotMatchRegularExpression('/key$/i', $field, 'no field may carry an API key value');
@@ -34,40 +33,17 @@ final class AdminMollieConfigTypesTest extends TestCase
 
     public function testConfig_ReadsFromTheSnapshot(): void
     {
-        $config = new AdminMollieConfig(ConfigFixtures::snapshot(['liveKeySet' => true, 'multiCapture' => true]), true);
+        $config = new AdminMollieConfig(ConfigFixtures::snapshot(['liveKeySet' => true, 'multiCapture' => true]));
 
         self::assertTrue($config->isLiveKeySet());
         self::assertTrue($config->isMultiCapture());
         self::assertSame('pfl_AbC123', $config->getProfileId());
+        self::assertSame(
+            'https://shop.test/admin/index.php?cl=module_config&oxid=oe_payments_mollie&shp=1',
+            $config->getClassicSettingsUrl()
+        );
         self::assertSame('https://shop.test/index.php?cl=MollieWebhookController', $config->getEffectiveWebhookUrl());
         self::assertSame(ConfigFixtures::snapshot(['liveKeySet' => true, 'multiCapture' => true])->version(), $config->getVersion());
-    }
-
-    public function testInput_TakesKeysButTheTypeNeverReturnsThem(): void
-    {
-        $input = new ReflectionClass(AdminMollieConfigInput::class);
-
-        self::assertTrue($input->hasProperty('testKey'));
-        self::assertTrue($input->hasProperty('liveKey'));
-        self::assertTrue($input->hasProperty('expectedVersion'));
-        self::assertFalse($input->hasProperty('effectiveWebhookUrl'), 'derived, read-only');
-    }
-
-    public function testInput_BecomesAChangeWithoutLosingOrInventingAnything(): void
-    {
-        $input = new AdminMollieConfigInput();
-        $input->expectedVersion = 'v1';
-        $input->mode = 'live';
-        $input->liveKey = ConfigFixtures::LIVE_KEY;
-        $input->multiCapture = true;
-
-        $change = $input->toChange();
-
-        self::assertSame('v1', $change->expectedVersion);
-        self::assertSame('live', $change->mode);
-        self::assertSame(ConfigFixtures::LIVE_KEY, $change->keyFor('live'));
-        self::assertTrue($change->multiCapture);
-        self::assertNull($change->captureMode);
     }
 
     /**

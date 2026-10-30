@@ -23,6 +23,7 @@ use OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface;
 use OxidEsales\Payments\Mollie\Service\ContractRefundRecorder;
 use OxidEsales\Payments\Mollie\Service\Exception\MollieRefundNotYetAvailableException;
 use OxidEsales\Payments\Mollie\Service\RefundService;
+use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -77,6 +78,24 @@ final class RefundServiceTest extends TestCase
         $dto = $this->service->refund($contract);
 
         self::assertSame('re_1', $dto->id);
+    }
+
+    public function testRefund_IsListedInTheTransactionTableWithMolliesRefundId(): void
+    {
+        $contract = $this->fulfilledContract('tr_123', '5');
+        $this->paymentsAdapter->method('getPayment')->willReturn($this->payment('tr_123', 100.0, 0.0));
+        $this->refundAdapter->method('createRefund')->willReturn($this->refundDto('re_9', 'tr_123', 25.0));
+        $audit = $this->auditRecorderExpecting('refund', 25.0, 're_9');
+        $service = new RefundService(
+            $this->paymentsAdapter,
+            $this->refundAdapter,
+            $this->refundRecorder,
+            $this->stockRestorationService,
+            new NullLogger(),
+            $audit,
+        );
+
+        $service->refund($contract, 25.0);
     }
 
     public function testRefund_Full_OnPartiallyCapturedPayment_RefundsOnlyWhatWasCaptured(): void
@@ -349,5 +368,19 @@ final class RefundServiceTest extends TestCase
     private function refundDto(string $id, string $paymentId, float $amount): MollieRefundDto
     {
         return new MollieRefundDto($id, $paymentId, MollieAmountDto::fromComponents('EUR', $amount), 'pending');
+    }
+
+    private function auditRecorderExpecting(string $type, float $amount, string $reference): TransactionAuditRecorder
+    {
+        $shop = $this->createMock(\OxidEsales\PaymentBase\Adapter\ShopAdapterInterface::class);
+        $shop->method('getShopId')->willReturn('1');
+        $rows = $this->createMock(\OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface::class);
+        $rows->expects(self::once())->method('save')->with(self::callback(
+            static fn (\OxidEsales\PaymentBase\Contract\Transaction $row): bool => $row->getType() === $type
+                && $row->getAmount() === $amount
+                && $row->getTransactionId() === $reference
+        ));
+
+        return new TransactionAuditRecorder($rows, $shop);
     }
 }

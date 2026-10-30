@@ -33,11 +33,6 @@ final class AdminApiIsOptionalTest extends TestCase
         });
 
         self::assertSame([], $hard, 'a hard reference to an admin API service breaks the compile without it: use @?');
-        self::assertContains(
-            '@?OxidEsales\\GraphQL\\Admin\\Audit\\Service\\AuditRecorder',
-            $this->flattenedReferences($services),
-            'the audit recorder is wired optionally',
-        );
     }
 
     public function testNoServiceIsDefinedForAClassOfTheAdminApiItself(): void
@@ -94,21 +89,5 @@ final class AdminApiIsOptionalTest extends TestCase
     private function services(): array
     {
         return Yaml::parseFile(__DIR__ . '/../../../../services.yaml', Yaml::PARSE_CUSTOM_TAGS)['services'];
-    }
-
-    /**
-     * @param array<string, mixed> $services
-     * @return list<string>
-     */
-    private function flattenedReferences(array $services): array
-    {
-        $references = [];
-        array_walk_recursive($services, static function (mixed $value) use (&$references): void {
-            if (is_string($value) && str_starts_with($value, '@')) {
-                $references[] = $value;
-            }
-        });
-
-        return $references;
     }
 }
