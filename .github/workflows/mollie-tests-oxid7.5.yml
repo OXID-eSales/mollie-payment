@@ -162,8 +162,12 @@ jobs:
           if [ '${{ matrix.graphql }}' = 'with' ]; then
             docker compose exec -T php composer require oxid-esales/graphql-storefront --no-interaction --no-update
           fi
-          docker compose exec -T -e COMPOSER_AUTH="${COMPOSER_AUTH_JSON}" \
-            php composer update --with-all-dependencies --no-interaction
+          for attempt in 1 2 3; do
+            docker compose exec -T -e COMPOSER_AUTH="${COMPOSER_AUTH_JSON}" \
+              php composer update --with-all-dependencies --no-interaction && break
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            echo "composer update failed (attempt $attempt), retrying in 20 s"; sleep 20
+          done
 
       # Workaround for a CI-environment-specific bug in
       # `oxid-esales/oxideshop-unified-namespace-generator`: on the CI runner image its
@@ -408,7 +412,11 @@ jobs:
 
       - name: Install module dependencies
         run: |
-          docker compose exec -T php bash -c "cd /var/www/test-module && composer update --no-interaction"
+          for attempt in 1 2 3; do
+            docker compose exec -T php bash -c "cd /var/www/test-module && composer update --no-interaction" && break
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            echo "composer update failed (attempt $attempt), retrying in 20 s"; sleep 20
+          done
 
       - name: Run isolated unit tests
         # Genuinely isolated: the module's own PHPUnit against
@@ -476,7 +484,11 @@ jobs:
           if [ '${{ matrix.graphql }}' = 'with' ]; then
             docker compose exec -T php composer require oxid-esales/graphql-storefront --no-interaction --no-update
           fi
-          docker compose exec -T php composer update --no-interaction
+          for attempt in 1 2 3; do
+            docker compose exec -T php composer update --no-interaction && break
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            echo "composer update failed (attempt $attempt), retrying in 20 s"; sleep 20
+          done
 
       - name: Install module
         run: |
