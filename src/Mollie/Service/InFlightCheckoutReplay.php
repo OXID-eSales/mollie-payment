@@ -12,15 +12,18 @@ namespace OxidEsales\Payments\Mollie\Service;
 use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\PaymentBase\Adapter\SessionAdapterInterface;
 use OxidEsales\PaymentBase\Checkout\InFlightCheckoutAttemptResolverInterface;
+use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 
 /**
  * MOL-18: "Order now" clicked twice. PHP's session lock serialises the two POSTs, so the second
  * one arrives after the first has created contract, order and Mollie payment and answered with a
  * redirect. Starting a second attempt used to retire the first (order storno'd) and - because
  * core's sess_challenge still named that order - end in a phantom order row the shopper then paid
- * for. payment-base decides whether an attempt is in flight (open contract with a checkout URL,
- * order still NOT_FINISHED, same basket total); this class only reads the live basket total for it
- * and hands the Mollie checkout URL to replay back to the controller.
+ * for. payment-base decides whether an attempt is in flight (open contract of the same provider with
+ * a checkout URL, order still NOT_FINISHED, same basket total); this class only says that Mollie
+ * starts, reads the live basket total for it and hands the Mollie checkout URL to replay back to the
+ * controller. PSP-SWITCH: the provider is part of the question - a PayPal attempt that a cancel left
+ * open is not rejoined, so its approval URL is never replayed into a Mollie start.
  */
 final class InFlightCheckoutReplay implements InFlightCheckoutReplayInterface
 {
@@ -41,6 +44,9 @@ final class InFlightCheckoutReplay implements InFlightCheckoutReplayInterface
             return null;
         }
 
-        return $this->resolver->resolve((float) $basket->getPrice()->getBruttoPrice());
+        return $this->resolver->resolve(
+            MollieDefinitions::PROVIDER_NAME,
+            (float) $basket->getPrice()->getBruttoPrice()
+        );
     }
 }

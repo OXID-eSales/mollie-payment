@@ -5,6 +5,11 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed (PSP-SWITCH) - after a PayPal cancel, "Pay" with Mollie opened PayPal again
+- The MOL-18 replay now asks payment-base for a **Mollie** attempt only. A PayPal attempt that a cancel left open is
+  not rejoined: the Mollie start continues that attempt (OPC-175), the order is written again with
+  `OXPAYMENTTYPE = oe_payments_mollie`, and the browser goes to Mollie. Requires payment-base `>=v1.6`.
+
 ### Changed
 - **API keys: superadmin only (PAY-10 S3).** `adminMollieConfigModify` with a non-empty `testKey` / `liveKey` is refused for
   anyone but a superadmin: payload `errors` entry `validation_failed` with `code: superadmin_required` (`field` = the key
