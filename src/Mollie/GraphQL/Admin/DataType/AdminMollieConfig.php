@@ -14,8 +14,8 @@ use TheCodingMachine\GraphQLite\Annotations\Field;
 use TheCodingMachine\GraphQLite\Annotations\Type;
 
 /**
- * The Mollie settings of the shop. `testKeySet` / `liveKeySet` say whether an API key is stored, and no field carries its value,
- * ever. `version` identifies the state of the settings that was read.
+ * The Mollie settings of the shop. `testKeySet` / `liveKeySet` say whether an API key is stored, and no field carries
+ * its value, ever. `version` identifies the state of the settings that was read.
  *
  * The getters carry the GraphQL field names (graphqlite strips get/is).
  */
