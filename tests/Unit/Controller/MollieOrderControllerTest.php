@@ -364,7 +364,10 @@ final class MollieOrderControllerTest extends TestCase
     private function replayAnswering(?string $checkoutUrl): InFlightCheckoutReplay
     {
         $resolver = $this->createMock(InFlightCheckoutAttemptResolverInterface::class);
-        $resolver->expects(self::once())->method('resolve')->with(self::LIVE_BASKET_TOTAL)->willReturn($checkoutUrl);
+        $resolver->expects(self::once())
+            ->method('resolve')
+            ->with(MollieDefinitions::PROVIDER_NAME, self::LIVE_BASKET_TOTAL)
+            ->willReturn($checkoutUrl);
 
         return new InFlightCheckoutReplay($resolver, $this->sessionWithBasketWorth(self::LIVE_BASKET_TOTAL));
     }

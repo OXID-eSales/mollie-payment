@@ -13,23 +13,25 @@ use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\Eshop\Core\Price;
 use OxidEsales\PaymentBase\Adapter\SessionAdapterInterface;
 use OxidEsales\PaymentBase\Checkout\InFlightCheckoutAttemptResolverInterface;
+use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplay;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 /**
  * MOL-18 — the glue between the order controller and payment-base's in-flight resolver: it
- * contributes exactly one fact, the live basket's gross total.
+ * contributes two facts, the provider that starts (Mollie) and the live basket's gross total.
  */
 #[CoversClass(InFlightCheckoutReplay::class)]
 final class InFlightCheckoutReplayTest extends TestCase
 {
-    public function testAsksTheResolverWithTheLiveBasketTotalAndReturnsItsAnswer(): void
+    public function testAsksTheResolverForAMollieAttemptWithTheLiveBasketTotalAndReturnsItsAnswer(): void
     {
         $resolver = $this->createMock(InFlightCheckoutAttemptResolverInterface::class);
         $resolver->expects(self::once())
             ->method('resolve')
-            ->with(116.5)
+            // PSP-SWITCH: only a Mollie attempt is rejoined, never the PayPal one a cancel left open.
+            ->with(MollieDefinitions::PROVIDER_NAME, 116.5)
             ->willReturn('https://www.mollie.com/checkout/select-method/tr_1');
 
         $replay = new InFlightCheckoutReplay($resolver, $this->sessionWith($this->basketWorth(116.5)));
