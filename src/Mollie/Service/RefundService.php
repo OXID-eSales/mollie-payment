@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\Service;
 use DomainException;
 use InvalidArgumentException;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
+use OxidEsales\PaymentBase\Refund\ProviderRefundLedgerInterface;
 use OxidEsales\PaymentBase\Service\StockRestorationServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
@@ -21,7 +22,6 @@ use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
-use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\Exception\MollieRefundNotYetAvailableException;
 use Psr\Log\LoggerInterface;
 
@@ -38,8 +38,9 @@ use Psr\Log\LoggerInterface;
  * "API truth": while Mollie still books a capture its payment reports nothing settled, so the
  * ceiling is {@see RefundBound} — Mollie's figure once settled, the shop's record until then.
  *
- * DRY: the actual contract bookkeeping (FULFILLED guard + delta-only accumulation) is delegated
- * to {@see ContractRefundRecorder}, the same collaborator the webhook-driven refund path uses.
+ * VR-21 F6: the refund is booked through payment-base's ledger by its Mollie refund id - the same
+ * id the `refunded` webhook books, so the second report is a duplicate. The ledger's transaction row
+ * is the one the admin's Payment tab lists.
  *
  * Story 1 (Sprint 9): Stock restoration on admin refund. When a refund succeeds, stock is restored
  * for the associated order articles via {@see StockRestorationServiceInterface}.
@@ -52,10 +53,9 @@ final class RefundService implements RefundServiceInterface
     public function __construct(
         private readonly MolliePaymentsAdapterInterface $paymentsAdapter,
         private readonly MollieRefundAdapterInterface $refundAdapter,
-        private readonly ContractRefundRecorder $refundRecorder,
+        private readonly ProviderRefundLedgerInterface $ledger,
         private readonly StockRestorationServiceInterface $stockRestorationService,
         private readonly LoggerInterface $logger,
-        private readonly ?TransactionAuditRecorder $auditRecorder = null,
     ) {
     }
 
@@ -87,15 +87,15 @@ final class RefundService implements RefundServiceInterface
         );
         $refund = $this->createRefund($request, $payment);
 
-        $this->refundRecorder->record($contract, (float) $refund->amount->value, $contract->getId());
-        // the row the admin's Payment tab lists, with Mollie's refund id as its reference
-        $this->auditRecorder?->record(
-            $contract,
-            MollieDefinitions::TRANSACTION_TYPE_REFUND,
-            MollieDefinitions::TRANSACTION_STATUS_COMPLETED,
-            (float) $refund->amount->value,
-            $refund->id,
-        );
+        if ($this->wasRun($refund)) {
+            $this->ledger->book(
+                (string) $contract->getId(),
+                $refund->id,
+                $refund->amount->value,
+                $refund->amount->currency,
+                'admin'
+            );
+        }
 
         if ($this->refundsTheRest($refund, $refundable, $effectiveAmount)) {
             $this->restoreStockIfOrderLinked($contract);
@@ -131,11 +131,16 @@ final class RefundService implements RefundServiceInterface
      */
     private function refundsTheRest(MollieRefundDto $refund, float $refundableBefore, float $refunded): bool
     {
-        if (in_array($refund->status, [self::REFUND_FAILED, self::REFUND_CANCELED], true)) {
-            return false;
-        }
+        return $this->wasRun($refund) && $refundableBefore - $refunded < 0.005;
+    }
 
-        return $refundableBefore - $refunded < 0.005;
+    /**
+     * A refund Mollie refused to run (failed / canceled) moved no money; a pending one is the
+     * normal start of a refund at Mollie.
+     */
+    private function wasRun(MollieRefundDto $refund): bool
+    {
+        return !in_array($refund->status, [self::REFUND_FAILED, self::REFUND_CANCELED], true);
     }
 
     /**

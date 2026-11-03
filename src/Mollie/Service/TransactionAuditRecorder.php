@@ -20,11 +20,9 @@ use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
  *
  * Extracted as its own service (rather than inlined per handler) so both the webhook
  * fulfillment ladder (capture/failure/expiration/cancellation) and the chargeback handler
- * share exactly one place that knows how to build a {@see Transaction}. Refunds are
- * deliberately NOT recorded here — {@see ContractRefundRecorder} owns the contract-level
- * refundedAmount bookkeeping and payment-base's Transaction model has no "refund" row
- * requirement for Mollie (mirrors Stripe's ContractRefundRecorder, which also stays out of
- * TransactionRepository).
+ * share exactly one place that knows how to build a {@see Transaction}. Refunds are not
+ * recorded here: payment-base's ProviderRefundLedger writes the refund row and the contract's
+ * refunded total together, by the Mollie refund id (VR-21 F6).
  */
 final class TransactionAuditRecorder
 {

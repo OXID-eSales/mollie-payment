@@ -5,6 +5,16 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed (VR-21 F6) - refunds are booked once, by their Mollie refund id
+- The admin refund (`RefundService`) and the `refunded` webhook (`PaymentRefundedHandler`) book through payment-base's
+  `ProviderRefundLedgerInterface` by the Mollie refund id: whichever reports a refund second is a duplicate and changes
+  nothing. The webhook lists the payment's refunds instead of booking "Mollie's total minus the contract's", so it no
+  longer races the admin refund (a stale save after the money had moved) and answers `refund_recorded` only when it
+  booked something. A refund Mollie refused to run (`failed` / `canceled`) is never booked. Requires payment-base with
+  `ProviderRefundLedgerInterface` (b-7.4.x since 2026-11-03).
+- Removed `Service\ContractRefundRecorder`; `RefundService` no longer takes a `TransactionAuditRecorder` (the ledger
+  writes the refund row the admin's Payment tab lists).
+
 ### Fixed (VR-21 F1/F2) - one refund is one refund; a partial refund keeps the stock
 - Captures and refunds send their idempotency key to Mollie (`MollieAdapter` called the API without it): a double
   click, a resubmit or a retry after a timeout no longer creates a second refund or capture. The key names the contract
