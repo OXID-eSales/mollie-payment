@@ -5,6 +5,11 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Removed (VR-17) - code nothing called
+- `MollieRefundAdapterInterface::getRefund()` (and its two implementations): refund rows come from `listRefunds()`.
+- `MollieCaptureRequestEvent::isFullCapture()`, `MollieConfigSnapshot::keySet()` (only a test called it).
+- Translation key `MOLLIE_VALIDATION_INVALID_USER_DATA` (en, de), unused since MOL-15.
+
 ### Fixed (PSP-SWITCH) - after a PayPal cancel, "Pay" with Mollie opened PayPal again
 - The MOL-18 replay now asks payment-base for a **Mollie** attempt only. A PayPal attempt that a cancel left open is
   not rejoined: the Mollie start continues that attempt (OPC-175), the order is written again with

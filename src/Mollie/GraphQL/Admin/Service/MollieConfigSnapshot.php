@@ -9,8 +9,6 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\GraphQL\Admin\Service;
 
-use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-
 /**
  * The Mollie settings as the admin API shows them. An API key is never part of it: only whether one is set.
  * `version()` is the optimistic-lock token of the settings (the module settings have no row timestamp); the
@@ -30,11 +28,6 @@ final readonly class MollieConfigSnapshot
         public bool $liveKeySet,
         public string $classicSettingsUrl,
     ) {
-    }
-
-    public function keySet(string $mode): bool
-    {
-        return $mode === MollieDefinitions::MODE_LIVE ? $this->liveKeySet : $this->testKeySet;
     }
 
     public function version(): string
