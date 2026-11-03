@@ -49,7 +49,7 @@ final class MollieEventTranslatorTest extends TestCase
         self::assertSame($contract, $translated->contract);
         self::assertSame(25.0, $translated->amount);
         self::assertSame('requested', $translated->reason);
-        self::assertSame('contract-1:refund:25.00', $translated->idempotencyKey);
+        self::assertSame('contract-1:refund:25.00:after:0.00', $translated->idempotencyKey);
         self::assertNull($translated->description);
     }
 
@@ -75,10 +75,10 @@ final class MollieEventTranslatorTest extends TestCase
 
         self::assertInstanceOf(MollieCaptureRequestEvent::class, $translated);
         self::assertSame(40.0, $translated->amount);
-        self::assertSame('contract-2:capture:40.00', $translated->idempotencyKey);
+        self::assertSame('contract-2:capture:40.00:after:0.00', $translated->idempotencyKey);
     }
 
-    public function testTranslate_CaptureRequested_FullAmount_KeyHasNoAmountSuffix(): void
+    public function testTranslate_CaptureRequested_FullAmount_KeySaysFull(): void
     {
         $contract = $this->contractWithId('contract-3');
         $context = $this->contextWithContract($contract);
@@ -86,7 +86,7 @@ final class MollieEventTranslatorTest extends TestCase
         $translated = $this->translator->translate(new CaptureRequestedEvent($context));
 
         self::assertInstanceOf(MollieCaptureRequestEvent::class, $translated);
-        self::assertSame('contract-3:capture', $translated->idempotencyKey);
+        self::assertSame('contract-3:capture:full:after:0.00', $translated->idempotencyKey);
     }
 
     public function testTranslate_CancelAuthorizationRequested_ToMollieCancelAuthorizationRequestEvent(): void
@@ -110,10 +110,39 @@ final class MollieEventTranslatorTest extends TestCase
         self::assertNull($translated);
     }
 
-    private function contractWithId(string $id): PaymentContractInterface
+    /**
+     * VR-21 F1 — the key names the contract state the action starts from: a double click
+     * or retry repeats the key (Mollie runs it once); a second refund of the same amount
+     * after the first one was booked starts from another state and gets its own key.
+     */
+    public function testASecondRefundOfTheSameAmountGetsItsOwnKey(): void
+    {
+        $first = $this->translator->translate(
+            new RefundRequestedEvent($this->contextWithContract($this->contractWithId('contract-5')), 10.0, 'r')
+        );
+        $second = $this->translator->translate(
+            new RefundRequestedEvent($this->contextWithContract($this->contractWithId('contract-5', refunded: 10.0)), 10.0, 'r')
+        );
+
+        self::assertSame('contract-5:refund:10.00:after:0.00', $first->idempotencyKey);
+        self::assertSame('contract-5:refund:10.00:after:10.00', $second->idempotencyKey);
+    }
+
+    public function testASecondPartialCaptureOfTheSameAmountGetsItsOwnKey(): void
+    {
+        $second = $this->translator->translate(
+            new CaptureRequestedEvent($this->contextWithContract($this->contractWithId('contract-6', captured: 40.0)), 40.0, 'c')
+        );
+
+        self::assertSame('contract-6:capture:40.00:after:40.00', $second->idempotencyKey);
+    }
+
+    private function contractWithId(string $id, ?float $refunded = null, ?float $captured = null): PaymentContractInterface
     {
         $contract = $this->createMock(PaymentContractInterface::class);
         $contract->method('getId')->willReturn($id);
+        $contract->method('getRefundedAmount')->willReturn($refunded);
+        $contract->method('getCapturedAmount')->willReturn($captured);
 
         return $contract;
     }

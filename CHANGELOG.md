@@ -5,6 +5,15 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed (VR-21 F1/F2) - one refund is one refund; a partial refund keeps the stock
+- Captures and refunds send their idempotency key to Mollie (`MollieAdapter` called the API without it): a double
+  click, a resubmit or a retry after a timeout no longer creates a second refund or capture. The key names the contract
+  state the action starts from (`contract:action:amount:after:<refunded|captured so far>`), so a real second refund of
+  the same amount is not mistaken for a repeat.
+- Stock comes back only with the refund that leaves nothing refundable. Before, any refund - a 5 EUR goodwill refund
+  on a 100 EUR order included - put every item back in stock and stornoed every order line. A refund Mollie refused to
+  run (`failed` / `canceled`) restocks nothing.
+
 ### Fixed (PSP-SWITCH) - after a PayPal cancel, "Pay" with Mollie opened PayPal again
 - The MOL-18 replay now asks payment-base for a **Mollie** attempt only. A PayPal attempt that a cancel left open is
   not rejoined: the Mollie start continues that attempt (OPC-175), the order is written again with

@@ -46,6 +46,9 @@ use Psr\Log\LoggerInterface;
  */
 final class RefundService implements RefundServiceInterface
 {
+    private const REFUND_FAILED = 'failed';
+    private const REFUND_CANCELED = 'canceled';
+
     public function __construct(
         private readonly MolliePaymentsAdapterInterface $paymentsAdapter,
         private readonly MollieRefundAdapterInterface $refundAdapter,
@@ -94,7 +97,9 @@ final class RefundService implements RefundServiceInterface
             $refund->id,
         );
 
-        $this->restoreStockIfOrderLinked($contract);
+        if ($this->refundsTheRest($refund, $refundable, $effectiveAmount)) {
+            $this->restoreStockIfOrderLinked($contract);
+        }
 
         return $refund;
     }
@@ -116,6 +121,21 @@ final class RefundService implements RefundServiceInterface
 
             throw $refusal;
         }
+    }
+
+    /**
+     * VR-21 F2: stock comes back with the refund that leaves nothing refundable - not with a
+     * partial one (a goodwill refund put every item back and stornoed every line). A refund
+     * Mollie refused to run (failed / canceled) restocks nothing; a pending one is the normal
+     * start of a refund at Mollie and counts.
+     */
+    private function refundsTheRest(MollieRefundDto $refund, float $refundableBefore, float $refunded): bool
+    {
+        if (in_array($refund->status, [self::REFUND_FAILED, self::REFUND_CANCELED], true)) {
+            return false;
+        }
+
+        return $refundableBefore - $refunded < 0.005;
     }
 
     /**

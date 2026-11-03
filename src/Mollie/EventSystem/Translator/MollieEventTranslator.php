@@ -11,6 +11,7 @@ namespace OxidEsales\Payments\Mollie\EventSystem\Translator;
 
 use OxidEsales\PaymentBase\EventSystem\Broker\ProviderEventTranslatorInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventInterface;
+use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\Request\AbstractProviderRequestEvent;
 use OxidEsales\PaymentBase\EventSystem\Event\Request\CancelAuthorizationRequestedEvent;
 use OxidEsales\PaymentBase\EventSystem\Event\Request\CaptureRequestedEvent;
@@ -59,7 +60,7 @@ final class MollieEventTranslator implements ProviderEventTranslatorInterface
                 $contract,
                 $event->getAmount(),
                 $event->getReason(),
-                $this->buildIdempotencyKey($contract->getId(), self::ACTION_REFUND, $event->getAmount()),
+                $this->buildIdempotencyKey($contract, self::ACTION_REFUND, $event->getAmount()),
                 $description,
             );
         }
@@ -69,7 +70,7 @@ final class MollieEventTranslator implements ProviderEventTranslatorInterface
                 $contract,
                 $event->getAmount(),
                 $event->getReason(),
-                $this->buildIdempotencyKey($contract->getId(), self::ACTION_CAPTURE, $event->getAmount()),
+                $this->buildIdempotencyKey($contract, self::ACTION_CAPTURE, $event->getAmount()),
             );
         }
 
@@ -77,20 +78,34 @@ final class MollieEventTranslator implements ProviderEventTranslatorInterface
             return new MollieCancelAuthorizationRequestEvent(
                 $contract,
                 $event->getReason(),
-                $this->buildIdempotencyKey($contract->getId(), self::ACTION_CANCEL_AUTHORIZATION, null),
+                $this->cancelAuthorizationKey($contract),
             );
         }
 
         return null;
     }
 
-    private function buildIdempotencyKey(?string $contractId, string $action, ?float $amount): string
+    /**
+     * VR-21 F1: the key names the contract state the action starts from - what was
+     * refunded / captured before it. A double click or a retry repeats the key and Mollie
+     * runs the action once; a second refund of the same amount, after the first one was
+     * booked, starts from another state and gets its own key.
+     */
+    private function buildIdempotencyKey(PaymentContractInterface $contract, string $action, ?float $amount): string
     {
-        $key = ($contractId ?? 'unknown') . ':' . $action;
-        if ($amount !== null) {
-            $key .= ':' . number_format($amount, 2, '.', '');
-        }
+        $before = $action === self::ACTION_REFUND ? $contract->getRefundedAmount() : $contract->getCapturedAmount();
 
-        return $key;
+        return sprintf(
+            '%s:%s:%s:after:%s',
+            $contract->getId() ?? 'unknown',
+            $action,
+            $amount !== null ? number_format($amount, 2, '.', '') : 'full',
+            number_format($before ?? 0.0, 2, '.', ''),
+        );
+    }
+
+    private function cancelAuthorizationKey(PaymentContractInterface $contract): string
+    {
+        return ($contract->getId() ?? 'unknown') . ':' . self::ACTION_CANCEL_AUTHORIZATION;
     }
 }
