@@ -11,8 +11,8 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller\Webhook;
 
 use OxidEsales\PaymentBase\Service\FileLoggerInterface;
 use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookController;
-use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRequest;
-use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRequestGuardInterface;
+use OxidEsales\PaymentBase\Webhook\Guard\WebhookHttpRequest;
+use OxidEsales\PaymentBase\Webhook\Guard\WebhookGuardInterface;
 use OxidEsales\Payments\Mollie\Webhook\MollieWebhookProcessor;
 
 /**
@@ -22,18 +22,18 @@ use OxidEsales\Payments\Mollie\Webhook\MollieWebhookProcessor;
  */
 final class TestableWebhookController extends WebhookController
 {
-    private WebhookRequest $testGuardRequest;
+    private WebhookHttpRequest $testGuardRequest;
 
     public function __construct(
         ?MollieWebhookProcessor $processor,
-        private readonly ?WebhookRequestGuardInterface $testGuard,
+        private readonly ?WebhookGuardInterface $testGuard,
         private readonly ?string $testPaymentId,
-        ?WebhookRequest $guardRequest = null,
+        ?WebhookHttpRequest $guardRequest = null,
         private readonly ?FileLoggerInterface $testFileLogger = null,
         private readonly bool $testTrustProxyHeaders = false,
     ) {
         $this->processor = $processor;
-        $this->testGuardRequest = $guardRequest ?? new WebhookRequest('https', '127.0.0.1', 0, 'id=tr_x');
+        $this->testGuardRequest = $guardRequest ?? new WebhookHttpRequest('https', '127.0.0.1', 0, 'id=tr_x');
     }
 
     public function init(): void
@@ -46,7 +46,7 @@ final class TestableWebhookController extends WebhookController
         // No-op in tests.
     }
 
-    protected function getGuard(): ?WebhookRequestGuardInterface
+    protected function getGuard(): ?WebhookGuardInterface
     {
         return $this->testGuard;
     }
@@ -56,7 +56,7 @@ final class TestableWebhookController extends WebhookController
         return $this->testFileLogger;
     }
 
-    protected function buildGuardRequest(): WebhookRequest
+    protected function buildGuardRequest(): WebhookHttpRequest
     {
         return $this->testGuardRequest;
     }

@@ -16,11 +16,11 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
 use OxidEsales\Payments\Mollie\Adapter\MollieWebhookAdapterInterface;
-use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookHttpsGuard;
-use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookIpAllowlistGuard;
-use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookPayloadSizeGuard;
-use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRateLimitGuard;
-use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRequest;
+use OxidEsales\PaymentBase\Webhook\Guard\HttpsGuard;
+use OxidEsales\PaymentBase\Webhook\Guard\IpAllowlistGuard;
+use OxidEsales\PaymentBase\Webhook\Guard\PayloadSizeGuard;
+use OxidEsales\PaymentBase\Webhook\Guard\RateLimitGuard;
+use OxidEsales\PaymentBase\Webhook\Guard\WebhookHttpRequest;
 use OxidEsales\Payments\Mollie\Service\ContractTokenService;
 use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use OxidEsales\Payments\Mollie\Webhook\MollieWebhookProcessor;
@@ -41,9 +41,9 @@ final class WebhookSecurityParityTest extends TestCase
     #[Group('F1')]
     public function testF1_WebhookHttpsEnforced(): void
     {
-        $guard = new WebhookHttpsGuard(allowHttpForDevelopment: false);
+        $guard = new HttpsGuard(allowHttpForDevelopment: false);
 
-        $result = $guard->check(new WebhookRequest('http', '1.2.3.4', 10, 'id=tr_x'));
+        $result = $guard->check(new WebhookHttpRequest('http', '1.2.3.4', 10, 'id=tr_x'));
 
         self::assertFalse($result->ok);
     }
@@ -51,9 +51,9 @@ final class WebhookSecurityParityTest extends TestCase
     #[Group('F2')]
     public function testF2_PayloadSizeCapped(): void
     {
-        $guard = new WebhookPayloadSizeGuard(maxBytes: 10);
+        $guard = new PayloadSizeGuard(maxBytes: 10);
 
-        $result = $guard->check(new WebhookRequest('https', '1.2.3.4', 100, str_repeat('x', 100)));
+        $result = $guard->check(new WebhookHttpRequest('https', '1.2.3.4', 100, str_repeat('x', 100)));
 
         self::assertFalse($result->ok);
         self::assertSame(413, $result->httpStatus);
@@ -61,15 +61,15 @@ final class WebhookSecurityParityTest extends TestCase
 
     /**
      * F3 — source IP allowlist. Not wired into the default guard chain (Mollie publishes no
-     * fixed webhook source ranges — see {@see WebhookIpAllowlistGuard}'s docblock), but the guard
+     * fixed webhook source ranges — see {@see IpAllowlistGuard}'s docblock), but the guard
      * class itself must behave correctly for merchants who opt in via services.yaml.
      */
     #[Group('F3')]
     public function testF3_IpAllowlistGuardRejectsUnlistedSource(): void
     {
-        $guard = new WebhookIpAllowlistGuard(['173.0.80.0/20']);
+        $guard = new IpAllowlistGuard(['173.0.80.0/20']);
 
-        $result = $guard->check(new WebhookRequest('https', '8.8.8.8', 10, 'id=tr_x'));
+        $result = $guard->check(new WebhookHttpRequest('https', '8.8.8.8', 10, 'id=tr_x'));
 
         self::assertFalse($result->ok);
         self::assertSame(403, $result->httpStatus);
@@ -80,8 +80,8 @@ final class WebhookSecurityParityTest extends TestCase
     {
         // Shared-storage counter since 2026-10-14 (review D-M1); behavior detail lives in
         // WebhookRateLimitGuardTest — this parity sweep pins the 429 contract only.
-        $guard = new WebhookRateLimitGuard(new InMemoryRateLimitStore(), limitPerWindow: 1);
-        $request = new WebhookRequest('https', '5.5.5.5', 10, 'id=tr_x');
+        $guard = new RateLimitGuard(new InMemoryRateLimitStore(), 'mollie', limitPerWindow: 1);
+        $request = new WebhookHttpRequest('https', '5.5.5.5', 10, 'id=tr_x');
 
         $guard->check($request);
         $result = $guard->check($request);

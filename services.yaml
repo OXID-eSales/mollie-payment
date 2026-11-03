@@ -498,39 +498,33 @@ services:
       $handlers: !tagged_iterator mollie.webhook_handler
     public: true
 
-  # Guard chain (Story 1). Cheapest check first: payload size -> HTTPS -> rate limit.
-  # WebhookIpAllowlistGuard is built (see its docblock) but intentionally NOT wired here —
-  # Mollie publishes no fixed webhook source ranges, unlike PayPal.
-  OxidEsales\Payments\Mollie\Controller\Webhook\WebhookHttpsGuard:
+  # Guard chain (VR-19 W5): payment-base's shared guards, cheapest check first: payload size ->
+  # HTTPS -> rate limit. 120/min per caller, counted in payment-base's shared RateLimitStore
+  # (oe_payments_idempotency); the caller is the address payment-base's TrustedProxyClientIp
+  # resolves behind the shop's reverse proxies (settings "Webhooks"). No IP allow-list: Mollie
+  # publishes no fixed webhook source ranges.
+  mollie.webhook.guard.payload_size:
+    class: OxidEsales\PaymentBase\Webhook\Guard\PayloadSizeGuard
     public: false
-  OxidEsales\Payments\Mollie\Controller\Webhook\WebhookPayloadSizeGuard:
+  mollie.webhook.guard.https:
+    class: OxidEsales\PaymentBase\Webhook\Guard\HttpsGuard
     public: false
-  # 2026-10-14 (review D-M1): reworked onto payment-base's SHARED RateLimitStore (Doctrine,
-  # reuses oe_payments_idempotency — the binding is payment-base's own, this module only
-  # consumes it) and wired into the chain. Sprint 11 (F6) had unwired the per-request
-  # token-bucket version that could never reject; the id-shape precheck alone still let every
-  # well-shaped forged id buy an authenticated Mollie API call (quota-exhaustion DoS).
-  # 120/min per source IP: Mollie delivers from few IPs, so legitimate bursts (batch refunds,
-  # settlement sweeps) stay far below this; the guard fails OPEN on storage failure.
-  OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRateLimitGuard:
+  mollie.webhook.guard.rate_limit:
+    class: OxidEsales\PaymentBase\Webhook\Guard\RateLimitGuard
     arguments:
       $store: '@OxidEsales\PaymentBase\Validation\RateLimit\RateLimitStoreInterface'
+      $provider: 'mollie'
       $limitPerWindow: 120
       $windowSeconds: 60
     public: false
-  OxidEsales\Payments\Mollie\Controller\Webhook\WebhookIpAllowlistGuard:
-    public: false
 
-  OxidEsales\Payments\Mollie\Controller\Webhook\WebhookGuardChain:
+  mollie.webhook.guard_chain:
+    class: OxidEsales\PaymentBase\Webhook\Guard\WebhookGuardChain
     arguments:
       $guards:
-        - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookPayloadSizeGuard'
-        - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookHttpsGuard'
-        - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRateLimitGuard'
-    public: true
-
-  OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRequestGuardInterface:
-    alias: OxidEsales\Payments\Mollie\Controller\Webhook\WebhookGuardChain
+        - '@mollie.webhook.guard.payload_size'
+        - '@mollie.webhook.guard.https'
+        - '@mollie.webhook.guard.rate_limit'
     public: true
 
   # ===========================================================================

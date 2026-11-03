@@ -5,6 +5,16 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed (VR-19 W5) - the webhook runs on payment-base's shared guard chain
+- The webhook guards are payment-base's `Webhook\Guard\*` classes, wired as `mollie.webhook.guard_chain` (payload size
+  -> HTTPS -> rate limit 120/min). The module's copies (`WebhookGuardChain`, `WebhookGuardResult`, `WebhookRequest`,
+  `WebhookRequestGuardInterface`, `WebhookHttpsGuard`, `WebhookPayloadSizeGuard`, `WebhookRateLimitGuard`,
+  `WebhookIpAllowlistGuard`) are removed.
+- The rate limit keys on the caller as payment-base's `TrustedProxyClientIp` resolves it behind the shop's reverse
+  proxies (payment-base settings "Webhooks"): behind Cloudflare, forged ids no longer exhaust the budget Mollie's real
+  deliveries share. Without the resolver the endpoint answers 503, like without a guard chain. Requires payment-base
+  `b-7.4.x` from 2026-11-03 (`TrustedProxyClientIp` service).
+
 ### Changed (VR-21 F6) - refunds are booked once, by their Mollie refund id
 - The admin refund (`RefundService`) and the `refunded` webhook (`PaymentRefundedHandler`) book through payment-base's
   `ProviderRefundLedgerInterface` by the Mollie refund id: whichever reports a refund second is a duplicate and changes

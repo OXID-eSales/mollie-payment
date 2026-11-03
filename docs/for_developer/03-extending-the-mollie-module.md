@@ -78,23 +78,28 @@ OxidEsales\MyModule\Service\LineItemAwareRefundService:
 
 ## Extension pattern 4 — opt into the IP allowlist guard
 
-`WebhookIpAllowlistGuard` exists but ships disabled (empty allowlist = pass-through) because
-Mollie publishes no fixed webhook source ranges. If your infrastructure fronts the webhook
-endpoint with a reverse proxy/CDN you control, wire it into the guard chain:
+The webhook guard chain is built from payment-base's shared guards (`OxidEsales\PaymentBase\Webhook\Guard\*`,
+VR-19). It ships without an IP allow-list because Mollie publishes no fixed webhook source ranges. If your
+infrastructure fronts the webhook endpoint with a reverse proxy/CDN you control, add payment-base's
+`IpAllowlistGuard` to the chain. The address it checks is the caller as payment-base's `TrustedProxyClientIp`
+resolves it: set your proxies in the module settings of payment-base (group "Webhooks").
 
 ```yaml
-OxidEsales\Payments\Mollie\Controller\Webhook\WebhookIpAllowlistGuard:
+mollie.webhook.guard.ip_allowlist:
+  class: OxidEsales\PaymentBase\Webhook\Guard\IpAllowlistGuard
   arguments:
     $allowedCidrs:
       - '10.0.0.0/8'   # your reverse-proxy/CDN egress range
 
-OxidEsales\Payments\Mollie\Controller\Webhook\WebhookGuardChain:
+mollie.webhook.guard_chain:
+  class: OxidEsales\PaymentBase\Webhook\Guard\WebhookGuardChain
   arguments:
     $guards:
-      - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookPayloadSizeGuard'
-      - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookHttpsGuard'
-      - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookIpAllowlistGuard'
-      - '@OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRateLimitGuard'
+      - '@mollie.webhook.guard.payload_size'
+      - '@mollie.webhook.guard.https'
+      - '@mollie.webhook.guard.ip_allowlist'
+      - '@mollie.webhook.guard.rate_limit'
+  public: true
 ```
 
 ## Extension pattern 5 — override the Mollie API client
