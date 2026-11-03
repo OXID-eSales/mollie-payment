@@ -9,27 +9,29 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Service;
 
+use OxidEsales\PaymentBase\Admin\Panel\AdminActionRefusedException;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminAuditInterface;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\IdempotencyClaim;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\OperationIdempotencyInterface;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentContractDetails;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentContractDetailsReaderInterface;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentOperationResult;
-use OxidEsales\PaymentBase\GraphQL\Admin\Service\ProviderActionOutcome;
-use OxidEsales\PaymentBase\GraphQL\Admin\Service\ProviderActionRunnerInterface;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\RequestShopOrdersInterface;
+use OxidEsales\Payments\Mollie\Admin\ReleaseActionInterface;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieReleaseOperation;
 use OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Support\CountingStepUp;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use RuntimeException;
+use Throwable;
 
 final class MollieReleaseOperationTest extends TestCase
 {
     /** @var list<PaymentContractDetails|null> */
     private array $reads;
-    /** @var list<array{string, string, string, array<string, mixed>}> */
+    /** @var list<array{string, ?string}> */
     private array $providerCalls = [];
-    private ProviderActionOutcome $outcome;
+    private ?Throwable $releaseFailure = null;
     private string $claimOutcome = IdempotencyClaim::FRESH;
     /** @var list<string> */
     private array $idempotencyLog = [];
@@ -41,7 +43,6 @@ final class MollieReleaseOperationTest extends TestCase
     protected function setUp(): void
     {
         $this->reads = [$this->payment('committed', 40.0), $this->payment('fulfilled', 40.0)];
-        $this->outcome = ProviderActionOutcome::ran();
         $this->stepUp = new CountingStepUp();
     }
 
@@ -51,7 +52,7 @@ final class MollieReleaseOperationTest extends TestCase
 
         self::assertNull($result->refusal());
         self::assertSame('fulfilled', $result->payment()->state);
-        self::assertSame([['mollie', 'o1', 'release', ['release_reason' => 'customer keeps 40']]], $this->providerCalls);
+        self::assertSame([['o1', 'customer keeps 40']], $this->providerCalls);
         self::assertSame(1, $this->stepUp->required);
         self::assertSame(['claim:admin_mollie_release', 'complete'], $this->idempotencyLog);
     }
@@ -96,7 +97,7 @@ final class MollieReleaseOperationTest extends TestCase
 
     public function testRelease_TheProviderRefuses_TheSentenceIsTheErrorAndTheKeyIsReleased(): void
     {
-        $this->outcome = ProviderActionOutcome::refused('not_releasable', 'The remaining authorization cannot be released');
+        $this->releaseFailure = new AdminActionRefusedException('not_releasable', 'The remaining authorization cannot be released');
 
         $refusal = $this->operation()->release('o1', null, 'release-key-1')->refusal();
 
@@ -107,9 +108,19 @@ final class MollieReleaseOperationTest extends TestCase
 
     public function testRelease_TheProviderThrows_IsProviderFailed(): void
     {
-        $this->outcome = ProviderActionOutcome::failed();
+        $this->releaseFailure = new RuntimeException('Mollie is down');
 
         self::assertSame('provider_failed', $this->operation()->release('o1', null, 'release-key-1')->refusal()?->code);
+    }
+
+    public function testRelease_TheProviderThrows_NothingOfItsMessageLeaksAndTheKeyIsReleased(): void
+    {
+        $this->releaseFailure = new RuntimeException('secret detail');
+
+        $refusal = $this->operation()->release('o1', null, 'release-key-1')->refusal();
+
+        self::assertStringNotContainsString('secret', (string) $refusal?->message);
+        self::assertSame(['claim:admin_mollie_release', 'release'], $this->idempotencyLog);
     }
 
     public function testRelease_NothingMovedAfterTheProviderRan_IsNotConfirmed(): void
@@ -162,11 +173,12 @@ final class MollieReleaseOperationTest extends TestCase
         $details->method('findByOrderId')->willReturnCallback(static function () use (&$reads): ?PaymentContractDetails {
             return count($reads) > 1 ? array_shift($reads) : $reads[0];
         });
-        $provider = $this->createStub(ProviderActionRunnerInterface::class);
-        $provider->method('run')->willReturnCallback(function (string $p, string $o, string $a, array $r): ProviderActionOutcome {
-            $this->providerCalls[] = [$p, $o, $a, $r];
-
-            return $this->outcome;
+        $release = $this->createStub(ReleaseActionInterface::class);
+        $release->method('run')->willReturnCallback(function (string $orderId, ?string $reason): void {
+            $this->providerCalls[] = [$orderId, $reason];
+            if ($this->releaseFailure !== null) {
+                throw $this->releaseFailure;
+            }
         });
         $idempotency = $this->createStub(OperationIdempotencyInterface::class);
         $idempotency->method('claim')->willReturnCallback(function (string $operation, string $orderId): IdempotencyClaim {
@@ -189,6 +201,6 @@ final class MollieReleaseOperationTest extends TestCase
         $shop = $this->createStub(RequestShopOrdersInterface::class);
         $shop->method('contains')->willReturnCallback(fn (): bool => $this->inShop);
 
-        return new MollieReleaseOperation($details, $provider, $idempotency, $this->stepUp, $audit, $shop);
+        return new MollieReleaseOperation($details, $release, $idempotency, $this->stepUp, $audit, $shop, $this->createStub(LoggerInterface::class));
     }
 }

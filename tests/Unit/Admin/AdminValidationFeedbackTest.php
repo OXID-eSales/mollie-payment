@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Admin;
 
 use OxidEsales\PaymentBase\Adapter\SessionAdapterInterface;
-use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminValidationFeedback;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -20,7 +19,6 @@ use PHPUnit\Framework\TestCase;
 final class AdminValidationFeedbackTest extends TestCase
 {
     private SessionAdapterInterface&MockObject $session;
-    private MessageFormatterInterface&MockObject $messageFormatter;
     private AdminValidationFeedback $feedback;
 
     /** @var array<string, mixed> */
@@ -36,8 +34,7 @@ final class AdminValidationFeedbackTest extends TestCase
             fn (string $name): mixed => $this->sessionStore[$name] ?? null,
         );
 
-        $this->messageFormatter = $this->createMock(MessageFormatterInterface::class);
-        $this->feedback = new AdminValidationFeedback($this->session, $this->messageFormatter);
+        $this->feedback = new AdminValidationFeedback($this->session);
     }
 
     public function testConsume_WithNothingStored_ReturnsEmptyList(): void
@@ -45,37 +42,25 @@ final class AdminValidationFeedbackTest extends TestCase
         self::assertSame([], $this->feedback->consume('order-1'));
     }
 
-    public function testReject_StoresTheFormattedMessage_ConsumedOnce(): void
+    public function testRejectWithMessage_IsConsumedOnce(): void
     {
-        $this->messageFormatter->method('format')
-            ->with('refund_amount', 'amountExceedsBound', null)
-            ->willReturn('Refund amount exceeds the refundable balance.');
+        $this->feedback->rejectWithMessage('order-1', 'Not valid');
 
-        $message = $this->feedback->reject('order-1', 'refund_amount', 'amountExceedsBound');
-
-        self::assertSame('Refund amount exceeds the refundable balance.', $message, 'PAY-5: the caller gets the sentence back');
-        self::assertSame(
-            ['Refund amount exceeds the refundable balance.'],
-            $this->feedback->consume('order-1'),
-        );
+        self::assertSame(['Not valid'], $this->feedback->consume('order-1'));
         self::assertSame([], $this->feedback->consume('order-1'), 'consume() clears the stored messages');
     }
 
-    public function testReject_TwiceForSameOrder_AccumulatesMessages(): void
+    public function testRejectWithMessage_TwiceForSameOrder_AccumulatesMessages(): void
     {
-        $this->messageFormatter->method('format')->willReturnOnConsecutiveCalls('first message', 'second message');
-
-        $this->feedback->reject('order-2', 'refund_amount', 'amountMalformed');
-        $this->feedback->reject('order-2', 'refund_reason', 'amountNotPositive');
+        $this->feedback->rejectWithMessage('order-2', 'first message');
+        $this->feedback->rejectWithMessage('order-2', 'second message');
 
         self::assertSame(['first message', 'second message'], $this->feedback->consume('order-2'));
     }
 
-    public function testReject_IsNamespacedPerOrder(): void
+    public function testRejectWithMessage_IsNamespacedPerOrder(): void
     {
-        $this->messageFormatter->method('format')->willReturn('boom');
-
-        $this->feedback->reject('order-a', 'refund_amount', 'amountMalformed');
+        $this->feedback->rejectWithMessage('order-a', 'boom');
 
         self::assertSame([], $this->feedback->consume('order-b'));
         self::assertSame(['boom'], $this->feedback->consume('order-a'));
@@ -83,8 +68,6 @@ final class AdminValidationFeedbackTest extends TestCase
 
     public function testRejectWithMessage_StoresTheMessageAsIs(): void
     {
-        $this->messageFormatter->expects(self::never())->method('format');
-
         $this->feedback->rejectWithMessage('order-3', 'The refund description field is not valid. Allowed symbols are: letters');
 
         self::assertSame(

@@ -89,8 +89,6 @@ services:
       # MOL-22 value objects (built by the validator / from a throwable, never by the container)
       - 'src/Mollie/Service/BuyabilityFailure.php'
       - 'src/Mollie/Service/NotOrderableCheckoutFailure.php'
-      # MOL-32: a result enum, not a service.
-      - 'src/Mollie/Service/CaptureCompletion.php'
       # Review A-H1 (2026-10-14) value objects: built by the entry points / the starter,
       # never by the container (scalar ctor args Symfony cannot autowire).
       - 'src/Mollie/Service/CheckoutStartRequest.php'
@@ -567,32 +565,25 @@ services:
     factory: ['@OxidEsales\Payments\Mollie\Service\Factory\MollieWebhookFileLoggerFactory', 'create']
     public: true
 
-  # ===========================================================================
-  # Sprint 6: admin actions (capture / refund / cancel authorization).
-  #
-  # RefundService/CaptureService/CancelAuthorizationService implement their own focused
-  # interfaces rather than extending payment-base's AbstractPaymentRefundService/
-  # AbstractPaymentCaptureService — those templates depend on the generic, non-segregated
-  # PaymentAdapterInterface and derive refund/capture bounds from local arithmetic
-  # (getCapturedAmount()/getTotalRefundedForContract()), whereas this sprint's own risk
-  # analysis requires bounds to come from the live Mollie payment (API truth) via the
-  # ISP-segregated Mollie adapters. Mirrors Stripe's RefundService/CaptureService, which made
-  # the same call for the same reasons.
-  # ===========================================================================
+  # VR-22 A6: Mollie's side of payment-base's money runner (capture, refund, void). The runner finds the gateways by
+  # the tag and the contract's provider; it owns policy, idempotency, the order lock and the booking.
+  OxidEsales\Payments\Mollie\Gateway\GatewayRefusals:
+    arguments:
+      $textFormatter: '@OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter'
+  OxidEsales\Payments\Mollie\Gateway\GatewayTextRules: ~
+  OxidEsales\Payments\Mollie\Gateway\MollieCaptureGateway:
+    tags:
+      - { name: oe.payment.gateway }
+    public: true
+  OxidEsales\Payments\Mollie\Gateway\MollieRefundGateway:
+    tags:
+      - { name: oe.payment.gateway }
+    public: true
+  OxidEsales\Payments\Mollie\Gateway\MollieCancelGateway:
+    tags:
+      - { name: oe.payment.gateway }
+    public: true
 
-  OxidEsales\Payments\Mollie\Service\RefundServiceInterface:
-    alias: OxidEsales\Payments\Mollie\Service\RefundService
-    public: true
-  OxidEsales\Payments\Mollie\Service\CaptureServiceInterface:
-    alias: OxidEsales\Payments\Mollie\Service\CaptureService
-    public: true
-  # MOL-32: the single-vs-multi-capture decision behind one injected policy.
-  OxidEsales\Payments\Mollie\Service\CaptureCompletionPolicyInterface:
-    alias: OxidEsales\Payments\Mollie\Service\CaptureCompletionPolicy
-    public: false
-  OxidEsales\Payments\Mollie\Service\CancelAuthorizationServiceInterface:
-    alias: OxidEsales\Payments\Mollie\Service\CancelAuthorizationService
-    public: true
   # MOL-32 S6: release the remaining authorization after partial captures.
   OxidEsales\Payments\Mollie\Service\ReleaseAuthorizationServiceInterface:
     alias: OxidEsales\Payments\Mollie\Service\ReleaseAuthorizationService
@@ -621,25 +612,8 @@ services:
       - { name: 'console.command', command: 'mollie:reconcile-paid' }
     public: true
 
-  # Admin request handlers — delegate to the services above, tagged so
-  # EventListenerProvider dispatches the Mollie concrete event produced by the translator.
-  OxidEsales\Payments\Mollie\EventSystem\Handler\MollieRefundRequestHandler:
-    arguments:
-      $feedback: '@OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface'
-      $translator: '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
-    tags:
-      - { name: payment.event_handler }
-    public: true
-  OxidEsales\Payments\Mollie\EventSystem\Handler\MollieCaptureRequestHandler:
-    arguments:
-      # MOL-32 S5: a refused capture reaches the admin on the next render, like the refund handler.
-      $feedback: '@OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface'
-      $translator: '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
-    tags:
-      - { name: payment.event_handler }
-    public: true
-  # MOL-32 S6: release-authorization handler. Dispatched directly (no generic request event), so
-  # it is reached by its getHandledEventClass() like the translated provider events.
+  # MOL-32 S6: release-authorization handler. Dispatched directly (no generic request event), so it is reached by its
+  # getHandledEventClass().
   OxidEsales\Payments\Mollie\EventSystem\Handler\MollieReleaseAuthorizationRequestHandler:
     arguments:
       $feedback: '@OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface'
@@ -647,53 +621,11 @@ services:
     tags:
       - { name: payment.event_handler }
     public: true
-  OxidEsales\Payments\Mollie\EventSystem\Handler\MollieCancelAuthorizationRequestHandler:
-    tags:
-      - { name: payment.event_handler }
-    public: true
-
-  # Translator — maps payment-base's provider-agnostic *RequestedEvent onto the Mollie
-  # concrete events above. Collected by the EventBroker below via !tagged_iterator.
-  OxidEsales\Payments\Mollie\EventSystem\Translator\MollieEventTranslator:
-    tags:
-      - { name: oe.payment.event_translator }
-    public: true
-
-  # Event Broker — routes abstract request events through registered translators. Bound here
-  # (not by payment-base) exactly like Stripe/PayPal each bind their own copy; the shared
-  # tagged_iterator picks up every active module's translator regardless of which module's
-  # EventBroker instance ends up resolved.
-  OxidEsales\PaymentBase\EventSystem\Broker\EventBroker:
-    arguments:
-      - '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
-      - !tagged_iterator oe.payment.event_translator
-    public: true
-  OxidEsales\PaymentBase\EventSystem\Broker\EventBrokerInterface:
-    alias: OxidEsales\PaymentBase\EventSystem\Broker\EventBroker
-    public: true
-
-  # Controller/ is not swept by the Service/* resource glob, so this is registered explicitly
-  # (mirrors PayPal's and Stripe's own OrderActionDispatcher wiring). Consumed by
-  # MolliePaymentPanelProvider below (Sprint 7).
-  OxidEsales\Payments\Mollie\Controller\Admin\OrderActionDispatcher:
-    arguments:
-      # MOL-32 S6: release-authorization is dispatched straight to the shared dispatcher (no
-      # payment-base-generic request event exists for it).
-      $eventDispatcher: '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
-    public: true
-
-  OxidEsales\Payments\Mollie\Controller\Admin\MollieExtraActionDispatcherInterface:
-    alias: OxidEsales\Payments\Mollie\Controller\Admin\OrderActionDispatcher
-    public: false
 
   # ===========================================================================
   # Sprint 7: admin panel (oe.payment.admin_panel) + storefront method selector.
   #
-  # Admin/ is not swept by the Service/* resource glob (same reasoning as Controller/), so every
-  # class below is registered explicitly. MolliePaymentPanelProvider is wired to the CONCRETE
-  # OrderActionDispatcher, not a global AdminActionDispatcherInterface alias — Stripe and PayPal
-  # both implement that interface too, so a global alias would collide (mirrors PayPal's own
-  # services.yaml comment on the identical wiring).
+  # Admin/ is not swept by the Service/* resource glob, so every class below is registered explicitly.
   # ===========================================================================
 
   # TransactionHistoryService and MollieUrlBuilder are plain classes directly under Service/, so
@@ -725,28 +657,14 @@ services:
   OxidEsales\Payments\Mollie\Admin\ReleaseRule:
     public: true
 
-  OxidEsales\Payments\Mollie\Admin\AdminAmountValidator:
-    public: true
-
-  # NOT tagged `oe.payment_base.validation_message_formatter` — that tag feeds the shared
-  # ValidationApiController's iterator, which resolves a formatter by `pluginModuleId` alone.
-  # UserDataValidationMessageFormatter already owns that slot for MollieDefinitions::MODULE_ID
-  # (character-level checkout validation); tagging this one too would make that endpoint's
-  # formatter resolution ambiguous. This formatter implements the same MessageFormatterInterface
-  # SPI/"plumbing" and is instead injected directly, by class, into AdminValidationFeedback below.
-  OxidEsales\Payments\Mollie\Admin\AdminAmountValidationMessageFormatter:
-    public: true
-
   OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface:
     alias: OxidEsales\Payments\Mollie\Admin\AdminValidationFeedback
     public: true
   OxidEsales\Payments\Mollie\Admin\AdminValidationFeedback:
-    arguments:
-      $messageFormatter: '@OxidEsales\Payments\Mollie\Admin\AdminAmountValidationMessageFormatter'
     public: true
 
-  # PAY-5 S4: how the panel says no (classic feedback + the admin API's typed refusal). MOL-15: admin free text is
-  # formatted by the tagged user-data formatter (the amount formatter belongs to AdminValidationFeedback).
+  # PAY-5 S4: how the release says no (classic feedback + the admin API's typed refusal). MOL-15: admin free text is
+  # formatted by the tagged user-data formatter.
   OxidEsales\Payments\Mollie\Admin\AdminActionRefusals:
     arguments:
       $textFormatter: '@OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter'
@@ -769,13 +687,16 @@ services:
   OxidEsales\Payments\Mollie\Admin\MolliePanelViewDataBuilder:
     public: false
 
-  OxidEsales\Payments\Mollie\Admin\MolliePaymentPanelProvider:
+  # MOL-32 S6: the Mollie-only release, run the same way by the classic tab and the admin API.
+  OxidEsales\Payments\Mollie\Admin\ReleaseActionInterface:
+    alias: OxidEsales\Payments\Mollie\Admin\MollieReleaseAction
+    public: false
+  OxidEsales\Payments\Mollie\Admin\MollieReleaseAction:
     arguments:
-      $actionDispatcher: '@OxidEsales\Payments\Mollie\Controller\Admin\OrderActionDispatcher'
-      # MOL-15: capture reason / refund description validated with the checkout rules.
-      $userDataValidator: '@OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface'
-      # MOL-32 S6: the Mollie-only release action.
-      $extraActions: '@OxidEsales\Payments\Mollie\Controller\Admin\MollieExtraActionDispatcherInterface'
+      $events: '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
+    public: false
+
+  OxidEsales\Payments\Mollie\Admin\MolliePaymentPanelProvider:
     tags:
       - { name: oe.payment.admin_panel }
     public: true
@@ -885,8 +806,8 @@ services:
     alias: oe_payments_mollie.graphql.admin_payment_contract_relation
     public: true
 
-  # PAY-5 S5: the release operation reuses payment-base's admin payment services (reader, provider-action boundary,
-  # idempotency store, step-up, audit, shop scope); Mollie's panel provider runs the MOL-32 release itself.
+  # PAY-5 S5: the release operation reuses payment-base's admin payment services (reader, idempotency store, step-up,
+  # audit, shop scope); Mollie's own ReleaseAction runs the MOL-32 release (payment-base's money runner does not know it).
   OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieReleaseOperationInterface:
     class: OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieReleaseOperation
     autowire: false
@@ -894,11 +815,12 @@ services:
     public: true # the integration tests resolve it
     arguments:
       - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentContractDetailsReaderInterface'
-      - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\ProviderActionRunnerInterface'
+      - '@OxidEsales\Payments\Mollie\Admin\ReleaseActionInterface'
       - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\OperationIdempotencyInterface'
       - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminStepUpInterface'
       - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminAuditInterface'
       - '@OxidEsales\PaymentBase\GraphQL\Admin\Service\RequestShopOrdersInterface'
+      - '@Psr\Log\LoggerInterface'
 
   oe_payments_mollie.graphql.admin_payment_controller:
     class: OxidEsales\Payments\Mollie\GraphQL\Admin\Controller\MollieAdminPaymentController

@@ -13,6 +13,7 @@ use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
 use OxidEsales\PaymentBase\Contract\BasketSnapshot;
 use OxidEsales\PaymentBase\Contract\ContractCondition;
 use OxidEsales\PaymentBase\Contract\PaymentContract;
+use OxidEsales\PaymentBase\Payment\ProviderCaptureLedgerInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface;
 use OxidEsales\PaymentBase\Service\Commit\CommitOutcome;
@@ -114,6 +115,7 @@ final class WebhookContractFulfillmentHandlerAuthorizedCommitTest extends TestCa
             new NullLogger(),
             $this->createMock(MollieLatePaymentRefunder::class),
             $this->commit,
+            $this->createMock(ProviderCaptureLedgerInterface::class),
         );
     }
 

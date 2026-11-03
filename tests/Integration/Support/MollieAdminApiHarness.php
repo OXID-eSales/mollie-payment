@@ -11,22 +11,20 @@ namespace OxidEsales\Payments\Mollie\Tests\Integration\Support;
 
 use Closure;
 use Doctrine\DBAL\Connection;
-use OxidEsales\Eshop\Application\Model\Order;
 use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
 use OxidEsales\EshopCommunity\Internal\Framework\Database\ConnectionProviderInterface;
-use OxidEsales\PaymentBase\Admin\Contract\AdminActionDispatcherInterface;
 use OxidEsales\PaymentBase\Admin\PaymentPanelRegistry;
 use OxidEsales\PaymentBase\Contract\BasketSnapshot;
 use OxidEsales\PaymentBase\Contract\ContractCondition;
 use OxidEsales\PaymentBase\Contract\PaymentContract;
+use OxidEsales\PaymentBase\EventSystem\Event\EventInterface;
+use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminAuditInterface;
-use OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminPaymentOperations;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminStepUpInterface;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\DbalRequestShopOrders;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\OperationIdempotency;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PanelActionBoundsResolver;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PanelActionOptionsResolver;
-use OxidEsales\PaymentBase\GraphQL\Admin\Service\PanelProviderActionRunner;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentContractDetailsReader;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentOperationResult;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
@@ -38,14 +36,14 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminActionBounds;
 use OxidEsales\Payments\Mollie\Admin\AdminActionRefusals;
-use OxidEsales\Payments\Mollie\Admin\AdminAmountValidator;
 use OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface;
 use OxidEsales\Payments\Mollie\Admin\MolliePanelOrderLoader;
 use OxidEsales\Payments\Mollie\Admin\MolliePanelViewDataBuilder;
 use OxidEsales\Payments\Mollie\Admin\MolliePaymentPanelProvider;
+use OxidEsales\Payments\Mollie\Admin\MollieReleaseAction;
 use OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider;
 use OxidEsales\Payments\Mollie\Admin\ReleaseRule;
-use OxidEsales\Payments\Mollie\Controller\Admin\MollieExtraActionDispatcherInterface;
+use OxidEsales\Payments\Mollie\EventSystem\Event\MollieReleaseAuthorizationRequestEvent;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieReleaseOperation;
 use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter;
@@ -54,11 +52,11 @@ use Psr\Log\NullLogger;
 use RuntimeException;
 
 /**
- * The Mollie panel provider behind payment-base's admin payment API, against the real database and the real
- * payment-base services (contract and transaction repositories, bounds and options resolvers, idempotency, the
- * provider-action runner), with only Mollie itself faked: the payments adapter answers with a scripted live payment
- * (or fails) and the action dispatchers record what the panel asked of them. No Mollie sandbox is involved: the money
- * movement is Mollie's side, what is proven is everything the shop decides.
+ * The Mollie panel provider and the Mollie-only release behind payment-base's admin payment API, against the real
+ * database and the real payment-base services (contract and transaction repositories, bounds and options resolvers,
+ * idempotency), with only Mollie itself faked: the payments adapter answers with a scripted live payment (or fails)
+ * and the event dispatcher records the release it was asked to run. Capture, refund and void are payment-base's
+ * money runner's (VR-22 A3) and Mollie's gateways' (unit-tested); no Mollie sandbox is involved here.
  *
  * The using test case must be a TestCase on a rolled-back connection (OXID's IntegrationTestCase) with `contracts()`
  * built on that connection.
@@ -81,19 +79,25 @@ trait MollieAdminApiHarness
         $this->panel = null;
     }
 
-    private function operations(): AdminPaymentOperations
+    private function detailsReader(): PaymentContractDetailsReader
     {
-        $connection = $this->connection();
         $registry = new PaymentPanelRegistry([$this->panel()]);
 
-        return new AdminPaymentOperations(
-            new PaymentContractDetailsReader(
-                $this->contracts(),
-                new DoctrineTransactionRepository($connection),
-                new PanelActionOptionsResolver($registry, new NullLogger()),
-                new PanelActionBoundsResolver($registry, new NullLogger()),
-            ),
-            new PanelProviderActionRunner($registry, $this->contracts(), new NullLogger()),
+        return new PaymentContractDetailsReader(
+            $this->contracts(),
+            new DoctrineTransactionRepository($this->connection()),
+            new PanelActionOptionsResolver($registry, new NullLogger()),
+            new PanelActionBoundsResolver($registry, new NullLogger()),
+        );
+    }
+
+    private function releaseOperation(): MollieReleaseOperation
+    {
+        $connection = $this->connection();
+
+        return new MollieReleaseOperation(
+            $this->detailsReader(),
+            $this->releaseAction(),
             new OperationIdempotency(new DoctrineIdempotencyRepository($connection)),
             $this->countingStepUp(),
             $this->passThroughAudit(),
@@ -102,40 +106,28 @@ trait MollieAdminApiHarness
         );
     }
 
-    private function releaseOperation(): MollieReleaseOperation
+    private function panel(): MolliePaymentPanelProvider
     {
-        $connection = $this->connection();
-        $registry = new PaymentPanelRegistry([$this->panel()]);
-
-        return new MollieReleaseOperation(
-            new PaymentContractDetailsReader(
-                $this->contracts(),
-                new DoctrineTransactionRepository($connection),
-                new PanelActionOptionsResolver($registry, new NullLogger()),
-                new PanelActionBoundsResolver($registry, new NullLogger()),
-            ),
-            new PanelProviderActionRunner($registry, $this->contracts(), new NullLogger()),
-            new OperationIdempotency(new DoctrineIdempotencyRepository($connection)),
-            $this->countingStepUp(),
-            $this->passThroughAudit(),
-            new DbalRequestShopOrders($connection),
+        return $this->panel ??= new MolliePaymentPanelProvider(
+            $this->createMock(MolliePanelViewDataBuilder::class),
+            new MolliePanelOrderLoader(),
+            $this->bounds(),
+            $this->releaseAction(),
         );
     }
 
-    private function panel(): MolliePaymentPanelProvider
+    private function bounds(): AdminActionBounds
+    {
+        return new AdminActionBounds(new MolliePaymentSnapshotProvider($this->paymentsAdapter(), new NullLogger()));
+    }
+
+    private function releaseAction(): MollieReleaseAction
     {
         $container = ContainerFactory::getInstance()->getContainer();
-        $snapshots = new MolliePaymentSnapshotProvider($this->paymentsAdapter(), new NullLogger());
-        $bounds = new AdminActionBounds($snapshots);
-        $dispatcher = $this->recordingDispatcher();
 
-        return $this->panel ??= new MolliePaymentPanelProvider(
-            $dispatcher,
-            $this->createMock(MolliePanelViewDataBuilder::class),
-            new MolliePanelOrderLoader(),
+        return new MollieReleaseAction(
             $this->contracts(),
-            $bounds,
-            new AdminAmountValidator(),
+            new ReleaseRule($this->bounds()),
             $container->get(UserDataValidatorInterface::class),
             new AdminActionRefusals(
                 $container->get(AdminValidationFeedbackInterface::class),
@@ -147,8 +139,7 @@ trait MollieAdminApiHarness
                     }
                 },
             ),
-            new ReleaseRule($bounds),
-            $dispatcher,
+            $this->recordingDispatcher(),
         );
     }
 
@@ -190,57 +181,42 @@ trait MollieAdminApiHarness
     }
 
     /**
-     * Records what the panel asked of the dispatcher and, like the real handlers, books the effect on the contract.
+     * Records the release it is asked to run and, like the real handler, books the effect on the contract.
      */
-    private function recordingDispatcher(): AdminActionDispatcherInterface&MollieExtraActionDispatcherInterface
+    private function recordingDispatcher(): EventDispatcherInterface
     {
         $harness = $this;
 
-        return new class ($harness) implements AdminActionDispatcherInterface, MollieExtraActionDispatcherInterface {
+        return new class ($harness) implements EventDispatcherInterface {
             public function __construct(private readonly object $harness)
             {
             }
 
-            public function refund(Order $order, ?float $amount, ?string $reason, array $extras = []): void
+            public function addListener(string $eventClass, callable $listener, int $priority = 0): void
             {
-                $this->book($order, 'refund', $amount, static function (PaymentContract $contract, ?float $amount): void {
-                    $contract->addRefundedAmount($amount ?? 0.0);
-                });
             }
 
-            public function capture(Order $order, ?float $amount, ?string $reason, array $extras = []): void
+            public function removeListener(string $eventClass, callable $listener): void
             {
-                $this->book($order, 'capture', $amount, static function (PaymentContract $contract, ?float $amount): void {
-                    $contract->setCapturedAmount(($contract->getCapturedAmount() ?? 0.0) + ($amount ?? $contract->getAmount()));
-                });
             }
 
-            public function cancel(Order $order, ?string $reason, array $extras = []): void
+            public function dispatch(EventInterface $event): EventInterface
             {
-                $this->book($order, 'cancel', null, static function (PaymentContract $contract): void {
-                });
-            }
-
-            public function release(Order $order, ?string $reason = null): bool
-            {
+                if (!$event instanceof MollieReleaseAuthorizationRequestEvent) {
+                    return $event;
+                }
                 $succeeds = Closure::bind(fn (): bool => $this->releaseSucceeds, $this->harness, $this->harness)();
-                $this->book($order, 'release:' . ($reason ?? '-'), null, static function (PaymentContract $contract) use ($succeeds): void {
+                Closure::bind(function () use ($event, $succeeds): void {
+                    $this->actionsRun[] = 'release:' . ($event->reason ?? '-');
                     if ($succeeds) {
+                        $contract = $this->contracts()->findByOrderId((string) $event->contract->getOrderId());
                         $contract->fulfill();
+                        $this->contracts()->save($contract);
                     }
-                });
-
-                return $succeeds;
-            }
-
-            private function book(Order $order, string $action, ?float $amount, Closure $effect): void
-            {
-                Closure::bind(function () use ($order, $action, $amount, $effect): void {
-                    $this->actionsRun[] = $action . ($amount === null ? '' : ':' . $amount);
-                    $contract = $this->contracts()->findByOrderId((string) $order->getId());
-                    $effect($contract, $amount);
-                    $this->contracts()->save($contract);
                 }, $this->harness, $this->harness)();
+                $event->setResult($succeeds, $succeeds ? null : 'release_failed', $succeeds ? null : 'refused');
+
+                return $event;
             }
         };
     }

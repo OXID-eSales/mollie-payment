@@ -14,8 +14,8 @@ use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 
 /**
  * The one way a money action reads the Mollie payment id off a contract (review 2026-10-14,
- * A-M3: CaptureService and RefundService carried this guard verbatim, differing only in the
- * action word).
+ * A-M3: one guard, differing only in the action word). Capture, refund and void have their own gateways since
+ * VR-22 A6; the release action is its only user left.
  */
 final class ProviderOrderId
 {

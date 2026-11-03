@@ -14,8 +14,8 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
 
 /**
- * How much of a payment may be refunded - the one rule the admin panel (what it offers) and
- * {@see RefundService} (what it accepts) share, so the form never offers what the service refuses.
+ * How much of a payment may be refunded - the admin panel's read model (what it offers). Since VR-22 A6 payment-base's
+ * RefundPolicy is what a refund must satisfy; this only shows Mollie's live figure.
  *
  * MOL-30 (2026-10-09): Mollie's live payment is the answer once Mollie has settled the capture
  * ({@see MolliePaymentDto::refundableAmount()}, which knows about Dashboard refunds and pending

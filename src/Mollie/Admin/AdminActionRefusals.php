@@ -30,20 +30,10 @@ final class AdminActionRefusals
 
     public function __construct(
         private readonly AdminValidationFeedbackInterface $feedback,
-        // MOL-15: admin free text is formatted by the tagged user-data formatter, not by the amount formatter that
-        // AdminValidationFeedback owns.
+        // MOL-15: admin free text is formatted by the tagged user-data formatter.
         private readonly MessageFormatterInterface $textFormatter,
         private readonly LanguageTranslatorInterface $translator,
     ) {
-    }
-
-    public function amount(string $orderId, string $field, string $code): AdminActionRefusedException
-    {
-        return new AdminActionRefusedException(
-            self::machineCode($code),
-            $this->feedback->reject($orderId, $field, $code),
-            true
-        );
     }
 
     /**

@@ -93,8 +93,7 @@ final readonly class MolliePaymentDto
 
     /**
      * Remaining refundable balance. Never negative. Single source of truth for both the admin
-     * panel's refund bound ({@see \OxidEsales\Payments\Mollie\Admin\AdminActionBounds}) and
-     * Sprint 6's {@see \OxidEsales\Payments\Mollie\Service\RefundService}.
+     * panel's refund bound ({@see \OxidEsales\Payments\Mollie\Admin\AdminActionBounds}).
      *
      * Mollie's own `amountRemaining` ("the remaining amount that can be refunded") is the answer
      * whenever Mollie sends it: it already accounts for refunds that are still *pending*, which

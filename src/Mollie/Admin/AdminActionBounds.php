@@ -18,9 +18,9 @@ use OxidEsales\Payments\Mollie\Service\RefundBound;
 /**
  * Derives admin capture/refund bounds from the live Mollie payment via
  * {@see MolliePaymentDto::capturableAmount()}/{@see MolliePaymentDto::refundableAmount()} — the
- * exact same formulas Sprint 6's `RefundService`/`CaptureService` use to size the actual PSP call.
- * Kept as a small, independently-injectable seam (rather than reusing those services' private
- * methods) so the admin panel's read-only display path never depends on the write-side services.
+ * figures the panel shows (VR-22 A6: a read model; the capture and refund policies are payment-base's).
+ * Kept as a small, independently-injectable seam so the admin panel's read-only display path never depends on the
+ * write side.
  *
  * Sprint 136: the payment read itself moved to
  * {@see MolliePaymentSnapshotProviderInterface}, so the three questions below —
@@ -40,7 +40,7 @@ final class AdminActionBounds implements AdminActionBoundsInterface
      * shop has already captured. Right after "Execute capture" Mollie's payment resource still reads
      * `authorized` with the old remaining amount (the capture is booked, the payment follows a moment
      * later), so the live figure alone offered the same amount a second time; the contract knows
-     * better the moment CaptureService wrote the captured amount (2026-10-01).
+     * better the moment the capture was booked (2026-10-01).
      */
     public function captureBound(PaymentContractInterface $contract): float
     {
@@ -51,7 +51,7 @@ final class AdminActionBounds implements AdminActionBoundsInterface
     }
 
     /**
-     * MOL-30 (2026-10-09): the same rule RefundService accepts ({@see RefundBound}) - the shop's
+     * MOL-30 (2026-10-09): the rule of {@see RefundBound} - the shop's
      * own record stands while Mollie still books a capture, Mollie's figure once it has settled.
      */
     public function refundBound(PaymentContractInterface $contract): float

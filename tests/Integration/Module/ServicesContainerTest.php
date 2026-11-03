@@ -77,7 +77,9 @@ final class ServicesContainerTest extends TestCase
 
         foreach (
             [
-                \OxidEsales\Payments\Mollie\Service\RefundServiceInterface::class,
+                \OxidEsales\Payments\Mollie\Gateway\MollieRefundGateway::class,
+                \OxidEsales\Payments\Mollie\Gateway\MollieCaptureGateway::class,
+                \OxidEsales\Payments\Mollie\Gateway\MollieCancelGateway::class,
                 \OxidEsales\Payments\Mollie\Webhook\Handler\PaymentRefundedHandler::class,
                 \OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface::class,
                 \OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface::class,

@@ -18,19 +18,6 @@ use PHPUnit\Framework\TestCase;
 
 final class AdminActionRefusalsTest extends TestCase
 {
-    public function testAmount_IsRecordedForTheClassicTabAndRefusedWithTheSameSentence(): void
-    {
-        $feedback = $this->createMock(AdminValidationFeedbackInterface::class);
-        $feedback->expects(self::once())->method('reject')->with('o1', 'refund_amount', 'amountExceedsBound')
-            ->willReturn('Too much');
-
-        $refusal = $this->refusals($feedback)->amount('o1', 'refund_amount', 'amountExceedsBound');
-
-        self::assertSame('amount_exceeds_bound', $refusal->refusalCode());
-        self::assertSame('Too much', $refusal->getMessage());
-        self::assertTrue($refusal->feedbackRecorded());
-    }
-
     public function testText_EveryFailureIsRecordedAndTheFirstIsTheSentence(): void
     {
         $recorded = [];

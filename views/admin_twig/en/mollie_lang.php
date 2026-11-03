@@ -64,18 +64,15 @@ $aLang = [
     'MOLLIE_RELEASE_SUBMIT' => 'Release remainder',
     'MOLLIE_RELEASE_CONFIRM' => 'Release the remaining authorized amount back to the customer via Mollie? This cannot be undone.',
 
-    // Sprint 7 Story 3 — admin amount validation messages
-    // (AdminAmountValidationMessageFormatter).
-    'MOLLIE_ADMIN_AMOUNT_MALFORMED' => 'The amount is not a valid number.',
-    'MOLLIE_ADMIN_AMOUNT_NOT_POSITIVE' => 'The amount must be greater than zero.',
-    'MOLLIE_ADMIN_AMOUNT_PRECISION' => 'The amount may only have up to two decimal places.',
-    'MOLLIE_ADMIN_AMOUNT_EXCEEDS_BOUND' => 'The amount exceeds the available balance.',
+    // Admin money actions (VR-22 A6) — the sentences Mollie's gateways refuse with.
     'MOLLIE_ADMIN_REFUND_CAPTURE_SETTLING' => 'Mollie is still settling the capture — the refund could not be booked yet. Please try again in a moment.',
     'MOLLIE_ADMIN_REFUND_FAILED' => 'The refund could not be booked at Mollie. Please check the transaction history and try again.',
     'MOLLIE_ADMIN_CAPTURE_FAILED' => 'The capture could not be booked at Mollie. Please check the transaction history and the capturable amount, then try again.',
+    'MOLLIE_ADMIN_CAPTURE_FINAL' => 'The capture was refused: this Mollie account captures an authorization once, so what was not captured the first time has been released. Refund instead, or ask Mollie to enable multiple captures.',
+    'MOLLIE_ADMIN_CANCEL_FAILED' => 'The void could not be booked at Mollie. Please check the transaction history and the status of the payment, then try again.',
+    'MOLLIE_ADMIN_NO_PAYMENT' => 'The order has no Mollie payment on record.',
     'MOLLIE_ADMIN_RELEASE_FAILED' => 'The remaining authorization could not be released at Mollie. Please check the transaction history and try again.',
     'MOLLIE_ADMIN_RELEASE_NOT_POSSIBLE' => 'The remaining authorization cannot be released: nothing has been captured yet, nothing is left to capture, or the payment is no longer an open authorization.',
-    'MOLLIE_ADMIN_AMOUNT_INVALID' => 'The amount is invalid.',
 
     // Module configuration — group headings
     'SHOP_MODULE_GROUP_MOLLIE_GENERAL' => 'General',

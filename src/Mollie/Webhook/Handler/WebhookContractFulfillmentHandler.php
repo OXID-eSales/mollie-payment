@@ -9,8 +9,8 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Webhook\Handler;
 
-use DomainException;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
+use OxidEsales\PaymentBase\Payment\ProviderCaptureLedgerInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Repository\StaleContractException;
 use OxidEsales\PaymentBase\Service\Commit\CommitOutcome;
@@ -47,6 +47,8 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         // VR-20 R6: required - the one commit path for `authorized` and `paid` (amount, currency
         // and state checks in payment-base); no hand-written ladder beside it.
         private readonly ContractCommitServiceInterface $contractCommit,
+        // VR-22 A6: an automatically captured payment is booked like an admin capture, by payment-base's ledger.
+        private readonly ProviderCaptureLedgerInterface $captures,
     ) {
     }
 
@@ -136,7 +138,7 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             $contract = $this->contractRepository->findByProviderOrderId($providerOrderId) ?? $contract;
         }
 
-        $this->recordCapturedAmount($contract);
+        $contract = $this->bookAutomaticCapture($contract, $providerOrderId);
         $this->contractRepository->save($contract);
 
         $fulfilled = $this->contractFulfillmentService->fulfill($contract);
@@ -152,13 +154,6 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
 
             return FulfillmentResult::failed((string) $contract->getId());
         }
-
-        $this->auditRecorder->record(
-            $contract,
-            MollieDefinitions::TRANSACTION_TYPE_CAPTURE,
-            MollieDefinitions::TRANSACTION_STATUS_COMPLETED,
-            $contract->getAmount(),
-        );
 
         return FulfillmentResult::acted((string) $contract->getId());
     }
@@ -247,15 +242,14 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
     }
 
     /**
-     * Handle a Mollie `authorized` status: advances the contract from NOT_FINISHED/PENDING to
-     * AUTHORIZED — the state {@see \OxidEsales\Payments\Mollie\Service\CaptureService} requires
-     * before an admin capture can run.
+     * Handle a Mollie `authorized` status: commits the open contract (see {@see commitAuthorization()}), the
+     * state an admin capture or void of the authorization starts from.
      *
      * A contract that is anything other than NOT_FINISHED or PENDING is left untouched and this
      * is reported as a no-op: it is either already AUTHORIZED (re-delivered webhook) or has
      * already advanced past it (e.g. captured, committed, fulfilled, or terminal). Either way,
-     * attempting the ladder would be a wasted (and harmless, thanks to {@see attemptTransition})
-     * no-op, so it is skipped outright to avoid recording a spurious audit transaction.
+     * attempting the ladder would be a wasted no-op, so it is skipped outright to avoid recording a
+     * spurious audit transaction.
      */
     private function doPaymentAuthorized(string $providerOrderId): FulfillmentResult
     {
@@ -309,8 +303,8 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
      * AUTHORIZED and the order stayed NOT_FINISHED until the merchant captured. A headless
      * shopper who never returns would leave the money reserved on an unfinished order, so the
      * authorization now commits the open contract through payment-base's ContractCommitService
-     * with `requiresCapture`: the order is committed, not marked paid; the capture (CaptureService
-     * accepts COMMITTED) and the following `paid` webhook fulfil it as before. Same semantics as
+     * with `requiresCapture`: the order is committed, not marked paid; the admin capture
+     * (committed is capturable) and the following `paid` webhook fulfil it as before. Same semantics as
      * Stripe's `payment_intent.amount_capturable_updated` handler.
      *
      * The commit service saves its own copy of the contract, so the one loaded here is NOT saved
@@ -363,43 +357,31 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
     }
 
     /**
-     * MOL-17 Story 5: an automatically captured payment never wrote OXCAPTUREDAMOUNT (only the manual
-     * CaptureService did), so the admin panel showed "Captured 0.00" for every paid Mollie order. The
-     * refund gate does not read it; merchants do. Set once the ladder reached a state that allows it.
-     */
-    private function recordCapturedAmount(PaymentContractInterface $contract): void
-    {
-        if ($contract->getCapturedAmount() !== null || !$contract->getState()->isCommitted()) {
-            return;
-        }
-
-        $this->attemptTransition(
-            'setCapturedAmount',
-            $contract,
-            static fn () => $contract->setCapturedAmount($contract->getAmount())
-        );
-    }
-
-    /**
-     * Run one named transition, tolerating an inapplicable step.
+     * MOL-17 Story 5, VR-22 A6: an automatically captured payment (iDEAL, a card with automatic capture, ...) has no
+     * capture of its own to book, so the admin panel showed "Captured 0.00" for every paid Mollie order. The paid
+     * payment is the capture: payment-base's ledger books it once under the Mollie payment id (a redelivery books
+     * nothing). Nothing is booked when a capture is on record already (a manual capture, booked by the admin
+     * action by its Mollie capture id); the `paid` that follows it only fulfils.
      *
-     * The catch is deliberately broad — the contract state machine signals "not applicable" with a
-     * DomainException and the ladder must survive out-of-order deliveries. What it is NOT allowed to
-     * do is stay silent: a DomainException raised for a reason other than "already past this step"
-     * looks identical here, and before Sprint 11 nothing recorded it (F8).
+     * The ledger saves its own copy of the contract, so the copy to continue on is read again.
      */
-    private function attemptTransition(string $name, PaymentContractInterface $contract, callable $transition): void
-    {
-        try {
-            $transition();
-        } catch (DomainException $e) {
-            $this->logger->warning('[WebhookContractFulfillmentHandler] transition not applied', [
-                'transition' => $name,
-                'contractId' => $contract->getId(),
-                'state' => $contract->getStateValue(),
-                'reason' => $e->getMessage(),
-            ]);
+    private function bookAutomaticCapture(
+        PaymentContractInterface $contract,
+        string $providerOrderId,
+    ): PaymentContractInterface {
+        if (($contract->getCapturedAmount() ?? 0.0) > 0.0 || !$contract->getState()->isCommitted()) {
+            return $contract;
         }
+
+        $this->captures->book(
+            (string) $contract->getId(),
+            $providerOrderId,
+            $contract->getAmount(),
+            $contract->getCurrency(),
+            'webhook',
+        );
+
+        return $this->contractRepository->findByProviderOrderId($providerOrderId) ?? $contract;
     }
 
     /**

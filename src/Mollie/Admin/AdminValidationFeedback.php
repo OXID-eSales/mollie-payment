@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Admin;
 
 use OxidEsales\PaymentBase\Adapter\SessionAdapterInterface;
-use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
 
 /**
  * Session-backed implementation of the admin validation feedback channel.
@@ -25,18 +24,8 @@ final class AdminValidationFeedback implements AdminValidationFeedbackInterface
 {
     private const SESSION_KEY_PREFIX = 'mollie_admin_validation_';
 
-    public function __construct(
-        private readonly SessionAdapterInterface $session,
-        private readonly MessageFormatterInterface $messageFormatter,
-    ) {
-    }
-
-    public function reject(string $orderId, string $field, string $code): string
+    public function __construct(private readonly SessionAdapterInterface $session)
     {
-        $message = $this->messageFormatter->format($field, $code, null);
-        $this->rejectWithMessage($orderId, $message);
-
-        return $message;
     }
 
     public function rejectWithMessage(string $orderId, string $message): void

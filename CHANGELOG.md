@@ -5,6 +5,38 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed - VR-22 A6: Mollie's gateways for payment-base's money runner
+- New `Gateway\MollieCaptureGateway`, `MollieRefundGateway`, `MollieCancelGateway` (tag `oe.payment.gateway`).
+  payment-base's `MoneyOperationRunner` now owns admin capture, refund and void for the classic Payment tab and the
+  admin API: policy (capturable / refundable come from payment-base, not from Mollie bounds), idempotency, the order
+  lock, rights/step-up and the booking (`ProviderCaptureLedger` by Mollie's capture id, `ProviderRefundLedger` by the
+  refund id). The gateways only talk to Mollie; Mollie saying no is a refusal in a translated sentence, never Mollie's
+  text; a transport failure is not answered (the runner keeps the claim and retries with the same key). New sentences
+  `MOLLIE_ADMIN_CAPTURE_FINAL`, `MOLLIE_ADMIN_CANCEL_FAILED`, `MOLLIE_ADMIN_NO_PAYMENT`.
+- A second partial capture is refused with `capture_final` where the account has no multi-capture (Mollie captures once
+  and releases the rest). MOL-15's character rules still apply to the capture reason and the refund description.
+- **Merchant-visible:** an admin capture no longer fulfils the contract or stamps OXPAID itself: Mollie's `paid`
+  webhook does (it books nothing again, the capture is on record). Refund works right after the capture (committed
+  with a captured amount). A void books nothing; Mollie's `canceled` webhook cancels the contract and the order.
+- The `paid` webhook books an automatically captured payment through `ProviderCaptureLedger` (capture id = the Mollie
+  payment id) instead of writing the captured amount and a capture row itself; nothing is booked when an admin capture
+  is on record.
+- The Mollie-only release (`MollieReleaseAction`, `ReleaseActionInterface`) is run the same way by the classic tab and
+  by `adminMolliePaymentRelease`, which no longer goes through payment-base's removed `PanelProviderActionRunner`
+  (the operation takes the action and a logger).
+- `MolliePaymentPanelProvider` keeps the view, the reasons (`actionOptions`), the read-model bounds and the release.
+
+### Removed - VR-22 A6
+- `Service\CaptureService`, `RefundService`, `CancelAuthorizationService` (+ interfaces), `CaptureCompletionPolicy`
+  (+ interface, enum), `Service\Exception\MollieRefundNotYetAvailableException`.
+- `Controller\Admin\OrderActionDispatcher`, `MollieExtraActionDispatcherInterface`, `EventSystem\Translator\
+  MollieEventTranslator` (and Mollie's `EventBroker` binding), the Mollie capture / refund / cancel request events and
+  handlers (the release event and handler stay).
+- `Admin\AdminAmountValidator`, `AmountValidationResult`, `AdminAmountValidationMessageFormatter`,
+  `AdminValidationFeedback::reject()`, `AdminActionRefusals::amount()`, the `MOLLIE_ADMIN_AMOUNT_*` sentences, the
+  panel provider's capture/refund/cancel branches and its `validateAmount()`; the idempotency key test of the old
+  event chain (the runner owns idempotency).
+
 ### Changed - Adopts payment-base VR-24 H8 (ACP ownership guard)
 - `MollieAcpCheckoutService` is unchanged (it inherits the guard): its tests now open the contract as an ACP agent
   would (`channel=acp`, `acp_agent_id`), and another agent's checkout is pinned as "not found" with nothing committed.

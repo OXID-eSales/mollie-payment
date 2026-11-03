@@ -14,9 +14,9 @@ use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 
 /**
  * Narrow seam exposing the maximum amount an admin action may move, sourced from the live Mollie
- * payment (never from locally-tracked columns) — the same values the panel displays and the
- * {@see \OxidEsales\Payments\Mollie\Admin\AdminAmountValidator} validates against. PAY-5: the same numbers are
- * what payment-base's admin API offers and enforces ({@see AdminActionBoundsProviderInterface::boundsFor()}).
+ * payment (never from locally-tracked columns) — the values the panel displays. VR-22 A6: a read
+ * model only; what a capture or refund must satisfy is payment-base's policies', not these bounds
+ * ({@see AdminActionBoundsProviderInterface::boundsFor()}).
  */
 interface AdminActionBoundsInterface extends AdminActionBoundsProviderInterface
 {

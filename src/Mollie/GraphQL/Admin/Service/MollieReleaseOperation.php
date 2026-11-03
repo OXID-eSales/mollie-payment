@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\GraphQL\Admin\Service;
 
+use OxidEsales\PaymentBase\Admin\Panel\AdminActionRefusedException;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminAuditInterface;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminStepUpInterface;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\IdempotencyClaim;
@@ -17,24 +18,24 @@ use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentContractDetails;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentContractDetailsReaderInterface;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentOperationResult;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentRefusal;
-use OxidEsales\PaymentBase\GraphQL\Admin\Service\ProviderActionOutcome;
-use OxidEsales\PaymentBase\GraphQL\Admin\Service\ProviderActionRunnerInterface;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\RequestShopOrdersInterface;
+use OxidEsales\Payments\Mollie\Admin\ReleaseActionInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
+use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * `adminMolliePaymentRelease`: the MOL-32 release of the Payment tab, for the admin API. The rules are NOT
- * re-implemented here: the order's Mollie panel provider runs its own `release` action (the same {@see
+ * re-implemented here: {@see ReleaseActionInterface} runs the release (the same {@see
  * \OxidEsales\Payments\Mollie\Admin\ReleaseRule}, the same reason validation, the same Mollie event as the classic
- * button) through payment-base's provider-action boundary; this service adds what the admin API adds to every money
- * operation: step-up, the request's shop, an idempotency record, one audit row, and the read-back of what the
- * provider achieved. Releasing moves no money to the shop, but it gives money back to the customer and ends the
- * order's capturing, so it takes the step-up like a capture does.
+ * button); payment-base's money runner does not know this Mollie-only action. This service adds what the admin API
+ * adds to every money operation: step-up, the request's shop, an idempotency record, one audit row, and the
+ * read-back of what the provider achieved. Releasing moves no money to the shop, but it gives money back to the
+ * customer and ends the order's capturing, so it takes the step-up like a capture does.
  */
 final class MollieReleaseOperation implements MollieReleaseOperationInterface
 {
     public const OPERATION = 'adminMolliePaymentRelease';
-    public const PROVIDER_ACTION = 'release';
 
     private const IDEMPOTENCY_NAME = 'admin_mollie_release';
     private const KEY_PATTERN = '/^[A-Za-z0-9_-]{8,64}$/';
@@ -42,11 +43,12 @@ final class MollieReleaseOperation implements MollieReleaseOperationInterface
 
     public function __construct(
         private readonly PaymentContractDetailsReaderInterface $details,
-        private readonly ProviderActionRunnerInterface $provider,
+        private readonly ReleaseActionInterface $releaseAction,
         private readonly OperationIdempotencyInterface $idempotency,
         private readonly AdminStepUpInterface $stepUp,
         private readonly AdminAuditInterface $audit,
         private readonly RequestShopOrdersInterface $shopOrders,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -109,8 +111,7 @@ final class MollieReleaseOperation implements MollieReleaseOperationInterface
         PaymentContractDetails $before,
         IdempotencyClaim $claim
     ): PaymentOperationResult {
-        $request = $reason === null ? [] : ['release_reason' => $reason];
-        $refusal = $this->refusalOf($this->provider->run($before->provider, $orderId, self::PROVIDER_ACTION, $request));
+        $refusal = $this->refusalOf($orderId, $reason);
         $after = $refusal === null ? $this->details->findByOrderId($orderId) : null;
         if ($after !== null && $after->fingerprint() !== $before->fingerprint()) {
             $this->idempotency->complete($claim);
@@ -126,26 +127,23 @@ final class MollieReleaseOperation implements MollieReleaseOperationInterface
         ));
     }
 
-    private function refusalOf(ProviderActionOutcome $outcome): ?PaymentRefusal
+    private function refusalOf(string $orderId, ?string $reason): ?PaymentRefusal
     {
-        return match ($outcome->status) {
-            ProviderActionRunnerInterface::REFUSED => PaymentRefusal::invalid(
-                'orderId',
-                'provider_refused',
-                (string) $outcome->refusalMessage
-            ),
-            ProviderActionRunnerInterface::UNAVAILABLE => PaymentRefusal::invalid(
-                'orderId',
-                'provider_unavailable',
-                'No payment provider module handles this payment'
-            ),
-            ProviderActionRunnerInterface::FAILED => PaymentRefusal::invalid(
+        try {
+            $this->releaseAction->run($orderId, $reason);
+        } catch (AdminActionRefusedException $refusal) {
+            return PaymentRefusal::invalid('orderId', 'provider_refused', $refusal->getMessage());
+        } catch (Throwable $failure) {
+            $this->logger->error('Mollie release failed', ['orderId' => $orderId, 'exception' => $failure::class]);
+
+            return PaymentRefusal::invalid(
                 'orderId',
                 'provider_failed',
-                'Mollie refused or could not complete the release'
-            ),
-            default => null,
-        };
+                'Mollie refused or could not complete the release',
+            );
+        }
+
+        return null;
     }
 
     private function inputRefusal(?string $reason, ?string $idempotencyKey): ?PaymentRefusal

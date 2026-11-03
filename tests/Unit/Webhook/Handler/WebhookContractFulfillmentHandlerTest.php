@@ -15,6 +15,8 @@ use OxidEsales\PaymentBase\Contract\ContractCondition;
 use OxidEsales\PaymentBase\Contract\ContractState;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Contract\Transaction;
+use OxidEsales\PaymentBase\Payment\CaptureBooking;
+use OxidEsales\PaymentBase\Payment\ProviderCaptureLedgerInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Repository\StaleContractException;
 use OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface;
@@ -43,6 +45,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
     private TransactionRepositoryInterface&MockObject $transactionRepository;
     private TransactionAuditRecorder $auditRecorder;
     private MollieLatePaymentRefunder&MockObject $lateMoney;
+    private ProviderCaptureLedgerInterface&MockObject $captures;
     private CommittingContractCommit $commit;
     private WebhookContractFulfillmentHandler $handler;
 
@@ -50,6 +53,8 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
     {
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
         $this->lateMoney = $this->createMock(MollieLatePaymentRefunder::class);
+        $this->captures = $this->createMock(ProviderCaptureLedgerInterface::class);
+        $this->captures->method('book')->willReturn(CaptureBooking::booked(10.0));
         $this->contractFulfillmentService = $this->createMock(ContractFulfillmentServiceInterface::class);
         $this->orderUpdater = $this->createMock(ContractLinkedOrderUpdaterInterface::class);
         $this->transactionRepository = $this->createMock(TransactionRepositoryInterface::class);
@@ -106,7 +111,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
      * (amount / currency / state checks, one path for every provider) instead of climbing a
      * hand-written ladder of its own.
      */
-    public function testHandlePaymentPaid_CommitsThroughTheCommitServiceThenFulfillsAndRecordsTransaction(): void
+    public function testHandlePaymentPaid_CommitsThroughTheCommitServiceThenFulfills(): void
     {
         $contract = $this->contractWithState(fulfilled: false);
         $contract->method('getOrderId')->willReturn('order-1');
@@ -119,8 +124,6 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
             ->method('fulfill')
             ->with($contract)
             ->willReturn(true);
-
-        $this->expectTransactionRecorded(MollieDefinitions::TRANSACTION_TYPE_CAPTURE, MollieDefinitions::TRANSACTION_STATUS_COMPLETED, 19.99);
 
         self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentPaid('tr_paid')->outcome);
         self::assertCount(1, $this->commit->confirmations);
@@ -178,8 +181,8 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
     public function testHandlePaymentPaid_RetriesOnceOnAFreshCopyWhenTheContractWasStale(): void
     {
-        $stale = $this->committedContract();
-        $fresh = $this->committedContract();
+        $stale = $this->capturedCommittedContract();
+        $fresh = $this->capturedCommittedContract();
         $this->contractRepository->method('findByProviderOrderId')
             ->willReturnOnConsecutiveCalls($stale, $fresh);
         $saves = 0;
@@ -190,7 +193,6 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
             }
         });
         $this->contractFulfillmentService->method('fulfill')->with($fresh)->willReturn(true);
-        $this->transactionRepository->expects(self::once())->method('save');
 
         $outcome = $this->handler->handlePaymentPaid('tr_1');
 
@@ -200,7 +202,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
     public function testHandlePaymentPaid_GivesUpAfterASecondStaleRefusal(): void
     {
-        $this->contractRepository->method('findByProviderOrderId')->willReturnCallback(fn () => $this->committedContract());
+        $this->contractRepository->method('findByProviderOrderId')->willReturnCallback(fn () => $this->capturedCommittedContract());
         $this->contractRepository->method('save')->willThrowException(new StaleContractException('c-1', 2, 3));
         $this->contractFulfillmentService->expects(self::never())->method('fulfill');
         $this->transactionRepository->expects(self::never())->method('save');
@@ -222,29 +224,41 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentFailed('tr_1', 'declined')->outcome);
     }
 
-    public function testHandlePaymentPaid_RecordsTheCapturedAmountOnceTheContractIsCommitted(): void
+    /**
+     * VR-22 A6 - an automatically captured payment is booked by payment-base's capture ledger under the Mollie
+     * payment id, like an admin capture is booked under its capture id.
+     */
+    public function testHandlePaymentPaid_BooksTheAutomaticCaptureThroughTheLedgerOnceTheContractIsCommitted(): void
     {
         $contract = $this->pendingContract();
         $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
         $this->contractFulfillmentService->method('fulfill')->willReturn(true);
+        $this->captures->expects(self::once())->method('book')->with('c-1', 'tr_1', 10.0, 'EUR', 'webhook')
+            ->willReturn(CaptureBooking::booked(10.0));
 
         $this->handler->handlePaymentPaid('tr_1');
-
-        self::assertSame(10.0, $contract->getCapturedAmount());
     }
 
-    public function testHandlePaymentPaid_LeavesAnExistingCapturedAmountAlone(): void
+    public function testHandlePaymentPaid_AfterAnAdminCapture_BooksNothingAndOnlyFulfils(): void
     {
-        $contract = $this->pendingContract();
-        $contract->fulfillCondition(ContractCondition::TYPE_PAYMENT_AUTHORIZED);
-        $contract->commitToOrder('order-1');
-        $contract->setCapturedAmount(4.0);   // a manual partial capture happened before the paid webhook
+        $contract = $this->committedContract();
+        $contract->setCapturedAmount(4.0);   // a manual partial capture, booked by the admin action
         $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
-        $this->contractFulfillmentService->method('fulfill')->willReturn(true);
+        $this->contractFulfillmentService->expects(self::once())->method('fulfill')->willReturn(true);
+        $this->captures->expects(self::never())->method('book');
 
         $this->handler->handlePaymentPaid('tr_1');
 
         self::assertSame(4.0, $contract->getCapturedAmount());
+    }
+
+    /** A manual capture was booked already, so the paid webhook books nothing and only fulfils. */
+    private function capturedCommittedContract(): PaymentContractInterface
+    {
+        $contract = $this->committedContract();
+        $contract->setCapturedAmount(4.0);
+
+        return $contract;
     }
 
     private function committedContract(): PaymentContractInterface
@@ -266,6 +280,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
             new NullLogger(),
             $this->lateMoney,
             $commit,
+            $this->captures,
         );
     }
 

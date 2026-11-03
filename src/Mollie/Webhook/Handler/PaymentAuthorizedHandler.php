@@ -18,8 +18,7 @@ use OxidEsales\Payments\Mollie\Webhook\MollieWebhookOutcome;
  *
  * This is the handler that closes the previously-unreachable AUTHORIZED contract state: it
  * advances the contract just far enough for the admin panel's Capture/Cancel-authorization
- * actions ({@see \OxidEsales\Payments\Mollie\Service\CaptureService},
- * {@see \OxidEsales\Payments\Mollie\Service\CancelAuthorizationService}) to apply. It never sets
+ * actions (payment-base's money runner, through Mollie's capture and cancel gateways) to apply. It never sets
  * OXPAID or fulfills the order — that only happens once the funds are actually captured, via the
  * `paid` status handled by {@see PaymentPaidHandler}.
  */

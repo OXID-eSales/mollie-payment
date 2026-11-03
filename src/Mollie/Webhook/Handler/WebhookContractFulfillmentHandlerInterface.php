@@ -47,8 +47,8 @@ interface WebhookContractFulfillmentHandlerInterface
 
     /**
      * Handle a Mollie `authorized` status (two-step/manual capture): transitions the contract
-     * from NOT_FINISHED/PENDING to AUTHORIZED, the state {@see \OxidEsales\Payments\Mollie\Service\CaptureService}
-     * and {@see \OxidEsales\Payments\Mollie\Service\CancelAuthorizationService} require. Deliberately
+     * from NOT_FINISHED/PENDING to AUTHORIZED, the state an admin capture or void of the
+     * authorization starts from. Deliberately
      * does not set OXPAID or fulfill the order — funds are not captured yet.
      */
     public function handlePaymentAuthorized(string $providerOrderId): FulfillmentResult;
