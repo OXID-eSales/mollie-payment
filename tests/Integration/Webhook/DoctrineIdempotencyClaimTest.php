@@ -70,8 +70,9 @@ final class DoctrineIdempotencyClaimTest extends TestCase
         $repository->updateStatus($eventId, 'failed', 'contract changed since it was loaded');
 
         self::assertTrue($repository->claimEvent($eventId, 'mollie', 'paid'), 'the retry must be processed');
-        self::assertSame('claimed', $repository->findByEventId($eventId)?->getStatus());
-        self::assertNull($repository->findByEventId($eventId)?->getError(), 'the old failure text is cleared');
+        $row = $this->logRow($eventId);
+        self::assertSame('claimed', $row['OXSTATUS'] ?? null);
+        self::assertNull($row['OXERROR'] ?? null, 'the old failure text is cleared');
     }
 
     public function testClaimEvent_ProcessedAndInFlightDeliveriesStayExclusive(): void
@@ -159,6 +160,20 @@ final class DoctrineIdempotencyClaimTest extends TestCase
 
         self::assertTrue($repository->claimEvent($paymentId . ':refunded:1250', 'mollie', 'refunded'));
         self::assertTrue($repository->claimEvent($paymentId . ':refunded:2000', 'mollie', 'refunded'));
+    }
+
+    /**
+     * The delivery's log row as the database holds it (payment-base keeps no read API for it since VR-17 DC-PB7b).
+     *
+     * @return array<string, mixed>
+     */
+    private function logRow(string $eventId): array
+    {
+        $row = ContainerFactory::getInstance()->getContainer()->get(ConnectionProviderInterface::class)->get()
+            ->fetchAssociative('SELECT OXSTATUS, OXERROR FROM oe_payments_webhooklogs WHERE OXEVENTID = ?', [$eventId]);
+        self::assertIsArray($row, 'no log row for ' . $eventId);
+
+        return $row;
     }
 
     private function webhookLogRepository(): WebhookLogRepositoryInterface

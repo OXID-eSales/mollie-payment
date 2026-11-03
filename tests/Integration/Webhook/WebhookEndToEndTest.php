@@ -213,9 +213,11 @@ final class WebhookEndToEndTest extends TestCase
         // Sprint 11 Story 2 (F1): the event id identifies the delivery, so the log row for this
         // delivery is `{paymentId}:paid`. Asserting the bare payment id here would re-encode the very
         // collision that let a later `paid` webhook be dropped.
-        $log = $this->webhookLogRepository->findByEventId($paymentId . ':paid');
-        self::assertNotNull($log);
-        self::assertSame('failed', $log->getStatus());
+        $status = $this->connection->fetchOne(
+            'SELECT OXSTATUS FROM oe_payments_webhooklogs WHERE OXEVENTID = ?',
+            [$paymentId . ':paid']
+        );
+        self::assertSame('failed', $status);
     }
 
     private function processor(MollieWebhookAdapterInterface $adapter): MollieWebhookProcessor
