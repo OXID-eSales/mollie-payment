@@ -20,10 +20,10 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\RefundRequest;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
 use OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface;
-use OxidEsales\Payments\Mollie\Service\ContractRefundRecorder;
+use OxidEsales\PaymentBase\Refund\ProviderRefundLedgerInterface;
+use OxidEsales\PaymentBase\Refund\RefundBooking;
 use OxidEsales\Payments\Mollie\Service\Exception\MollieRefundNotYetAvailableException;
 use OxidEsales\Payments\Mollie\Service\RefundService;
-use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -36,7 +36,7 @@ final class RefundServiceTest extends TestCase
     private MollieRefundAdapterInterface&MockObject $refundAdapter;
     private ContractRepositoryInterface&MockObject $contractRepository;
     private StockRestorationServiceInterface&MockObject $stockRestorationService;
-    private ContractRefundRecorder $refundRecorder;
+    private ProviderRefundLedgerInterface&MockObject $ledger;
     private RefundService $service;
 
     protected function setUp(): void
@@ -45,12 +45,13 @@ final class RefundServiceTest extends TestCase
         $this->refundAdapter = $this->createMock(MollieRefundAdapterInterface::class);
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
         $this->stockRestorationService = $this->createMock(StockRestorationServiceInterface::class);
-        $this->refundRecorder = new ContractRefundRecorder($this->contractRepository, new NullLogger());
+        $this->ledger = $this->createMock(ProviderRefundLedgerInterface::class);
+        $this->ledger->method('book')->willReturn(RefundBooking::booked(0.0));
 
         $this->service = new RefundService(
             $this->paymentsAdapter,
             $this->refundAdapter,
-            $this->refundRecorder,
+            $this->ledger,
             $this->stockRestorationService,
             new NullLogger(),
         );
@@ -72,30 +73,55 @@ final class RefundServiceTest extends TestCase
             }))
             ->willReturn($this->refundDto('re_1', 'tr_123', 100.0));
 
-        $contract->expects(self::once())->method('addRefundedAmount')->with(100.0);
-        $this->contractRepository->expects(self::once())->method('save')->with($contract);
+        $this->ledgerExpectsOneBooking('re_1', 100.0);
 
         $dto = $this->service->refund($contract);
 
         self::assertSame('re_1', $dto->id);
     }
 
-    public function testRefund_IsListedInTheTransactionTableWithMolliesRefundId(): void
+    /**
+     * VR-21 F6 — the admin refund is booked by its Mollie refund id through payment-base's ledger;
+     * the `refunded` webhook books the same id and is then a duplicate. The ledger's transaction
+     * row is the one the admin's Payment tab lists.
+     */
+    public function testRefund_IsBookedThroughTheLedgerByMolliesRefundId(): void
     {
         $contract = $this->fulfilledContract('tr_123', '5');
         $this->paymentsAdapter->method('getPayment')->willReturn($this->payment('tr_123', 100.0, 0.0));
         $this->refundAdapter->method('createRefund')->willReturn($this->refundDto('re_9', 'tr_123', 25.0));
-        $audit = $this->auditRecorderExpecting('refund', 25.0, 're_9');
-        $service = new RefundService(
+        $this->ledgerExpectsOneBooking('re_9', 25.0);
+
+        $this->service->refund($contract, 25.0);
+    }
+
+    public function testRefund_ThatMollieRefusedToRun_IsNotBooked(): void
+    {
+        $contract = $this->fulfilledContract('tr_123', '5');
+        $this->paymentsAdapter->method('getPayment')->willReturn($this->payment('tr_123', 100.0, 0.0));
+        $this->refundAdapter->method('createRefund')->willReturn(
+            new MollieRefundDto('re_x', 'tr_123', MollieAmountDto::fromComponents('EUR', 25.0), 'failed')
+        );
+        $this->ledger = $this->createMock(ProviderRefundLedgerInterface::class);
+        $this->ledger->expects(self::never())->method('book');
+
+        (new RefundService($this->paymentsAdapter, $this->refundAdapter, $this->ledger, $this->stockRestorationService, new NullLogger()))
+            ->refund($contract, 25.0);
+    }
+
+    private function ledgerExpectsOneBooking(string $refundId, float $amount): void
+    {
+        $this->ledger = $this->createMock(ProviderRefundLedgerInterface::class);
+        $this->ledger->expects(self::once())->method('book')
+            ->with('5', $refundId, $amount, 'EUR', 'admin')
+            ->willReturn(RefundBooking::booked($amount));
+        $this->service = new RefundService(
             $this->paymentsAdapter,
             $this->refundAdapter,
-            $this->refundRecorder,
+            $this->ledger,
             $this->stockRestorationService,
             new NullLogger(),
-            $audit,
         );
-
-        $service->refund($contract, 25.0);
     }
 
     public function testRefund_Full_OnPartiallyCapturedPayment_RefundsOnlyWhatWasCaptured(): void
@@ -139,7 +165,7 @@ final class RefundServiceTest extends TestCase
             $this->refundDto('re_2', 'tr_123', 30.0),
         );
 
-        $contract->expects(self::once())->method('addRefundedAmount')->with(30.0);
+        $this->ledgerExpectsOneBooking('re_2', 30.0);
 
         $dto = $this->service->refund($contract, 30.0);
 
@@ -186,7 +212,7 @@ final class RefundServiceTest extends TestCase
         $this->paymentsAdapter->method('getPayment')->willReturn($this->authorizedHold('tr_fresh', 20.9));
         $this->refundAdapter->method('createRefund')
             ->willThrowException(new MollieAdapterException('The payment is not refundable', 422));
-        $contract->expects(self::never())->method('addRefundedAmount');
+        $this->ledger->expects(self::never())->method('book');
 
         $this->expectException(MollieRefundNotYetAvailableException::class);
 
@@ -408,19 +434,5 @@ final class RefundServiceTest extends TestCase
     private function refundDto(string $id, string $paymentId, float $amount): MollieRefundDto
     {
         return new MollieRefundDto($id, $paymentId, MollieAmountDto::fromComponents('EUR', $amount), 'pending');
-    }
-
-    private function auditRecorderExpecting(string $type, float $amount, string $reference): TransactionAuditRecorder
-    {
-        $shop = $this->createMock(\OxidEsales\PaymentBase\Adapter\ShopAdapterInterface::class);
-        $shop->method('getShopId')->willReturn('1');
-        $rows = $this->createMock(\OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface::class);
-        $rows->expects(self::once())->method('save')->with(self::callback(
-            static fn (\OxidEsales\PaymentBase\Contract\Transaction $row): bool => $row->getType() === $type
-                && $row->getAmount() === $amount
-                && $row->getTransactionId() === $reference
-        ));
-
-        return new TransactionAuditRecorder($rows, $shop);
     }
 }

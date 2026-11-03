@@ -9,30 +9,32 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Webhook\Handler;
 
+use OxidEsales\PaymentBase\Refund\ProviderRefundLedgerInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Webhook\WebhookEvent;
 use OxidEsales\PaymentBase\Webhook\WebhookResult;
-use OxidEsales\Payments\Mollie\Service\ContractRefundRecorder;
+use OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface;
 use OxidEsales\Payments\Mollie\Webhook\MollieWebhookEventHandlerInterface;
 use OxidEsales\Payments\Mollie\Webhook\MollieWebhookOutcome;
 
 /**
  * Handles Mollie `refunded` status webhooks.
  *
- * Mollie's payment object already carries the CUMULATIVE `amountRefunded` — the same figure the
- * webhook processor fetched during verification is reused here (no second API round-trip: the
- * fetch-by-id IS the re-fetch). This handler computes the DELTA against what is already recorded
- * on the contract before handing off to {@see ContractRefundRecorder}, which itself only ever
- * accumulates — passing the cumulative total straight through would double-count on a second
- * partial refund.
+ * VR-21 F6: each refund of the payment is booked through payment-base's ledger by its Mollie
+ * refund id - the admin refund books the same id, so whichever path comes second is a duplicate
+ * and changes nothing. Before, this handler booked "Mollie's cumulative total minus the contract's"
+ * and raced the admin refund, and it answered `refund_recorded` even when it recorded nothing.
+ * A failure listing the refunds propagates: the delivery fails and Mollie retries it.
  */
 final class PaymentRefundedHandler implements MollieWebhookEventHandlerInterface
 {
     private const STATUS_REFUNDED = 'refunded';
+    private const NOT_RUN = ['failed', 'canceled'];
 
     public function __construct(
         private readonly ContractRepositoryInterface $contractRepository,
-        private readonly ContractRefundRecorder $refundRecorder,
+        private readonly MollieRefundAdapterInterface $refunds,
+        private readonly ProviderRefundLedgerInterface $ledger,
     ) {
     }
 
@@ -53,22 +55,26 @@ final class PaymentRefundedHandler implements MollieWebhookEventHandlerInterface
             return MollieWebhookOutcome::of(WebhookResult::skipped('Contract not found'));
         }
 
-        $contractId = $contract->getId();
-        $delta = $this->extractAmountRefunded($event) - ($contract->getRefundedAmount() ?? 0.0);
-
-        if ($delta <= 0.0) {
-            return MollieWebhookOutcome::of(WebhookResult::skipped('No new refund amount to record'), $contractId);
+        $contractId = (string) $contract->getId();
+        $booked = 0;
+        foreach ($this->refunds->listRefunds($providerOrderId) as $refund) {
+            if (in_array($refund->status, self::NOT_RUN, true)) {
+                continue;
+            }
+            $booking = $this->ledger->book(
+                $contractId,
+                $refund->id,
+                $refund->amount->value,
+                $refund->amount->currency,
+                'webhook'
+            );
+            $booked += $booking->booked ? 1 : 0;
         }
 
-        $this->refundRecorder->record($contract, $delta, $contractId);
+        if ($booked === 0) {
+            return MollieWebhookOutcome::of(WebhookResult::skipped('No new refund to record'), $contractId);
+        }
 
         return MollieWebhookOutcome::of(WebhookResult::success('refund_recorded'), $contractId);
-    }
-
-    private function extractAmountRefunded(WebhookEvent $event): float
-    {
-        $value = $event->getObject()['amountRefunded'] ?? 0.0;
-
-        return is_numeric($value) ? (float) $value : 0.0;
     }
 }
