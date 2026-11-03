@@ -77,11 +77,6 @@ final class LazyMollieAdapter implements
         return $this->adapter()->createRefund($request);
     }
 
-    public function getRefund(string $paymentId, string $refundId): MollieRefundDto
-    {
-        return $this->adapter()->getRefund($paymentId, $refundId);
-    }
-
     public function listRefunds(string $paymentId): array
     {
         return $this->adapter()->listRefunds($paymentId);

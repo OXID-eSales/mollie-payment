@@ -133,17 +133,6 @@ final class MollieAdapter implements
         return $this->mapRefund($refund);
     }
 
-    public function getRefund(string $paymentId, string $refundId): MollieRefundDto
-    {
-        try {
-            $refund = $this->client->paymentRefunds->getForId($paymentId, $refundId);
-        } catch (ApiException $exception) {
-            throw MollieExceptionConverter::convert($exception);
-        }
-
-        return $this->mapRefund($refund);
-    }
-
     public function listRefunds(string $paymentId): array
     {
         try {

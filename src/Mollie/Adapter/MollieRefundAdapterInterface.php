@@ -19,8 +19,6 @@ interface MollieRefundAdapterInterface
 {
     public function createRefund(RefundRequest $request): MollieRefundDto;
 
-    public function getRefund(string $paymentId, string $refundId): MollieRefundDto;
-
     /**
      * All refunds recorded against a payment — the admin transaction-history source of truth.
      *

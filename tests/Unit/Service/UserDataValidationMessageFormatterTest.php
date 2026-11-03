@@ -89,7 +89,6 @@ final class UserDataValidationMessageFormatterTest extends TestCase
             [
                 'MOLLIE_VALIDATION_FIELD_INVALID',
                 'MOLLIE_VALIDATION_REVIEW_ADDRESS',
-                'MOLLIE_VALIDATION_INVALID_USER_DATA',
                 'MOLLIE_CHECKOUT_UNAVAILABLE',
                 // MOL-22: not-orderable item sentences (standard step + OPC footer)
                 'MOLLIE_CHECKOUT_ITEMS_NOT_ORDERABLE',
