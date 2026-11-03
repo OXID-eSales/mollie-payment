@@ -127,7 +127,10 @@ final class WebhookEndToEndTest extends TestCase
 
         $contract = $this->contractRepository->findByProviderOrderId($paymentId);
         self::assertNotNull($contract);
-        self::assertTrue($contract->getState()->isFulfilled());
+        self::assertTrue(
+            $contract->getState()->isFulfilled(),
+            sprintf('contract state %s after webhook action %s', $contract->getStateValue(), $result->action)
+        );
 
         self::assertNotSame('0000-00-00 00:00:00', $this->fetchOxpaid($orderId));
 
@@ -147,8 +150,8 @@ final class WebhookEndToEndTest extends TestCase
         $first = $processor->process($this->webhookRequest($paymentId));
         $replay = $processor->process($this->webhookRequest($paymentId));
 
-        self::assertTrue($first->isSuccess());
-        self::assertTrue($replay->isSuccess());
+        self::assertTrue($first->isSuccess(), sprintf('first delivery: %s %s', $first->action, $first->error ?? ''));
+        self::assertTrue($replay->isSuccess(), sprintf('replay: %s %s', $replay->action, $replay->error ?? ''));
         self::assertSame(200, $this->httpStatusFor($replay));
         self::assertSame('skipped', $replay->action);
 
