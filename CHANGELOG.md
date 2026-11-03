@@ -5,6 +5,13 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed (VR-20 R6) - one commit path: `paid` commits through payment-base's ContractCommitService
+- A `paid` webhook on a contract that is not committed yet commits it through `ContractCommitServiceInterface` (amount,
+  currency and state checks in payment-base), like `authorized` already did, instead of climbing a hand-written
+  transition ladder of its own. A refused or still-open commit answers Failed, so Mollie retries.
+- `WebhookContractFulfillmentHandler` requires the commit service; the fallback that only moved the contract to
+  AUTHORIZED when it was missing is gone, with `advanceToAuthorized()` / `advanceToCommitted()`.
+
 ### Changed (VR-21 F6) - refunds are booked once, by their Mollie refund id
 - The admin refund (`RefundService`) and the `refunded` webhook (`PaymentRefundedHandler`) book through payment-base's
   `ProviderRefundLedgerInterface` by the Mollie refund id: whichever reports a refund second is a duplicate and changes

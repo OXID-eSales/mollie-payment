@@ -101,17 +101,7 @@ final class WebhookContractFulfillmentHandlerAuthorizedCommitTest extends TestCa
         self::assertSame(FulfillmentOutcome::NoOp, $this->handler()->handlePaymentAuthorized('tr_1')->outcome);
     }
 
-    public function testWithoutACommitServiceTheContractIsOnlyAuthorizedAsBefore(): void
-    {
-        $contract = $this->pendingContract();
-        $this->contracts->method('findByProviderOrderId')->willReturn($contract);
-        $this->contracts->expects($this->once())->method('save')->with($contract);
-
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler(withCommit: false)->handlePaymentAuthorized('tr_1')->outcome);
-        self::assertTrue($contract->getState()->isAuthorized());
-    }
-
-    private function handler(bool $withCommit = true): WebhookContractFulfillmentHandler
+    private function handler(): WebhookContractFulfillmentHandler
     {
         $shopAdapter = $this->createMock(ShopAdapterInterface::class);
         $shopAdapter->method('getShopId')->willReturn('1');
@@ -123,7 +113,7 @@ final class WebhookContractFulfillmentHandlerAuthorizedCommitTest extends TestCa
             new TransactionAuditRecorder($this->transactions, $shopAdapter),
             new NullLogger(),
             $this->createMock(MollieLatePaymentRefunder::class),
-            $withCommit ? $this->commit : null,
+            $this->commit,
         );
     }
 

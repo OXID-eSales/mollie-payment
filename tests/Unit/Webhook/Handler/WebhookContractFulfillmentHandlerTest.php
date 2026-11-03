@@ -27,6 +27,9 @@ use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentResult;
 use OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandler;
 use PHPUnit\Framework\Attributes\CoversClass;
+use OxidEsales\PaymentBase\Service\Commit\CommitOutcome;
+use OxidEsales\PaymentBase\Service\Commit\ContractCommitServiceInterface;
+use OxidEsales\Payments\Mollie\Tests\Unit\Webhook\Handler\Support\CommittingContractCommit;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -40,6 +43,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
     private TransactionRepositoryInterface&MockObject $transactionRepository;
     private TransactionAuditRecorder $auditRecorder;
     private MollieLatePaymentRefunder&MockObject $lateMoney;
+    private CommittingContractCommit $commit;
     private WebhookContractFulfillmentHandler $handler;
 
     protected function setUp(): void
@@ -53,14 +57,8 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $shopAdapter->method('getShopId')->willReturn('1');
         $this->auditRecorder = new TransactionAuditRecorder($this->transactionRepository, $shopAdapter);
 
-        $this->handler = new WebhookContractFulfillmentHandler(
-            $this->contractRepository,
-            $this->contractFulfillmentService,
-            $this->orderUpdater,
-            $this->auditRecorder,
-            new NullLogger(),
-            $this->lateMoney,
-        );
+        $this->commit = new CommittingContractCommit($this->contractRepository);
+        $this->handler = $this->handlerWith($this->commit);
     }
 
     // --- handlePaymentPaid ---
@@ -103,18 +101,18 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentPaid('tr_paid')->outcome);
     }
 
-    public function testHandlePaymentPaid_ClimbsLadderAndFulfillsAndRecordsTransaction(): void
+    /**
+     * VR-20 R6 — `paid` on an open contract commits through payment-base's ContractCommitService
+     * (amount / currency / state checks, one path for every provider) instead of climbing a
+     * hand-written ladder of its own.
+     */
+    public function testHandlePaymentPaid_CommitsThroughTheCommitServiceThenFulfillsAndRecordsTransaction(): void
     {
         $contract = $this->contractWithState(fulfilled: false);
         $contract->method('getOrderId')->willReturn('order-1');
         $contract->method('getAmount')->willReturn(19.99);
+        $contract->method('getCurrency')->willReturn('EUR');
         $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
-
-        $contract->expects(self::once())->method('transitionToPending');
-        $contract->expects(self::once())
-            ->method('fulfillCondition')
-            ->with(ContractCondition::TYPE_PAYMENT_AUTHORIZED);
-        $contract->expects(self::once())->method('commitToOrder')->with('order-1');
         $this->contractRepository->expects(self::once())->method('save')->with($contract);
 
         $this->contractFulfillmentService->expects(self::once())
@@ -125,22 +123,40 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $this->expectTransactionRecorded(MollieDefinitions::TRANSACTION_TYPE_CAPTURE, MollieDefinitions::TRANSACTION_STATUS_COMPLETED, 19.99);
 
         self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentPaid('tr_paid')->outcome);
+        self::assertCount(1, $this->commit->confirmations);
+        $confirmation = $this->commit->confirmations[0];
+        self::assertSame(['contract-1', 'mollie', 'tr_paid', 19.99, 'EUR', false], [
+            $confirmation->contractId,
+            $confirmation->providerName,
+            $confirmation->providerOrderId,
+            $confirmation->amount,
+            $confirmation->currency,
+            $confirmation->requiresCapture,
+        ]);
     }
 
-    public function testHandlePaymentPaid_SwallowsDomainExceptionsFromLadderSteps(): void
+    public function testHandlePaymentPaid_WhenTheCommitIsRefused_AsksMollieToRetryAndFulfilsNothing(): void
     {
         $contract = $this->contractWithState(fulfilled: false);
-        $contract->method('getOrderId')->willReturn('order-1');
-        $contract->method('transitionToPending')->willThrowException(new DomainException('already past pending'));
-        $contract->method('fulfillCondition')->willThrowException(new DomainException('already fulfilled condition'));
-        $contract->method('commitToOrder')->willThrowException(new DomainException('not ready'));
         $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+        $commit = $this->createMock(ContractCommitServiceInterface::class);
+        $commit->method('commit')->willReturn(CommitOutcome::refused('amount_mismatch'));
 
-        $this->contractFulfillmentService->method('fulfill')->willReturn(false);
-
+        $this->contractFulfillmentService->expects(self::never())->method('fulfill');
         $this->transactionRepository->expects(self::never())->method('save');
 
-        self::assertSame(FulfillmentOutcome::Failed, $this->handler->handlePaymentPaid('tr_paid')->outcome);
+        self::assertSame(FulfillmentOutcome::Failed, $this->handlerWith($commit)->handlePaymentPaid('tr_paid')->outcome);
+    }
+
+    public function testHandlePaymentPaid_OnAnAlreadyCommittedContract_DoesNotCommitAgain(): void
+    {
+        // manual capture: `authorized` committed the contract, the capture's `paid` only fulfils it
+        $contract = $this->committedContract();
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+        $this->contractFulfillmentService->method('fulfill')->willReturn(true);
+
+        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentPaid('tr_1')->outcome);
+        self::assertSame([], $this->commit->confirmations);
     }
 
     public function testHandlePaymentPaid_DoesNotRecordTransactionWhenFulfillmentServiceDeclines(): void
@@ -162,8 +178,8 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
     public function testHandlePaymentPaid_RetriesOnceOnAFreshCopyWhenTheContractWasStale(): void
     {
-        $stale = $this->pendingContract();
-        $fresh = $this->pendingContract();
+        $stale = $this->committedContract();
+        $fresh = $this->committedContract();
         $this->contractRepository->method('findByProviderOrderId')
             ->willReturnOnConsecutiveCalls($stale, $fresh);
         $saves = 0;
@@ -184,7 +200,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
     public function testHandlePaymentPaid_GivesUpAfterASecondStaleRefusal(): void
     {
-        $this->contractRepository->method('findByProviderOrderId')->willReturnCallback(fn () => $this->pendingContract());
+        $this->contractRepository->method('findByProviderOrderId')->willReturnCallback(fn () => $this->committedContract());
         $this->contractRepository->method('save')->willThrowException(new StaleContractException('c-1', 2, 3));
         $this->contractFulfillmentService->expects(self::never())->method('fulfill');
         $this->transactionRepository->expects(self::never())->method('save');
@@ -229,6 +245,28 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $this->handler->handlePaymentPaid('tr_1');
 
         self::assertSame(4.0, $contract->getCapturedAmount());
+    }
+
+    private function committedContract(): PaymentContractInterface
+    {
+        $contract = $this->pendingContract();
+        $contract->fulfillCondition(ContractCondition::TYPE_PAYMENT_AUTHORIZED);
+        $contract->commitToOrder('order-1');
+
+        return $contract;
+    }
+
+    private function handlerWith(ContractCommitServiceInterface $commit): WebhookContractFulfillmentHandler
+    {
+        return new WebhookContractFulfillmentHandler(
+            $this->contractRepository,
+            $this->contractFulfillmentService,
+            $this->orderUpdater,
+            $this->auditRecorder,
+            new NullLogger(),
+            $this->lateMoney,
+            $commit,
+        );
     }
 
     private function pendingContract(): PaymentContractInterface
@@ -399,61 +437,6 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         $this->contractRepository->expects(self::never())->method('save');
 
         self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentAuthorized('tr_captured')->outcome);
-    }
-
-    public function testHandlePaymentAuthorized_FromNotFinished_AuthorizesContractAndRecordsTransaction(): void
-    {
-        $contract = $this->contractWithState(notFinished: true, pending: false);
-        $contract->method('getAmount')->willReturn(42.5);
-        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
-
-        $contract->expects(self::once())->method('transitionToPending');
-        $contract->expects(self::once())->method('authorize');
-        $this->contractRepository->expects(self::once())->method('save')->with($contract);
-
-        $this->expectTransactionRecorded(MollieDefinitions::TRANSACTION_TYPE_AUTHORIZATION, MollieDefinitions::TRANSACTION_STATUS_COMPLETED, 42.5);
-
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentAuthorized('tr_authorized')->outcome);
-    }
-
-    public function testHandlePaymentAuthorized_FromPending_SwallowsTransitionToPendingDomainException(): void
-    {
-        $contract = $this->contractWithState(notFinished: false, pending: true);
-        $contract->method('getAmount')->willReturn(10.0);
-        $contract->method('transitionToPending')->willThrowException(new DomainException('already past NOT_FINISHED'));
-        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
-
-        $contract->expects(self::once())->method('authorize');
-        $this->contractRepository->expects(self::once())->method('save')->with($contract);
-
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentAuthorized('tr_authorized')->outcome);
-    }
-
-    public function testHandlePaymentAuthorized_SwallowsDomainExceptionFromAuthorizeStep(): void
-    {
-        $contract = $this->contractWithState(notFinished: true, pending: false);
-        $contract->method('authorize')->willThrowException(new DomainException('unexpected concurrent state change'));
-        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
-
-        $this->contractRepository->expects(self::once())->method('save')->with($contract);
-        $this->transactionRepository->expects(self::once())->method('save');
-
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentAuthorized('tr_authorized')->outcome);
-    }
-
-    public function testHandlePaymentAuthorized_DoesNotFulfillOrTouchOxpaid(): void
-    {
-        $contract = $this->contractWithState(notFinished: true, pending: false);
-        $contract->method('getAmount')->willReturn(10.0);
-        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
-
-        $this->contractFulfillmentService->expects(self::never())->method('fulfill');
-        $this->orderUpdater->expects(self::never())->method('markFailed');
-        $this->orderUpdater->expects(self::never())->method('markCancelled');
-        $contract->expects(self::never())->method('fulfill');
-        $contract->expects(self::never())->method('commitToOrder');
-
-        self::assertSame(FulfillmentOutcome::Acted, $this->handler->handlePaymentAuthorized('tr_authorized')->outcome);
     }
 
     private function contractWithState(
