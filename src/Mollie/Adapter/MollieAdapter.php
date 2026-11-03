@@ -106,6 +106,7 @@ final class MollieAdapter implements
         }
 
         try {
+            $this->useIdempotencyKey($request->idempotencyKey);
             $capture = $this->client->paymentCaptures->createForId(
                 $request->paymentId,
                 $this->buildCaptureBody($request),
@@ -125,12 +126,24 @@ final class MollieAdapter implements
         }
 
         try {
+            $this->useIdempotencyKey($request->idempotencyKey);
             $refund = $this->client->paymentRefunds->createForId($request->paymentId, $body);
         } catch (ApiException $exception) {
             throw MollieExceptionConverter::convert($exception);
         }
 
         return $this->mapRefund($refund);
+    }
+
+    /**
+     * VR-21 F1: Mollie runs a mutating request with a known key once and answers a repeat
+     * with the first result. The client sends the key with its next request only.
+     */
+    private function useIdempotencyKey(?string $key): void
+    {
+        if ($key !== null && $key !== '') {
+            $this->client->setIdempotencyKey($key);
+        }
     }
 
     public function getRefund(string $paymentId, string $refundId): MollieRefundDto

@@ -219,6 +219,53 @@ final class MollieAdapterTest extends TestCase
         self::assertSame('re_1', $dto->id);
     }
 
+    /**
+     * VR-21 F1 — the key was carried all the way to the adapter and never given to
+     * the Mollie client: a double click or a retry after a timeout created a second
+     * refund / capture.
+     */
+    public function testCreateRefund_SendsTheIdempotencyKeyWithTheRequest(): void
+    {
+        $keyAtCall = null;
+        $this->client->expects(self::once())->method('setIdempotencyKey')->with('contract-1:refund:3.50:after:0.00')
+            ->willReturnCallback(function (string $key) use (&$keyAtCall) {
+                $keyAtCall = $key;
+
+                return $this->client;
+            });
+        $this->refunds->expects(self::once())->method('createForId')->willReturnCallback(
+            function () use (&$keyAtCall): Refund {
+                self::assertSame('contract-1:refund:3.50:after:0.00', $keyAtCall, 'key set before the request');
+
+                return $this->refund();
+            }
+        );
+
+        (new MollieAdapter($this->client))->createRefund(
+            new RefundRequest('tr_abc', new MollieAmountDto('EUR', 3.5), null, 'contract-1:refund:3.50:after:0.00')
+        );
+    }
+
+    public function testCreateCapture_SendsTheIdempotencyKeyWithTheRequest(): void
+    {
+        $this->payments->method('get')->willReturn($this->payment(['id' => 'tr_abc', 'status' => 'authorized']));
+        $this->client->expects(self::once())->method('setIdempotencyKey')->with('contract-2:capture:40.00:after:0.00')
+            ->willReturn($this->client);
+        $this->captures->method('createForId')->willReturn($this->capture());
+
+        (new MollieAdapter($this->client))->createCapture(
+            new CaptureRequest('tr_abc', new MollieAmountDto('EUR', 40.0), 'contract-2:capture:40.00:after:0.00')
+        );
+    }
+
+    public function testWithoutAKeyNoneIsSet(): void
+    {
+        $this->client->expects(self::never())->method('setIdempotencyKey');
+        $this->refunds->method('createForId')->willReturn($this->refund());
+
+        (new MollieAdapter($this->client))->createRefund(new RefundRequest('tr_abc', new MollieAmountDto('EUR', 1.0)));
+    }
+
     public function testCancelPayment_DelegatesToSdk(): void
     {
         $this->payments->expects(self::once())->method('cancel')->with('tr_abc')
