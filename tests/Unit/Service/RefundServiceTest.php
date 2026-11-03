@@ -261,6 +261,46 @@ final class RefundServiceTest extends TestCase
         $this->service->refund($contract);
     }
 
+    /**
+     * VR-21 F2 — any refund, a 5 EUR goodwill refund on a 100 EUR order included, put every
+     * item back in stock and stornoed every order line. Only the refund that leaves nothing
+     * refundable restocks.
+     */
+    public function testRefund_Partial_KeepsTheStock(): void
+    {
+        $contract = $this->fulfilledContractWithOrderId('tr_123', '5', 'order_42');
+        $this->paymentsAdapter->method('getPayment')->willReturn($this->payment('tr_123', 100.0, 0.0));
+        $this->refundAdapter->method('createRefund')->willReturn($this->refundDto('re_1', 'tr_123', 5.0));
+
+        $this->stockRestorationService->expects(self::never())->method('restoreStockForOrder');
+
+        $this->service->refund($contract, 5.0);
+    }
+
+    public function testRefund_TheRefundThatLeavesNothingRefundable_RestoresTheStock(): void
+    {
+        $contract = $this->fulfilledContractWithOrderId('tr_123', '5', 'order_42');
+        $this->paymentsAdapter->method('getPayment')->willReturn($this->payment('tr_123', 100.0, 60.0));
+        $this->refundAdapter->method('createRefund')->willReturn($this->refundDto('re_2', 'tr_123', 40.0));
+
+        $this->stockRestorationService->expects(self::once())->method('restoreStockForOrder')->with('order_42');
+
+        $this->service->refund($contract, 40.0);
+    }
+
+    public function testRefund_AFullRefundMollieRefusedToRun_KeepsTheStock(): void
+    {
+        $contract = $this->fulfilledContractWithOrderId('tr_123', '5', 'order_42');
+        $this->paymentsAdapter->method('getPayment')->willReturn($this->payment('tr_123', 100.0, 0.0));
+        $this->refundAdapter->method('createRefund')->willReturn(
+            new MollieRefundDto('re_3', 'tr_123', MollieAmountDto::fromComponents('EUR', 100.0), 'failed')
+        );
+
+        $this->stockRestorationService->expects(self::never())->method('restoreStockForOrder');
+
+        $this->service->refund($contract);
+    }
+
     public function testRefund_WhenRefundFails_DoesNotRestoreStock(): void
     {
         $contract = $this->fulfilledContractWithOrderId('tr_123', '5', 'order_42');
