@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Webhook\Handler;
 
 use DomainException;
-use OxidEsales\PaymentBase\Contract\ContractCondition;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Repository\StaleContractException;
@@ -27,21 +26,13 @@ use Psr\Log\LoggerInterface;
 /**
  * Default {@see WebhookContractFulfillmentHandlerInterface} implementation.
  *
- * The `paid` path is Mollie's one genuinely non-trivial ladder: unlike Stripe/PayPal, nothing
- * else in this module wires the shared PaymentAuthorizedEvent → ContractCommitmentHandler chain
- * (the return controller never dispatches it — Sprint 4 left commit/fulfill entirely to this
- * sprint). So the webhook is not just a backstop, it is the ONLY path that climbs the contract
- * from PENDING to COMMITTED, then hands off to the shared
- * {@see ContractFulfillmentServiceInterface} for the final COMMITTED → FULFILLED step (which
- * also dispatches ContractFulfilledEvent, driving payment-base's OrderPaymentCompletedHandler to
- * stamp OXPAID).
- *
- * Every step uses a named transition on the contract — never setState() — wrapped so a step that
- * doesn't apply (already past it, or its precondition isn't met yet) is skipped rather than
- * propagating a DomainException. This makes the ladder safe to re-run on every delivery, including
- * out-of-order or duplicate ones. Sprint 11 Story 8 (F8) made those skips *logged*: the catch
- * accepts every DomainException, including ones that are not benign, and it used to leave no trace
- * at all.
+ * The `paid` path commits through payment-base's {@see ContractCommitServiceInterface} (VR-20 R6),
+ * the same chain Stripe and PayPal use: PaymentAuthorizedEvent → PaymentAuthorizedEventHandler →
+ * ContractReadyToCommitEvent → ContractCommitmentHandler. Mollie's return controller commits
+ * nothing, so this webhook is the one path from PENDING to COMMITTED. A refusal (closed contract,
+ * amount off the snapshot) or a chain that leaves the contract open fails the delivery so Mollie
+ * retries. Then the shared {@see ContractFulfillmentServiceInterface} takes COMMITTED → FULFILLED,
+ * which dispatches ContractFulfilledEvent and stamps OXPAID through OrderPaymentCompletedHandler.
  */
 final class WebhookContractFulfillmentHandler implements WebhookContractFulfillmentHandlerInterface
 {
@@ -53,9 +44,9 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         private readonly LoggerInterface $logger,
         // OPC-175 / S2g: money on a payment of an attempt the contract replaced goes back.
         private readonly MollieLatePaymentRefunder $lateMoney,
-        // GRAPH-QL / MS3: optional so a consumer whose services.yaml predates it keeps the
-        // AUTHORIZED-only behaviour; autowired from payment-base otherwise.
-        private readonly ?ContractCommitServiceInterface $contractCommit = null,
+        // VR-20 R6: required - the one commit path for `authorized` and `paid` (amount, currency
+        // and state checks in payment-base); no hand-written ladder beside it.
+        private readonly ContractCommitServiceInterface $contractCommit,
     ) {
     }
 
@@ -136,7 +127,14 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             return FulfillmentResult::noOp((string) $contract->getId());
         }
 
-        $this->advanceToCommitted($contract);
+        if (!$contract->getState()->isCommitted()) {
+            $refusal = $this->commitPaid($contract, $providerOrderId);
+            if ($refusal !== null) {
+                return $refusal;
+            }
+            // The commit service saved its own copy; continue on the committed row.
+            $contract = $this->contractRepository->findByProviderOrderId($providerOrderId) ?? $contract;
+        }
 
         $this->recordCapturedAmount($contract);
         $this->contractRepository->save($contract);
@@ -270,20 +268,39 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             return FulfillmentResult::noOp((string) $contract->getId());
         }
 
-        if ($this->contractCommit !== null) {
-            return $this->commitAuthorization($contract, $providerOrderId);
+        return $this->commitAuthorization($contract, $providerOrderId);
+    }
+
+    /**
+     * VR-20 R6: `paid` on a contract that is not committed yet (no `authorized` webhook before it -
+     * the usual automatic-capture case) commits through payment-base's ContractCommitService, like
+     * `authorized` does. A refusal (amount mismatch, closed contract) or an open second condition
+     * answers Failed: Mollie retries and the merchant sees it in the webhook log.
+     */
+    private function commitPaid(PaymentContractInterface $contract, string $providerOrderId): ?FulfillmentResult
+    {
+        $outcome = $this->contractCommit->commit(new PaymentConfirmation(
+            contractId: (string) $contract->getId(),
+            providerName: MollieDefinitions::PROVIDER_NAME,
+            authorizationId: $providerOrderId,
+            providerOrderId: $providerOrderId,
+            amount: $contract->getAmount(),
+            currency: $contract->getCurrency(),
+            requiresCapture: false,
+            source: 'webhook',
+            extraContext: ['molliePaymentId' => $providerOrderId],
+        ));
+        if ($outcome->isSettled()) {
+            return null;
         }
 
-        $this->advanceToAuthorized($contract);
-        $this->contractRepository->save($contract);
-        $this->auditRecorder->record(
-            $contract,
-            MollieDefinitions::TRANSACTION_TYPE_AUTHORIZATION,
-            MollieDefinitions::TRANSACTION_STATUS_COMPLETED,
-            $contract->getAmount(),
-        );
+        $this->logger->warning('[WebhookContractFulfillmentHandler] paid, but the contract was not committed', [
+            'contractId' => $contract->getId(),
+            'outcome' => $outcome->outcome,
+            'reason' => $outcome->reason,
+        ]);
 
-        return FulfillmentResult::acted((string) $contract->getId());
+        return FulfillmentResult::failed((string) $contract->getId());
     }
 
     /**
@@ -361,48 +378,6 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             $contract,
             static fn () => $contract->setCapturedAmount($contract->getAmount())
         );
-    }
-
-    /**
-     * NOT_FINISHED → PENDING → AUTHORIZED, each step a named transition wrapped so an
-     * inapplicable step (already advanced past it) is a silent no-op instead of propagating —
-     * mirrors {@see advanceToCommitted()}.
-     */
-    private function advanceToAuthorized(PaymentContractInterface $contract): void
-    {
-        $this->attemptTransition('transitionToPending', $contract, static fn () => $contract->transitionToPending());
-        $this->attemptTransition('authorize', $contract, static fn () => $contract->authorize());
-    }
-
-    /**
-     * Climb the contract ladder as far as its current state allows: PENDING → READY_TO_COMMIT
-     * (via the `payment_authorized` condition) → COMMITTED. Each step is a named transition,
-     * wrapped so an inapplicable step (already advanced past it, or precondition unmet) is a
-     * silent no-op instead of propagating.
-     */
-    private function advanceToCommitted(PaymentContractInterface $contract): void
-    {
-        $this->attemptTransition('transitionToPending', $contract, static fn () => $contract->transitionToPending());
-        $this->attemptTransition(
-            'fulfillCondition',
-            $contract,
-            static fn () => $contract->fulfillCondition(ContractCondition::TYPE_PAYMENT_AUTHORIZED)
-        );
-
-        $orderId = $contract->getOrderId();
-        if ($orderId === null || $orderId === '') {
-            // Sprint 11 Story 8 (F8): the one case where "no order id" is a real problem, and it
-            // used to be skipped in silence. The contract cannot reach COMMITTED, so fulfil() below
-            // will fail and the delivery is now reported as retry-worthy rather than as a 200.
-            $this->logger->warning(
-                '[WebhookContractFulfillmentHandler] cannot commit: contract has no linked order id',
-                ['contractId' => $contract->getId(), 'state' => $contract->getStateValue()],
-            );
-
-            return;
-        }
-
-        $this->attemptTransition('commitToOrder', $contract, static fn () => $contract->commitToOrder($orderId));
     }
 
     /**
