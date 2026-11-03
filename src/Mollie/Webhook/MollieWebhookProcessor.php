@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Webhook;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface;
 use OxidEsales\PaymentBase\Repository\WebhookLogRepositoryInterface;
 use OxidEsales\PaymentBase\Webhook\AbstractWebhookProcessor;
 use OxidEsales\PaymentBase\Webhook\Exception\WebhookSignatureException;
@@ -48,11 +49,12 @@ final class MollieWebhookProcessor extends AbstractWebhookProcessor
     public function __construct(
         WebhookLogRepositoryInterface $logRepository,
         LoggerInterface $logger,
+        ThrowableSummaryInterface $throwableSummary,
         private readonly MollieWebhookAdapterInterface $webhookAdapter,
         private readonly MollieStatusMapper $statusMapper,
         private readonly iterable $handlers,
     ) {
-        parent::__construct($logRepository, $logger);
+        parent::__construct($logRepository, $logger, $throwableSummary);
     }
 
     protected function getProviderName(): string

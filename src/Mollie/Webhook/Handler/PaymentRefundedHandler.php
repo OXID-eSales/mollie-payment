@@ -66,7 +66,8 @@ final class PaymentRefundedHandler implements MollieWebhookEventHandlerInterface
                 $refund->id,
                 $refund->amount->value,
                 $refund->amount->currency,
-                'webhook'
+                'webhook',
+                $refund->hasSucceeded()
             );
             $booked += $booking->booked ? 1 : 0;
         }

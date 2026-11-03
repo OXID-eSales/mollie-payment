@@ -12,7 +12,6 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\Event\Request\RefundRequestedEvent;
-use OxidEsales\PaymentBase\Service\StockRestorationServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieRefundDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\RefundRequest;
@@ -96,10 +95,9 @@ final class AdminRequestIdempotencyTest extends TestCase
             }
         };
 
-        $stockRestorationService = $this->createMock(StockRestorationServiceInterface::class);
         $ledger = $this->createMock(\OxidEsales\PaymentBase\Refund\ProviderRefundLedgerInterface::class);
         $ledger->method('book')->willReturn(\OxidEsales\PaymentBase\Refund\RefundBooking::booked(25.0));
-        $service = new RefundService($paymentsAdapter, $refundAdapter, $ledger, $stockRestorationService, new NullLogger());
+        $service = new RefundService($paymentsAdapter, $refundAdapter, $ledger);
 
         $key = 'contract-99:refund:25.00';
         $first = $service->refund($contract, 25.0, null, $key);

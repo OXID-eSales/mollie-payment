@@ -9,18 +9,20 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Webhook\Handler;
 
+use OxidEsales\PaymentBase\Refund\ProviderChargebackLedgerInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Webhook\WebhookEvent;
 use OxidEsales\PaymentBase\Webhook\WebhookResult;
-use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use OxidEsales\Payments\Mollie\Webhook\MollieWebhookEventHandlerInterface;
 use OxidEsales\Payments\Mollie\Webhook\MollieWebhookOutcome;
 
 /**
  * Handles Mollie `chargedback` status webhooks.
  *
- * Records the chargeback as an audit transaction only. No automatic reversal of the contract's
+ * VR-21 S-M6: Mollie reports the CUMULATIVE `amountChargedBack` with every status webhook and has no
+ * chargeback id, so the total goes to payment-base's chargeback ledger, which books what changed
+ * (30 then 50 is +30, +20; a replay books nothing). Before, every delivery recorded the whole total
+ * again. Audit only: no automatic reversal of the contract's
  * fulfilled/captured state is performed — dispute resolution is a merchant/operator decision
  * (full dispute handling is out of scope for this sprint; see Sprint 8 stretch goals).
  */
@@ -30,7 +32,7 @@ final class ChargebackCreatedHandler implements MollieWebhookEventHandlerInterfa
 
     public function __construct(
         private readonly ContractRepositoryInterface $contractRepository,
-        private readonly TransactionAuditRecorder $auditRecorder,
+        private readonly ProviderChargebackLedgerInterface $ledger,
     ) {
     }
 
@@ -51,13 +53,16 @@ final class ChargebackCreatedHandler implements MollieWebhookEventHandlerInterfa
             return MollieWebhookOutcome::of(WebhookResult::skipped('Contract not found'));
         }
 
-        $amount = $this->extractAmountChargedBack($event);
-        $this->auditRecorder->record(
-            $contract,
-            MollieDefinitions::TRANSACTION_TYPE_CHARGEBACK,
-            MollieDefinitions::TRANSACTION_STATUS_COMPLETED,
-            $amount,
+        $booking = $this->ledger->book(
+            (string) $contract->getId(),
+            null,
+            $this->extractAmountChargedBack($event),
+            $contract->getCurrency(),
+            'webhook'
         );
+        if (!$booking->booked) {
+            return MollieWebhookOutcome::of(WebhookResult::skipped('No new chargeback to record'), $contract->getId());
+        }
 
         return MollieWebhookOutcome::of(WebhookResult::success('chargeback_recorded'), $contract->getId());
     }

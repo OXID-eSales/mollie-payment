@@ -13,7 +13,6 @@ use DomainException;
 use InvalidArgumentException;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Refund\ProviderRefundLedgerInterface;
-use OxidEsales\PaymentBase\Service\StockRestorationServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieRefundDto;
@@ -23,7 +22,6 @@ use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieRefundAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
 use OxidEsales\Payments\Mollie\Service\Exception\MollieRefundNotYetAvailableException;
-use Psr\Log\LoggerInterface;
 
 /**
  * Admin-initiated refund orchestrator (full & partial, accumulating).
@@ -42,8 +40,9 @@ use Psr\Log\LoggerInterface;
  * id the `refunded` webhook books, so the second report is a duplicate. The ledger's transaction row
  * is the one the admin's Payment tab lists.
  *
- * Story 1 (Sprint 9): Stock restoration on admin refund. When a refund succeeds, stock is restored
- * for the associated order articles via {@see StockRestorationServiceInterface}.
+ * VR-21 F3: whether the refund succeeded goes to the ledger with the booking; the ledger's policy
+ * alone decides about stock (back only when a succeeded refund leaves nothing refundable), so this
+ * class restocks nothing.
  */
 final class RefundService implements RefundServiceInterface
 {
@@ -54,8 +53,6 @@ final class RefundService implements RefundServiceInterface
         private readonly MolliePaymentsAdapterInterface $paymentsAdapter,
         private readonly MollieRefundAdapterInterface $refundAdapter,
         private readonly ProviderRefundLedgerInterface $ledger,
-        private readonly StockRestorationServiceInterface $stockRestorationService,
-        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -93,12 +90,9 @@ final class RefundService implements RefundServiceInterface
                 $refund->id,
                 $refund->amount->value,
                 $refund->amount->currency,
-                'admin'
+                'admin',
+                $refund->hasSucceeded()
             );
-        }
-
-        if ($this->refundsTheRest($refund, $refundable, $effectiveAmount)) {
-            $this->restoreStockIfOrderLinked($contract);
         }
 
         return $refund;
@@ -124,43 +118,12 @@ final class RefundService implements RefundServiceInterface
     }
 
     /**
-     * VR-21 F2: stock comes back with the refund that leaves nothing refundable - not with a
-     * partial one (a goodwill refund put every item back and stornoed every line). A refund
-     * Mollie refused to run (failed / canceled) restocks nothing; a pending one is the normal
-     * start of a refund at Mollie and counts.
-     */
-    private function refundsTheRest(MollieRefundDto $refund, float $refundableBefore, float $refunded): bool
-    {
-        return $this->wasRun($refund) && $refundableBefore - $refunded < 0.005;
-    }
-
-    /**
      * A refund Mollie refused to run (failed / canceled) moved no money; a pending one is the
      * normal start of a refund at Mollie.
      */
     private function wasRun(MollieRefundDto $refund): bool
     {
         return !in_array($refund->status, [self::REFUND_FAILED, self::REFUND_CANCELED], true);
-    }
-
-    /**
-     * Restore stock for the order if one is linked to the contract.
-     * Silently skips if no order ID is present (order may not be created yet
-     * in edge cases).
-     */
-    private function restoreStockIfOrderLinked(PaymentContractInterface $contract): void
-    {
-        $orderId = $contract->getOrderId();
-        if ($orderId === null || $orderId === '') {
-            return;
-        }
-
-        $articlesProcessed = $this->stockRestorationService->restoreStockForOrder($orderId);
-        $this->logger->info('Stock restored after refund', [
-            'contractId' => $contract->getId(),
-            'orderId' => $orderId,
-            'articlesProcessed' => $articlesProcessed,
-        ]);
     }
 
     private function assertFulfilled(PaymentContractInterface $contract): void

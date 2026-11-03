@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Webhook;
 use DateTimeImmutable;
 use OxidEsales\PaymentBase\Repository\WebhookLogRepositoryInterface;
 use OxidEsales\PaymentBase\Webhook\WebhookRequest;
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
@@ -155,6 +156,7 @@ final class WebhookEventIdentityTest extends TestCase
         $processor = new MollieWebhookProcessor(
             $logRepository,
             new NullLogger(),
+            new ThrowableSummary([]),
             $webhookAdapter,
             new MollieStatusMapper(),
             [],

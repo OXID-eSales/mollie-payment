@@ -11,6 +11,7 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller\Webhook;
 
 use OxidEsales\PaymentBase\Repository\WebhookLogRepositoryInterface;
 use OxidEsales\PaymentBase\Service\FileLoggerInterface;
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
@@ -73,6 +74,7 @@ final class WebhookControllerAuditLoggingTest extends TestCase
         $processor = new MollieWebhookProcessor(
             $logRepository,
             new NullLogger(),
+            new ThrowableSummary([]),
             $webhookAdapter,
             new MollieStatusMapper(),
             [],

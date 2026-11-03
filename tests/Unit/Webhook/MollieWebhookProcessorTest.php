@@ -14,6 +14,7 @@ use OxidEsales\PaymentBase\Webhook\Exception\WebhookSignatureException;
 use OxidEsales\PaymentBase\Webhook\WebhookEvent;
 use OxidEsales\PaymentBase\Webhook\WebhookRequest;
 use OxidEsales\PaymentBase\Webhook\WebhookResult;
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
@@ -165,6 +166,7 @@ final class MollieWebhookProcessorTest extends TestCase
         return new MollieWebhookProcessor(
             $this->logRepository,
             $this->logger,
+            new ThrowableSummary([]),
             $this->webhookAdapter,
             new MollieStatusMapper(),
             $handlers,

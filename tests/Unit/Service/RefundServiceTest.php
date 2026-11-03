@@ -12,7 +12,6 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 use OxidEsales\PaymentBase\Contract\ContractState;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
-use OxidEsales\PaymentBase\Service\StockRestorationServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieRefundDto;
@@ -35,7 +34,6 @@ final class RefundServiceTest extends TestCase
     private MolliePaymentsAdapterInterface&MockObject $paymentsAdapter;
     private MollieRefundAdapterInterface&MockObject $refundAdapter;
     private ContractRepositoryInterface&MockObject $contractRepository;
-    private StockRestorationServiceInterface&MockObject $stockRestorationService;
     private ProviderRefundLedgerInterface&MockObject $ledger;
     private RefundService $service;
 
@@ -44,7 +42,6 @@ final class RefundServiceTest extends TestCase
         $this->paymentsAdapter = $this->createMock(MolliePaymentsAdapterInterface::class);
         $this->refundAdapter = $this->createMock(MollieRefundAdapterInterface::class);
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
-        $this->stockRestorationService = $this->createMock(StockRestorationServiceInterface::class);
         $this->ledger = $this->createMock(ProviderRefundLedgerInterface::class);
         $this->ledger->method('book')->willReturn(RefundBooking::booked(0.0));
 
@@ -52,8 +49,6 @@ final class RefundServiceTest extends TestCase
             $this->paymentsAdapter,
             $this->refundAdapter,
             $this->ledger,
-            $this->stockRestorationService,
-            new NullLogger(),
         );
     }
 
@@ -105,22 +100,20 @@ final class RefundServiceTest extends TestCase
         $this->ledger = $this->createMock(ProviderRefundLedgerInterface::class);
         $this->ledger->expects(self::never())->method('book');
 
-        (new RefundService($this->paymentsAdapter, $this->refundAdapter, $this->ledger, $this->stockRestorationService, new NullLogger()))
+        (new RefundService($this->paymentsAdapter, $this->refundAdapter, $this->ledger))
             ->refund($contract, 25.0);
     }
 
-    private function ledgerExpectsOneBooking(string $refundId, float $amount): void
+    private function ledgerExpectsOneBooking(string $refundId, float $amount, bool $succeeded = false): void
     {
         $this->ledger = $this->createMock(ProviderRefundLedgerInterface::class);
         $this->ledger->expects(self::once())->method('book')
-            ->with('5', $refundId, $amount, 'EUR', 'admin')
+            ->with('5', $refundId, $amount, 'EUR', 'admin', $succeeded)
             ->willReturn(RefundBooking::booked($amount));
         $this->service = new RefundService(
             $this->paymentsAdapter,
             $this->refundAdapter,
             $this->ledger,
-            $this->stockRestorationService,
-            new NullLogger(),
         );
     }
 
@@ -263,113 +256,43 @@ final class RefundServiceTest extends TestCase
     }
 
     // =========================================================================
-    // Story 1: Stock Restoration on Admin Refund
+    // VR-21 F3: the refund tells payment-base's ledger whether it succeeded; the ledger's policy
+    // decides about stock. The provider restocks nothing itself.
     // =========================================================================
 
-    public function testRefund_Successful_RestoresStockForOrder(): void
+    public function testRefund_MollieReportsItRefunded_IsBookedAsSucceeded(): void
     {
-        $contract = $this->fulfilledContractWithOrderId('tr_123', '5', 'order_42');
-
-        $this->paymentsAdapter->method('getPayment')->with('tr_123')->willReturn(
-            $this->payment('tr_123', 100.0, 0.0),
-        );
-
+        $contract = $this->fulfilledContract('tr_123', '5');
+        $this->paymentsAdapter->method('getPayment')->willReturn($this->payment('tr_123', 100.0, 0.0));
         $this->refundAdapter->method('createRefund')->willReturn(
-            $this->refundDto('re_1', 'tr_123', 100.0),
+            new MollieRefundDto('re_1', 'tr_123', MollieAmountDto::fromComponents('EUR', 100.0), 'refunded')
         );
-
-        // Expect stock restoration to be called with the order ID
-        $this->stockRestorationService->expects(self::once())
-            ->method('restoreStockForOrder')
-            ->with('order_42')
-            ->willReturn(3);
+        $this->ledgerExpectsOneBooking('re_1', 100.0, true);
 
         $this->service->refund($contract);
     }
 
-    /**
-     * VR-21 F2 — any refund, a 5 EUR goodwill refund on a 100 EUR order included, put every
-     * item back in stock and stornoed every order line. Only the refund that leaves nothing
-     * refundable restocks.
-     */
-    public function testRefund_Partial_KeepsTheStock(): void
+    public function testRefund_MollieReportsItPending_IsBookedAsNotYetSucceeded(): void
     {
-        $contract = $this->fulfilledContractWithOrderId('tr_123', '5', 'order_42');
+        $contract = $this->fulfilledContract('tr_123', '5');
         $this->paymentsAdapter->method('getPayment')->willReturn($this->payment('tr_123', 100.0, 0.0));
-        $this->refundAdapter->method('createRefund')->willReturn($this->refundDto('re_1', 'tr_123', 5.0));
-
-        $this->stockRestorationService->expects(self::never())->method('restoreStockForOrder');
-
-        $this->service->refund($contract, 5.0);
-    }
-
-    public function testRefund_TheRefundThatLeavesNothingRefundable_RestoresTheStock(): void
-    {
-        $contract = $this->fulfilledContractWithOrderId('tr_123', '5', 'order_42');
-        $this->paymentsAdapter->method('getPayment')->willReturn($this->payment('tr_123', 100.0, 60.0));
-        $this->refundAdapter->method('createRefund')->willReturn($this->refundDto('re_2', 'tr_123', 40.0));
-
-        $this->stockRestorationService->expects(self::once())->method('restoreStockForOrder')->with('order_42');
-
-        $this->service->refund($contract, 40.0);
-    }
-
-    public function testRefund_AFullRefundMollieRefusedToRun_KeepsTheStock(): void
-    {
-        $contract = $this->fulfilledContractWithOrderId('tr_123', '5', 'order_42');
-        $this->paymentsAdapter->method('getPayment')->willReturn($this->payment('tr_123', 100.0, 0.0));
-        $this->refundAdapter->method('createRefund')->willReturn(
-            new MollieRefundDto('re_3', 'tr_123', MollieAmountDto::fromComponents('EUR', 100.0), 'failed')
-        );
-
-        $this->stockRestorationService->expects(self::never())->method('restoreStockForOrder');
+        $this->refundAdapter->method('createRefund')->willReturn($this->refundDto('re_1', 'tr_123', 100.0));
+        $this->ledgerExpectsOneBooking('re_1', 100.0, false);
 
         $this->service->refund($contract);
     }
 
-    public function testRefund_WhenRefundFails_DoesNotRestoreStock(): void
+    public function testRefund_ExceedingRefundable_IsRefusedAndNothingIsBooked(): void
     {
         $contract = $this->fulfilledContractWithOrderId('tr_123', '5', 'order_42');
-
-        $this->paymentsAdapter->method('getPayment')->willReturn(
-            $this->payment('tr_123', 100.0, 90.0),
-        );
-
-        // Exceeds refundable - should not call stock restoration
-        $this->stockRestorationService->expects(self::never())
-            ->method('restoreStockForOrder');
+        $this->paymentsAdapter->method('getPayment')->willReturn($this->payment('tr_123', 100.0, 90.0));
+        $this->ledger = $this->createMock(ProviderRefundLedgerInterface::class);
+        $this->ledger->expects(self::never())->method('book');
+        $service = new RefundService($this->paymentsAdapter, $this->refundAdapter, $this->ledger);
 
         $this->expectException(\InvalidArgumentException::class);
 
-        $this->service->refund($contract, 50.0);
-    }
-
-    public function testRefund_WithOrderIdNull_DoesNotRestoreStock(): void
-    {
-        $state = $this->createMock(ContractState::class);
-        $state->method('isFulfilled')->willReturn(true);
-
-        $contract = $this->createMock(PaymentContractInterface::class);
-        $contract->method('getState')->willReturn($state);
-        $contract->method('getProviderOrderId')->willReturn('tr_123');
-        $contract->method('getId')->willReturn('5');
-        $contract->method('getOrderId')->willReturn(null); // No order linked
-
-        $this->paymentsAdapter->method('getPayment')->willReturn(
-            $this->payment('tr_123', 100.0, 0.0),
-        );
-
-        $this->refundAdapter->method('createRefund')->willReturn(
-            $this->refundDto('re_1', 'tr_123', 100.0),
-        );
-
-        // Stock restoration should not be called when orderId is null
-        $this->stockRestorationService->expects(self::never())
-            ->method('restoreStockForOrder');
-
-        $dto = $this->service->refund($contract);
-
-        self::assertSame('re_1', $dto->id);
+        $service->refund($contract, 50.0);
     }
 
     private function fulfilledContractWithOrderId(string $providerOrderId, string $id, string $orderId): PaymentContractInterface&MockObject

@@ -11,6 +11,7 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Security;
 
 use OxidEsales\PaymentBase\Repository\WebhookLogRepositoryInterface;
 use OxidEsales\PaymentBase\Validation\RateLimit\InMemoryRateLimitStore;
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
@@ -110,6 +111,7 @@ final class WebhookSecurityParityTest extends TestCase
         $processor = new MollieWebhookProcessor(
             $logRepository,
             new NullLogger(),
+            new ThrowableSummary([]),
             $webhookAdapter,
             new MollieStatusMapper(),
             [],
@@ -145,6 +147,7 @@ final class WebhookSecurityParityTest extends TestCase
         $processor = new MollieWebhookProcessor(
             $logRepository,
             new NullLogger(),
+            new ThrowableSummary([]),
             $webhookAdapter,
             new MollieStatusMapper(),
             [],
@@ -196,6 +199,7 @@ final class WebhookSecurityParityTest extends TestCase
         $processor = new MollieWebhookProcessor(
             $this->createMock(WebhookLogRepositoryInterface::class),
             new NullLogger(),
+            new ThrowableSummary([]),
             $webhookAdapter,
             new MollieStatusMapper(),
             [],

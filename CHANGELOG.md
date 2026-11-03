@@ -5,6 +5,18 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed - Adopts payment-base VR wave 2 (F3/L1/A1)
+- Stock restoration is payment-base's now (`RefundSettledPolicy` after every ledger booking): removed
+  `Service\OxidStockRestorationService`, its `services.yaml` binding and autowire exclude, its unit and integration
+  tests, and `RefundService`'s restock (`refundsTheRest()`, `restoreStockIfOrderLinked()`, the stock and logger
+  constructor arguments). The refund ledger gets `succeeded` = Mollie reports the refund `refunded`
+  (`MollieRefundDto::hasSucceeded()`); a pending refund is booked as not yet succeeded and restocks when it settles.
+- `ChargebackCreatedHandler` books Mollie's cumulative `amountChargedBack` through `ProviderChargebackLedgerInterface`
+  (no chargeback id) instead of recording the whole total on every delivery (VR-21 S-M6); a replay answers skipped.
+- `MollieWebhookProcessor` passes payment-base's `ThrowableSummaryInterface` to `AbstractWebhookProcessor` (VR-18 L1).
+- VR-22 A1 (`MoneyInvariantViolation`): no Mollie flow over-books; the capture and refund bounds are checked against
+  Mollie's figures before any booking.
+
 ### Changed (VR-20 R6) - one commit path: `paid` commits through payment-base's ContractCommitService
 - A `paid` webhook on a contract that is not committed yet commits it through `ContractCommitServiceInterface` (amount,
   currency and state checks in payment-base), like `authorized` already did, instead of climbing a hand-written

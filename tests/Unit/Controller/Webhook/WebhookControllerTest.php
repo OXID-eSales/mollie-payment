@@ -11,6 +11,7 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller\Webhook;
 
 use OxidEsales\PaymentBase\Repository\WebhookLogRepositoryInterface;
 use OxidEsales\PaymentBase\Webhook\WebhookResult;
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
@@ -114,6 +115,7 @@ final class WebhookControllerTest extends TestCase
         $processor = new MollieWebhookProcessor(
             $this->createMock(WebhookLogRepositoryInterface::class),
             new NullLogger(),
+            new ThrowableSummary([]),
             $webhookAdapter,
             new MollieStatusMapper(),
             [],
@@ -151,6 +153,7 @@ final class WebhookControllerTest extends TestCase
         return new MollieWebhookProcessor(
             $logRepository,
             new NullLogger(),
+            new ThrowableSummary([]),
             $webhookAdapter,
             new MollieStatusMapper(),
             $handlers,

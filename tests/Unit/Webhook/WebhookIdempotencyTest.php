@@ -13,6 +13,7 @@ use DateTimeImmutable;
 use OxidEsales\PaymentBase\Repository\WebhookLogRepositoryInterface;
 use OxidEsales\PaymentBase\Webhook\WebhookRequest;
 use OxidEsales\PaymentBase\Webhook\WebhookResult;
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
@@ -56,6 +57,7 @@ final class WebhookIdempotencyTest extends TestCase
         $this->processor = new MollieWebhookProcessor(
             $this->logRepository,
             $this->createMock(LoggerInterface::class),
+            new ThrowableSummary([]),
             $this->webhookAdapter,
             new MollieStatusMapper(),
             [$this->handler],

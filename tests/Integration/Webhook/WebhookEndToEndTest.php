@@ -21,6 +21,7 @@ use OxidEsales\PaymentBase\Repository\WebhookLogRepositoryInterface;
 use OxidEsales\PaymentBase\Webhook\WebhookEvent;
 use OxidEsales\PaymentBase\Webhook\WebhookRequest;
 use OxidEsales\PaymentBase\Webhook\WebhookResult;
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
@@ -198,6 +199,7 @@ final class WebhookEndToEndTest extends TestCase
         $processor = new MollieWebhookProcessor(
             $this->webhookLogRepository,
             new NullLogger(),
+            new ThrowableSummary([]),
             $this->fakeAdapter($paymentId, 'paid'),
             new MollieStatusMapper(),
             [$throwingHandler],
@@ -232,6 +234,7 @@ final class WebhookEndToEndTest extends TestCase
         return new MollieWebhookProcessor(
             $this->webhookLogRepository,
             new NullLogger(),
+            new ThrowableSummary([]),
             $adapter,
             new MollieStatusMapper(),
             $handlers,

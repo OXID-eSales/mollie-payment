@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller\Webhook;
 
 use OxidEsales\PaymentBase\Repository\WebhookLogRepositoryInterface;
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
@@ -223,6 +224,7 @@ final class WebhookFailClosedTest extends TestCase
         return new MollieWebhookProcessor(
             $logRepository,
             new NullLogger(),
+            new ThrowableSummary([]),
             $webhookAdapter,
             new MollieStatusMapper(),
             [],

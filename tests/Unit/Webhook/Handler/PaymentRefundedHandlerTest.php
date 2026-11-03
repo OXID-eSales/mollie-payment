@@ -54,13 +54,13 @@ final class PaymentRefundedHandlerTest extends TestCase
     {
         $this->contracts->method('findByProviderOrderId')->with('tr_refund')->willReturn($this->contract());
         $this->refunds->method('listRefunds')->with('tr_refund')->willReturn([
-            $this->refund('re_1', 30.0),
+            $this->refund('re_1', 30.0, 'refunded'),
             $this->refund('re_2', 20.0),
         ]);
         $booked = [];
         $this->ledger->method('book')->willReturnCallback(
-            static function (string $contractId, string $refundId, float $amount, string $currency, string $source) use (&$booked): RefundBooking {
-                $booked[] = [$contractId, $refundId, $amount, $currency, $source];
+            static function (string $contractId, string $refundId, float $amount, string $currency, string $source, bool $succeeded) use (&$booked): RefundBooking {
+                $booked[] = [$contractId, $refundId, $amount, $currency, $source, $succeeded];
 
                 return RefundBooking::booked(50.0);
             }
@@ -69,8 +69,8 @@ final class PaymentRefundedHandlerTest extends TestCase
         $outcome = $this->handler->handle($this->event('tr_refund'));
 
         self::assertSame([
-            ['contract-1', 're_1', 30.0, 'EUR', 'webhook'],
-            ['contract-1', 're_2', 20.0, 'EUR', 'webhook'],
+            ['contract-1', 're_1', 30.0, 'EUR', 'webhook', true],
+            ['contract-1', 're_2', 20.0, 'EUR', 'webhook', false],
         ], $booked);
         self::assertSame('refund_recorded', $outcome->result->action);
         self::assertSame('contract-1', $outcome->contractId);
