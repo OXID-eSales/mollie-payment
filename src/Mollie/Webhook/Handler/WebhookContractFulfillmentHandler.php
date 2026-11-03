@@ -26,21 +26,13 @@ use Psr\Log\LoggerInterface;
 /**
  * Default {@see WebhookContractFulfillmentHandlerInterface} implementation.
  *
- * The `paid` path is Mollie's one genuinely non-trivial ladder: unlike Stripe/PayPal, nothing
- * else in this module wires the shared PaymentAuthorizedEvent → ContractCommitmentHandler chain
- * (the return controller never dispatches it — Sprint 4 left commit/fulfill entirely to this
- * sprint). So the webhook is not just a backstop, it is the ONLY path that climbs the contract
- * from PENDING to COMMITTED, then hands off to the shared
- * {@see ContractFulfillmentServiceInterface} for the final COMMITTED → FULFILLED step (which
- * also dispatches ContractFulfilledEvent, driving payment-base's OrderPaymentCompletedHandler to
- * stamp OXPAID).
- *
- * Every step uses a named transition on the contract — never setState() — wrapped so a step that
- * doesn't apply (already past it, or its precondition isn't met yet) is skipped rather than
- * propagating a DomainException. This makes the ladder safe to re-run on every delivery, including
- * out-of-order or duplicate ones. Sprint 11 Story 8 (F8) made those skips *logged*: the catch
- * accepts every DomainException, including ones that are not benign, and it used to leave no trace
- * at all.
+ * The `paid` path commits through payment-base's {@see ContractCommitServiceInterface} (VR-20 R6),
+ * the same chain Stripe and PayPal use: PaymentAuthorizedEvent → PaymentAuthorizedEventHandler →
+ * ContractReadyToCommitEvent → ContractCommitmentHandler. Mollie's return controller commits
+ * nothing, so this webhook is the one path from PENDING to COMMITTED. A refusal (closed contract,
+ * amount off the snapshot) or a chain that leaves the contract open fails the delivery so Mollie
+ * retries. Then the shared {@see ContractFulfillmentServiceInterface} takes COMMITTED → FULFILLED,
+ * which dispatches ContractFulfilledEvent and stamps OXPAID through OrderPaymentCompletedHandler.
  */
 final class WebhookContractFulfillmentHandler implements WebhookContractFulfillmentHandlerInterface
 {

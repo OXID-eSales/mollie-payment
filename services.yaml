@@ -384,13 +384,12 @@ services:
   # ===========================================================================
   # Sprint 5: webhook pipeline.
   #
-  # Mollie's checkout return (Sprint 4) never tags payment-base's shared
-  # PaymentAuthorizedEvent/ContractReadyToCommitEvent handler chain — commit +
-  # fulfillment is left entirely to this webhook. Registered here so
+  # Mollie's checkout return (Sprint 4) commits nothing — commit + fulfillment
+  # is left to this webhook, which commits through payment-base's
+  # ContractCommitService (VR-20 R6). Registered here so
   # `oe:module:activate oe_payments_mollie` validates standalone (Symfony
   # tolerates the same interface being (re)bound by another active module —
-  # Stripe and one-page-checkout both already do this for the exact same
-  # interfaces).
+  # Stripe and PayPal carry the exact same definitions).
   # ===========================================================================
 
   OxidEsales\PaymentBase\EventSystem\EventListenerProviderInterface:
@@ -418,6 +417,30 @@ services:
       $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
       $eventDispatcher: '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
       $logger: '@oxid_esales.monolog.logger'
+    public: true
+
+  # VR-20 R6: the chain ContractCommitService dispatches into —
+  # PaymentAuthorizedEvent → PaymentAuthorizedEventHandler (fulfils payment_authorized)
+  # → ContractReadyToCommitEvent → ContractCommitmentHandler (commits, stamps OXPAID).
+  # Without these tags a Mollie-only shop has an empty chain and every `paid` webhook
+  # stays PENDING. Same definitions and priorities as Stripe and PayPal, so whichever
+  # services.yaml merges last changes nothing.
+  OxidEsales\PaymentBase\EventSystem\Handler\PaymentAuthorizedEventHandler:
+    arguments:
+      $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
+      $eventDispatcher: '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
+      $orderPaymentStateService: '@OxidEsales\PaymentBase\Service\OrderPaymentStateServiceInterface'
+    tags:
+      - { name: payment.event_handler, priority: 90 }
+    public: false
+
+  OxidEsales\PaymentBase\EventSystem\Handler\ContractCommitmentHandler:
+    arguments:
+      $contracts: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
+      $paymentState: '@OxidEsales\PaymentBase\Service\OrderPaymentStateServiceInterface'
+      $dispatcher: '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
+    tags:
+      - { name: payment.event_handler, priority: 80 }
     public: true
 
   # Marks OXPAID via OrderPaymentStateService when the shared ContractFulfillmentService
