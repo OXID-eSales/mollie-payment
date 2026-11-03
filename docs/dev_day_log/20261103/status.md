@@ -5,6 +5,10 @@ Plan and reports: payment-base `docs/dev_log/20261030/` (sprints 16–25, `repor
 
 | Story | Branch | Status |
 |---|---|---|
-| F1 idempotency key reaches Mollie | `b-7.4.x-VR-21-mollie-refund-hotfixes` | DONE on the branch (`9448276`), CI running |
-| F2 restock only on the refund that leaves nothing refundable | same | DONE on the branch (`47757e6`), CI running |
-| R6, F6, W5, T2, DC-M1..5, D-items | — | PLANNED |
+| F1 idempotency key reaches Mollie | `b-7.4.x-VR-21-mollie-refund-hotfixes` | MERGED into `b-7.4.x` |
+| F2 restock only on the refund that leaves nothing refundable | same | MERGED into `b-7.4.x` |
+| F6 refunds booked once through payment-base's ledger | `b-7.4.x-VR-21-mollie-refund-ledger` | MERGED into `b-7.4.x` |
+| DC-M1/M2 dead code | `b-7.4.x-VR-17-mollie-dead-code` | MERGED into `b-7.4.x` (`dbcbbc7`) |
+| R6 `paid` commits through payment-base's ContractCommitService | `b-7.4.x-VR-20-mollie-one-commit-path` | MERGED into `b-7.4.x` (`eb48a21`) |
+| W5 webhook on payment-base's shared guard chain + TrustedProxyClientIp | `b-7.4.x-VR-19-mollie-shared-guards` | MERGED into `b-7.4.x` (`eb48a21`) |
+| T2 late money, DC-M3..5, D-items, `blUseStock` follow-up | — | PLANNED (T2 needs payment-base sprint 23 T1 first) |
