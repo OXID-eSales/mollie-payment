@@ -22,7 +22,7 @@ use OxidEsales\PaymentBase\Webhook\Guard\IpAllowlistGuard;
 use OxidEsales\PaymentBase\Webhook\Guard\PayloadSizeGuard;
 use OxidEsales\PaymentBase\Webhook\Guard\RateLimitGuard;
 use OxidEsales\PaymentBase\Webhook\Guard\WebhookHttpRequest;
-use OxidEsales\Payments\Mollie\Service\ContractTokenService;
+use OxidEsales\Payments\Mollie\Service\LegacyReturnTokenValidator;
 use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use OxidEsales\Payments\Mollie\Webhook\MollieWebhookProcessor;
 use PHPUnit\Framework\Attributes\Group;
@@ -166,18 +166,22 @@ final class WebhookSecurityParityTest extends TestCase
     }
 
     /**
-     * F20 — session fixation on the return URL. Mollie's exact analog is the HMAC-secured
-     * contract token embedded in the redirectUrl (see {@see ContractTokenService}): a tampered
-     * token (wrong contract id, flipped character) must never validate.
+     * F20 — session fixation on the return URL. Mollie's exact analog is the contract token embedded in the
+     * redirectUrl: payment-base's shared return token since VR-20 R3 (its own tests), and for payment pages opened
+     * before the update the legacy HMAC token ({@see LegacyReturnTokenValidator}): a tampered token (wrong contract
+     * id, flipped character) must never validate.
      */
     #[Group('F20')]
     public function testF20_ReturnTokenTamperRejected(): void
     {
         $config = $this->createMock(ModuleConfigurationServiceInterface::class);
         $config->method('getApiKey')->willReturn('test_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
-        $tokenService = new ContractTokenService($config);
+        $tokenService = new LegacyReturnTokenValidator($config);
 
-        $token = $tokenService->generateToken('contract-real');
+        $token = \OxidEsales\Payments\Mollie\Tests\Unit\Service\LegacyReturnTokenValidatorTest::legacyToken(
+            'contract-real',
+            'test_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        );
 
         self::assertTrue($tokenService->validateToken($token, 'contract-real'));
         self::assertFalse($tokenService->validateToken($token, 'contract-injected'));

@@ -22,6 +22,7 @@ $aLang = [
     'MOLLIE_RETURN_RETURN_NOT_FINALISED' => 'Ihre Zahlung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut oder wählen Sie eine andere Zahlungsart.',
     'MOLLIE_RETURN_MISSING_TOKEN' => 'Ihre Zahlungssitzung konnte nicht verifiziert werden. Bitte versuchen Sie es erneut.',
     'MOLLIE_RETURN_INVALID_TOKEN' => 'Ihre Zahlungssitzung konnte nicht verifiziert werden. Bitte versuchen Sie es erneut.',
+    'MOLLIE_RETURN_TOKEN_EXPIRED' => 'Der Link zu Ihrer Zahlung ist abgelaufen. Bitte starten Sie die Zahlung erneut.',
     'MOLLIE_RETURN_UNKNOWN_CONTRACT' => 'Ihre Zahlungssitzung wurde nicht gefunden. Bitte versuchen Sie es erneut.',
     'MOLLIE_RETURN_RETURN_SERVICE_UNAVAILABLE' => 'Die Zahlung konnte derzeit nicht verarbeitet werden. Bitte versuchen Sie es in Kürze erneut.',
 

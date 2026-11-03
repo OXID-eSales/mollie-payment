@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\EventSystem\Handler;
 
+use OxidEsales\PaymentBase\Checkout\Return\ReturnAccessGuard;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\Contract\ContractDraftCompletedEvent;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContextInterface;
@@ -22,7 +23,8 @@ use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEve
  * Runs as the *first* handler on {@see \OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent}
  * (priority 100). The payment-base Template Method base takes care of common validation,
  * contract creation, and idempotency; this subclass only adds:
- *  - the selected Mollie method + payment id stored as contract metadata;
+ *  - the selected Mollie method + payment id stored as contract metadata, and the session that started the
+ *    payment (what the return leg's guard checks, VR-20 R3);
  *  - dispatch of {@see ContractDraftCompletedEvent}, which triggers payment-base's shared
  *    EarlyOrderCreationHandler (priority 90) so the order number exists before
  *    MollieCheckoutSessionHandler calls Mollie's create-payment API.
@@ -52,6 +54,21 @@ final class MollieContractCreationHandler extends ContractCreationHandler
         }
 
         $contract->setMetadata(self::METADATA_PAYMENT_ID, MollieDefinitions::PAYMENT_ID);
+        $this->rememberInitiatingSession($contract, $context);
+    }
+
+    /**
+     * VR-20 R3: the return leg's guard grants the paying shopper in the session that started the payment. A headless
+     * checkout has no PHP session (its id is `headless:<basket>`); it returns with payment-base's own client token.
+     */
+    private function rememberInitiatingSession(PaymentContractInterface $contract, EventContextInterface $context): void
+    {
+        $sessionId = $context->get('sessionId');
+        if ($context->get('headless') === true || !is_string($sessionId) || $sessionId === '') {
+            return;
+        }
+
+        $contract->setMetadata(ReturnAccessGuard::METADATA_INITIATING_SESSION, $sessionId);
     }
 
     protected function dispatchContractEvent(

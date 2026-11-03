@@ -13,7 +13,7 @@ use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
-use OxidEsales\PaymentBase\Service\TokenServiceInterface;
+use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\CreatePaymentRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
@@ -41,6 +41,31 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
     public function testGetPriorityReturns10(): void
     {
         self::assertSame(10, $this->handler()['handler']->getPriority());
+    }
+
+    /**
+     * VR-20 R3: the return URL carries payment-base's shared return token, issued for the contract's shopper
+     * (the guard verifies it against the contract's user), not a token of the module's own.
+     */
+    public function testTheReturnUrlCarriesPaymentBasesReturnTokenIssuedForTheContractsShopper(): void
+    {
+        $contract = $this->contractStub();
+        $contract->method('getUserId')->willReturn('user-7');
+        $returnTokens = $this->createMock(ContractReturnTokenServiceInterface::class);
+        $returnTokens->expects(self::once())->method('generateToken')->with('contract-1', 'user-7')->willReturn('b64.sig');
+        ['handler' => $handler, 'checkoutPaymentService' => $checkoutPaymentService, 'adapter' => $adapter]
+            = $this->handler($returnTokens);
+        $checkoutPaymentService->expects(self::once())->method('buildCreatePaymentRequest')->with(
+            self::anything(),
+            self::anything(),
+            'https://shop.test/index.php?cl=' . MollieDefinitions::ORDER_CONTROLLER_ID
+                . '&fnc=checkoutReturn&contract_id=contract-1&contract_token=b64.sig',
+        )->willReturn(new CreatePaymentRequest(MollieAmountDto::fromComponents('EUR', 10.0), '2026-00001', 'https://x'));
+        $adapter->method('createPayment')->willReturn($this->paymentDto());
+        $context = new EventContext();
+        $context->setContract($contract);
+
+        $handler->handle(new MollieCheckoutSessionRequestEvent($context));
     }
 
     public function testHandleCallsCreatePaymentWithAmountAndOrderNumber(): void
@@ -348,16 +373,18 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
      *     repository: ContractRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject,
      * }
      */
-    private function handler(): array
+    private function handler(?ContractReturnTokenServiceInterface $returnTokens = null): array
     {
         $checkoutPaymentService = $this->createMock(CheckoutPaymentServiceInterface::class);
         $adapter = $this->createMock(MolliePaymentsAdapterInterface::class);
         $repository = $this->createMock(ContractRepositoryInterface::class);
 
-        $tokenService = $this->createMock(TokenServiceInterface::class);
-        $tokenService->method('generateToken')->willReturnCallback(
-            static fn (string $contractId): string => 'tok_' . $contractId,
-        );
+        $tokenService = $returnTokens ?? $this->createMock(ContractReturnTokenServiceInterface::class);
+        if ($returnTokens === null) {
+            $tokenService->method('generateToken')->willReturnCallback(
+                static fn (string $contractId): string => 'tok_' . $contractId,
+            );
+        }
 
         $shopAdapter = $this->createMock(ShopAdapterInterface::class);
         $shopAdapter->method('getShopUrl')->willReturn('https://shop.test/');

@@ -5,6 +5,24 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed - VR-20 R3 (R6 adoption): the return leg runs on payment-base's guard and token
+- The Twig / OPC return (`cl=order&fnc=checkoutReturn`) asks payment-base's `ReturnAccessGuard`: the contract must
+  exist, be Mollie's, and the caller must hold a valid return token **or** be the contract's shopper in the session that
+  started the payment. Unknown ownership is refused. The shopper sees one wording for every refusal
+  (`MOLLIE_RETURN_INVALID_TOKEN`) except an authentic link that ran out (new `MOLLIE_RETURN_TOKEN_EXPIRED`); a missing
+  and a foreign contract read alike.
+- New return URLs carry payment-base's `ContractReturnTokenService` token (expiring, issued for the contract's shopper,
+  signed with the shop's own secret instead of one derived from the Mollie API key).
+- Contracts get `initiating_session_id` at creation (`MollieContractCreationHandler`; not for a headless checkout, which
+  returns with payment-base's own client token and is unchanged).
+- **Transition window (one release):** a payment page opened before the update returns with the old token. Smallest
+  honest shape: `Service\ContractTokenService` is replaced by `Service\LegacyReturnTokenValidator` - it validates the old
+  HMAC token and never issues one (`generateToken` throws) - and is handed to the guard as `legacyTokens`; payment-base
+  accepts it only while `blPaymentBaseAcceptLegacyReturnTokens` is on. Delete it with that switch. The Mollie binding of
+  the shared `TokenServiceInterface` is gone (nothing in payment-base uses it).
+- `HandlesMollieCheckoutReturn` gets two seams for the guard's session facts (`returnSessionUserId()`,
+  `returnSessionId()`).
+
 ### Changed - VR-23 T1/T2: late money and "payment at risk" through payment-base
 - New `Gateway\MollieProviderPaymentGateway` (tag `oe.payment.provider_payment_gateway`): `statusOf` (Mollie `paid` ->
   paid, `authorized` -> authorized, anything else holds nothing), `refund` (the whole payment, under the resolver's key

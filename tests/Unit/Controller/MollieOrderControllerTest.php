@@ -18,14 +18,19 @@ use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplay;
 use OxidEsales\Payments\Mollie\Service\BuyabilityFailure;
 use OxidEsales\Payments\Mollie\Service\NotOrderableCheckoutFailure;
 use OxidEsales\Eshop\Core\Exception\OutOfStockException;
+use OxidEsales\PaymentBase\Checkout\Return\ReturnAccessDecision;
+use OxidEsales\PaymentBase\Checkout\Return\ReturnAccessGuardInterface;
+use OxidEsales\PaymentBase\Checkout\Return\ReturnAccessRejection;
+use OxidEsales\PaymentBase\Checkout\Return\ReturnAccessRequest;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Controller\CheckoutReturnResponder;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
-use OxidEsales\PaymentBase\Service\TokenServiceInterface;
 use OxidEsales\Payments\Mollie\Controller\MollieOrderController;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
+use OxidEsales\Payments\Mollie\Service\LegacyReturnTokenValidator;
+use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use OxidEsales\Payments\Mollie\Tests\Unit\Support\PreloadsModuleClassChain;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -340,7 +345,7 @@ final class MollieOrderControllerTest extends TestCase
     ): TestableMollieOrderController {
         return new TestableMollieOrderController(
             requestParams: $requestParams,
-            tokenService: $this->createMock(TokenServiceInterface::class),
+            returnGuard: null,
             contractRepository: $this->createMock(ContractRepositoryInterface::class),
             resolver: null,
             responder: null,
@@ -606,7 +611,7 @@ final class MollieOrderControllerTest extends TestCase
         self::assertSame([], $controller->redirectedTo);
     }
 
-    public function testCheckoutReturnWithValidTokenDispatchesReturnFlowAndGoesToThankyou(): void
+    public function testCheckoutReturnWithAGrantedGuardDispatchesReturnFlowAndGoesToThankyou(): void
     {
         $contract = $this->createMock(PaymentContractInterface::class);
         $resolver = $this->createMock(ReturnResolverInterface::class);
@@ -619,7 +624,7 @@ final class MollieOrderControllerTest extends TestCase
 
         $controller = $this->controller(
             requestParams: ['contract_id' => 'contract-1', 'contract_token' => 'good-token'],
-            tokenValid: true,
+            decision: ReturnAccessDecision::grant(),
             contract: $contract,
             resolver: $resolver,
             responder: $responder,
@@ -628,26 +633,67 @@ final class MollieOrderControllerTest extends TestCase
         self::assertSame('thankyou', $controller->checkoutReturn());
     }
 
-    public function testCheckoutReturnWithTamperedTokenIsRejected(): void
+    /**
+     * VR-20 R3 - the one check in front of the return leg is payment-base's guard: asked with the contract, Mollie as
+     * the provider, the token of the URL, the session's shopper and session, and the module's old token validator for
+     * the transition window.
+     */
+    public function testCheckoutReturnAsksThePaymentBaseGuardWithTheTokenTheSessionAndTheLegacyValidator(): void
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $guard = $this->createMock(ReturnAccessGuardInterface::class);
+        $legacyTokens = new LegacyReturnTokenValidator($this->createStub(ModuleConfigurationServiceInterface::class));
+        $guard->expects(self::once())->method('check')->with(self::callback(
+            static fn (ReturnAccessRequest $request): bool => $request->contract === $contract
+                && $request->provider === MollieDefinitions::PROVIDER_NAME
+                && $request->token === 'good-token'
+                && $request->sessionUserId === 'user-9'
+                && $request->sessionId === 'sess-9'
+                && $request->legacyTokens === $legacyTokens
+        ))->willReturn(ReturnAccessDecision::reject(ReturnAccessRejection::AccessDenied));
+
+        $controller = $this->controllerWithGuard(
+            $guard,
+            ['contract_id' => 'contract-1', 'contract_token' => 'good-token'],
+            $contract,
+        );
+        $controller->sessionUserId = 'user-9';
+        $controller->sessionId = 'sess-9';
+        $controller->legacyTokens = $legacyTokens;
+
+        self::assertSame('payment', $controller->checkoutReturn());
+    }
+
+    public function testCheckoutReturnRefusedByTheGuardIsRejected(): void
     {
         $responder = $this->createMock(CheckoutReturnResponder::class);
         $responder->expects(self::never())->method('respond');
 
         $controller = $this->controller(
             requestParams: ['contract_id' => 'contract-1', 'contract_token' => 'bad-token'],
-            tokenValid: false,
+            decision: ReturnAccessDecision::reject(ReturnAccessRejection::AccessDenied),
             responder: $responder,
         );
 
         self::assertSame('payment', $controller->checkoutReturn());
     }
 
-    public function testCheckoutReturnWithMissingParametersIsRejected(): void
+    public function testCheckoutReturnWithMissingParametersIsRejectedWithoutAskingTheGuard(): void
+    {
+        $guard = $this->createMock(ReturnAccessGuardInterface::class);
+        $guard->expects(self::never())->method('check');
+
+        $controller = $this->controllerWithGuard($guard, []);
+
+        self::assertSame('payment', $controller->checkoutReturn());
+    }
+
+    public function testCheckoutReturnWhenTheGuardIsUnavailableIsRejected(): void
     {
         $responder = $this->createMock(CheckoutReturnResponder::class);
         $responder->expects(self::never())->method('respond');
 
-        $controller = $this->controller(requestParams: [], tokenValid: false, responder: $responder);
+        $controller = $this->controllerWithGuard(null, ['contract_id' => 'contract-1', 'contract_token' => 'tok'], responder: $responder);
 
         self::assertSame('payment', $controller->checkoutReturn());
     }
@@ -659,7 +705,7 @@ final class MollieOrderControllerTest extends TestCase
 
         $controller = $this->controller(
             requestParams: ['contract_id' => 'contract-missing', 'contract_token' => 'good-token'],
-            tokenValid: true,
+            decision: ReturnAccessDecision::reject(ReturnAccessRejection::ContractNotFound),
             contract: null,
             responder: $responder,
         );
@@ -677,7 +723,7 @@ final class MollieOrderControllerTest extends TestCase
 
         $controller = $this->controller(
             requestParams: ['contract_id' => 'contract-1', 'contract_token' => 'good-token'],
-            tokenValid: true,
+            decision: ReturnAccessDecision::grant(),
             contract: $contract,
             resolver: $resolver,
             responder: $responder,
@@ -698,7 +744,7 @@ final class MollieOrderControllerTest extends TestCase
 
         $controller = $this->controller(
             requestParams: ['contract_id' => 'contract-1', 'contract_token' => 'good-token'],
-            tokenValid: true,
+            decision: ReturnAccessDecision::grant(),
             contract: $contract,
             resolver: $resolver,
             responder: $responder,
@@ -713,20 +759,33 @@ final class MollieOrderControllerTest extends TestCase
      */
     private function controller(
         array $requestParams,
-        bool $tokenValid,
+        ReturnAccessDecision $decision,
         ?PaymentContractInterface $contract = null,
         ?ReturnResolverInterface $resolver = null,
         ?CheckoutReturnResponder $responder = null,
     ): TestableMollieOrderController {
-        $tokenService = $this->createMock(TokenServiceInterface::class);
-        $tokenService->method('validateToken')->willReturn($tokenValid);
+        $guard = $this->createMock(ReturnAccessGuardInterface::class);
+        $guard->method('check')->willReturn($decision);
 
+        return $this->controllerWithGuard($guard, $requestParams, $contract, $resolver, $responder);
+    }
+
+    /**
+     * @param array<string, string> $requestParams
+     */
+    private function controllerWithGuard(
+        ?ReturnAccessGuardInterface $guard,
+        array $requestParams,
+        ?PaymentContractInterface $contract = null,
+        ?ReturnResolverInterface $resolver = null,
+        ?CheckoutReturnResponder $responder = null,
+    ): TestableMollieOrderController {
         $contractRepository = $this->createMock(ContractRepositoryInterface::class);
         $contractRepository->method('findById')->willReturn($contract);
 
         return new TestableMollieOrderController(
             $requestParams,
-            $tokenService,
+            $guard,
             $contractRepository,
             $resolver,
             $responder,

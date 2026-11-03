@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller;
 
+use OxidEsales\PaymentBase\Checkout\Return\ReturnAccessGuardInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Controller\CheckoutReturnResponder;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
@@ -19,9 +20,8 @@ use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplayInterface;
 use OxidEsales\Payments\Mollie\Service\NotOrderableCheckoutFailure;
 use OxidEsales\Payments\Mollie\Tests\Unit\Support\ScriptedLadderStarter;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
-use OxidEsales\PaymentBase\Service\TokenServiceInterface;
 use OxidEsales\Payments\Mollie\Controller\MollieOrderController;
-use OxidEsales\Payments\Mollie\Service\ContractTokenService;
+use OxidEsales\Payments\Mollie\Service\LegacyReturnTokenValidator;
 use OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver;
 
 /**
@@ -37,6 +37,11 @@ final class TestableMollieOrderController extends MollieOrderController
     public bool $delegatedToParent = false;
     public bool $unavailableErrorShown = false;
     public bool $pendingReturn = false;
+    /** VR-20 R3: who the return guard is told is in the session (the real seams read the OXID session). */
+    public string $sessionUserId = 'user-1';
+    public string $sessionId = 'sess-1';
+    /** The legacy validator the guard is handed for the transition window (the container's, in production). */
+    public ?LegacyReturnTokenValidator $legacyTokens = null;
     /** @var list<string> Redirect targets BASKET_ITEMS_CHANGED_ERROR was shown for. */
     public array $basketErrorsShown = [];
 
@@ -50,7 +55,7 @@ final class TestableMollieOrderController extends MollieOrderController
      */
     public function __construct(
         private readonly array $requestParams,
-        private readonly TokenServiceInterface $tokenService,
+        private readonly ?ReturnAccessGuardInterface $returnGuard,
         private readonly ContractRepositoryInterface $contractRepository,
         private readonly ?ReturnResolverInterface $resolver,
         private readonly ?CheckoutReturnResponder $responder,
@@ -107,7 +112,8 @@ final class TestableMollieOrderController extends MollieOrderController
     protected function resolveService(string $className): ?object
     {
         return match ($className) {
-            ContractTokenService::class => $this->tokenService,
+            ReturnAccessGuardInterface::class => $this->returnGuard,
+            LegacyReturnTokenValidator::class => $this->legacyTokens,
             ContractRepositoryInterface::class => $this->contractRepository,
             MollieReturnResolver::class => $this->resolver,
             EventDispatcherInterface::class => $this->dispatcher,
@@ -120,6 +126,16 @@ final class TestableMollieOrderController extends MollieOrderController
             ),
             default => null,
         };
+    }
+
+    protected function returnSessionUserId(): string
+    {
+        return $this->sessionUserId;
+    }
+
+    protected function returnSessionId(): string
+    {
+        return $this->sessionId;
     }
 
     protected function readRequestParameter(string $name): ?string

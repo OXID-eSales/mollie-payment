@@ -13,7 +13,7 @@ use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
-use OxidEsales\PaymentBase\Service\TokenServiceInterface;
+use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
@@ -122,7 +122,7 @@ final class ContractTokenNotPersistedTest extends TestCase
             checkoutUrl: $checkoutUrl,
         ));
 
-        $tokenService = $this->createMock(TokenServiceInterface::class);
+        $tokenService = $this->createMock(ContractReturnTokenServiceInterface::class);
         $tokenService->method('generateToken')->willReturn(self::TOKEN);
 
         $shopAdapter = $this->createMock(ShopAdapterInterface::class);

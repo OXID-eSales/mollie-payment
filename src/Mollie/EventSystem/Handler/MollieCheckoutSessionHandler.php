@@ -11,11 +11,11 @@ namespace OxidEsales\Payments\Mollie\EventSystem\Handler;
 
 use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
+use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\Handler\HandlerInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
-use OxidEsales\PaymentBase\Service\TokenServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
@@ -42,7 +42,8 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
         private readonly CheckoutPaymentServiceInterface $checkoutPaymentService,
         private readonly MolliePaymentsAdapterInterface $paymentsAdapter,
         private readonly ContractRepositoryInterface $contractRepository,
-        private readonly TokenServiceInterface $tokenService,
+        // VR-20 R3: payment-base's one return token (expiring, bound to the contract's shopper).
+        private readonly ContractReturnTokenServiceInterface $returnTokens,
         private readonly ShopAdapterInterface $shopAdapter,
         private readonly MollieRedirectUrlValidator $redirectUrlValidator = new MollieRedirectUrlValidator(),
         private readonly ?LoggerInterface $logger = null,
@@ -191,7 +192,7 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
     private function buildRedirectUrl(PaymentContractInterface $contract): string
     {
         $contractId = (string) ($contract->getId() ?? '');
-        $token = $this->tokenService->generateToken($contractId);
+        $token = $this->returnTokens->generateToken($contractId, $contract->getUserId());
         $shopUrl = rtrim($this->shopAdapter->getShopUrl(), '/');
 
         return sprintf(

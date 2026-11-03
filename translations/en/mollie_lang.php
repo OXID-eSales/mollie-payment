@@ -22,6 +22,7 @@ $aLang = [
     'MOLLIE_RETURN_RETURN_NOT_FINALISED' => 'Your payment could not be completed. Please try again or choose another payment method.',
     'MOLLIE_RETURN_MISSING_TOKEN' => 'Your payment session could not be verified. Please try again.',
     'MOLLIE_RETURN_INVALID_TOKEN' => 'Your payment session could not be verified. Please try again.',
+    'MOLLIE_RETURN_TOKEN_EXPIRED' => 'The link to your payment has expired. Please start the payment again.',
     'MOLLIE_RETURN_UNKNOWN_CONTRACT' => 'Your payment session could not be found. Please try again.',
     'MOLLIE_RETURN_RETURN_SERVICE_UNAVAILABLE' => 'Payment could not be processed right now. Please try again shortly.',
 

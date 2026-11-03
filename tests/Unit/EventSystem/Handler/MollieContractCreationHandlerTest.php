@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\EventSystem\Handler;
 
+use OxidEsales\PaymentBase\Checkout\Return\ReturnAccessGuard;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\Contract\ContractDraftCompletedEvent;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
@@ -117,6 +118,53 @@ final class MollieContractCreationHandlerTest extends TestCase
         );
 
         self::assertArrayNotHasKey(MollieContractCreationHandler::METADATA_MOLLIE_METHOD, $metadataCalls);
+    }
+
+    /**
+     * VR-20 R3 - the guard of the return leg grants the paying shopper in the session that started the payment:
+     * the contract must remember that session.
+     */
+    public function testHandleStoresTheInitiatingSessionOfTheStorefrontCheckout(): void
+    {
+        $metadata = $this->metadataAfterHandling(['sessionId' => 'sess-1']);
+
+        self::assertSame('sess-1', $metadata[ReturnAccessGuard::METADATA_INITIATING_SESSION] ?? null);
+    }
+
+    public function testHandleStoresNoInitiatingSessionForAHeadlessCheckout(): void
+    {
+        $metadata = $this->metadataAfterHandling(['sessionId' => 'headless:basket-1', 'headless' => true]);
+
+        self::assertArrayNotHasKey(ReturnAccessGuard::METADATA_INITIATING_SESSION, $metadata);
+    }
+
+    public function testHandleStoresNoInitiatingSessionWhenThereIsNone(): void
+    {
+        self::assertArrayNotHasKey(ReturnAccessGuard::METADATA_INITIATING_SESSION, $this->metadataAfterHandling([]));
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     *
+     * @return array<string, mixed>
+     */
+    private function metadataAfterHandling(array $context): array
+    {
+        $metadata = [];
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('setMetadata')->willReturnCallback(
+            static function (string $key, mixed $value) use (&$metadata): void {
+                $metadata[$key] = $value;
+            },
+        );
+        $service = $this->createMock(ContractServiceInterface::class);
+        $service->method('createContract')->willReturn($contract);
+
+        (new MollieContractCreationHandler($service, $this->createMock(EventDispatcherInterface::class)))->handle(
+            new MollieCheckoutSessionRequestEvent(new EventContext(['userId' => 'USR-1', 'basket' => new stdClass()] + $context)),
+        );
+
+        return $metadata;
     }
 
     public function testHandleDispatchesContractDraftCompletedEvent(): void

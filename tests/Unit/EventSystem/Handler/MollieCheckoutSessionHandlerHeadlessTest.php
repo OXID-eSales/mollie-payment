@@ -14,7 +14,7 @@ use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
-use OxidEsales\PaymentBase\Service\TokenServiceInterface;
+use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\CreatePaymentRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
@@ -35,7 +35,7 @@ use PHPUnit\Framework\TestCase;
 final class MollieCheckoutSessionHandlerHeadlessTest extends TestCase
 {
     private CheckoutPaymentServiceInterface&MockObject $checkoutPaymentService;
-    private TokenServiceInterface&MockObject $tokenService;
+    private ContractReturnTokenServiceInterface&MockObject $tokenService;
     private MollieCheckoutSessionHandler $handler;
 
     protected function setUp(): void
@@ -48,7 +48,7 @@ final class MollieCheckoutSessionHandlerHeadlessTest extends TestCase
             amount: MollieAmountDto::fromComponents('EUR', 10.0),
             checkoutUrl: 'https://www.mollie.com/checkout/tr_abc123',
         ));
-        $this->tokenService = $this->createMock(TokenServiceInterface::class);
+        $this->tokenService = $this->createMock(ContractReturnTokenServiceInterface::class);
         $this->tokenService->method('generateToken')->willReturn('tok_contract-1');
         $shopAdapter = $this->createMock(ShopAdapterInterface::class);
         $shopAdapter->method('getShopUrl')->willReturn('https://shop.test/');

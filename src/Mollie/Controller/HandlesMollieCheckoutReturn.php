@@ -10,13 +10,16 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Controller;
 
 use OxidEsales\Eshop\Core\Registry;
+use OxidEsales\PaymentBase\Checkout\Return\ReturnAccessGuardInterface;
+use OxidEsales\PaymentBase\Checkout\Return\ReturnAccessRejection;
+use OxidEsales\PaymentBase\Checkout\Return\ReturnAccessRequest;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Controller\CheckoutReturnResponder;
 use OxidEsales\PaymentBase\Controller\SessionWriterInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-use OxidEsales\Payments\Mollie\Service\ContractTokenService;
+use OxidEsales\Payments\Mollie\Service\LegacyReturnTokenValidator;
 use OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver;
 use OxidEsales\Payments\Mollie\Service\Return\PendingReturnProbe;
 use RuntimeException;
@@ -45,14 +48,25 @@ trait HandlesMollieCheckoutReturn
             return $this->onReturnError('missing_token');
         }
 
-        if (!$this->tokenIsValid($contractToken, $contractId)) {
-            return $this->onReturnError('invalid_token');
-        }
-
         $contract = $this->loadContract($contractId);
-        if ($contract === null) {
-            return $this->onReturnError('unknown_contract');
+        $guard = $this->resolveService(ReturnAccessGuardInterface::class);
+        if ($guard === null) {
+            return $this->onReturnError('return_service_unavailable');
         }
+        $decision = $guard->check(new ReturnAccessRequest(
+            $contract,
+            MollieDefinitions::PROVIDER_NAME,
+            $contractToken,
+            $this->returnSessionUserId(),
+            $this->returnSessionId(),
+            // The pre-VR-20 token of payment pages opened before the update (a transition window of one release).
+            $this->resolveService(LegacyReturnTokenValidator::class),
+        ));
+        if (!$decision->granted) {
+            return $this->onReturnError($this->returnErrorFor($decision->rejection));
+        }
+        // The guard grants only for a contract that exists.
+        assert($contract !== null);
 
         $resolver = $this->resolveReturnResolver();
         if ($resolver === null) {
@@ -97,13 +111,29 @@ trait HandlesMollieCheckoutReturn
     }
 
 
-    private function tokenIsValid(string $contractToken, string $contractId): bool
+    /**
+     * The shopper is told no more than "this payment cannot be continued here" (a missing contract and a foreign one
+     * read alike, so ids cannot be probed); an authentic link that ran out says so.
+     */
+    private function returnErrorFor(?ReturnAccessRejection $rejection): string
     {
-        // Resolve Mollie's CONCRETE token service, not the shared
-        // PaymentBase\TokenServiceInterface: that interface is single-valued in the merged DI
-        // container and, when another PSP is active, resolves to the wrong provider's HMAC.
-        return (bool) $this->resolveService(ContractTokenService::class)
-            ?->validateToken($contractToken, $contractId);
+        return $rejection === ReturnAccessRejection::TokenExpired ? 'token_expired' : 'invalid_token';
+    }
+
+    /**
+     * The shopper in the OXID session, for the guard's "paying shopper in the session that started the payment".
+     * Overridable seam: the OXID session is Registry-backed.
+     */
+    protected function returnSessionUserId(): string
+    {
+        $user = Registry::getSession()->getUser();
+
+        return $user ? (string) $user->getId() : '';
+    }
+
+    protected function returnSessionId(): string
+    {
+        return (string) Registry::getSession()->getId();
     }
 
 
