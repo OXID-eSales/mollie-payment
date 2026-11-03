@@ -14,6 +14,9 @@ use OxidEsales\Eshop\Application\Controller\FrontendController;
 use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
 use OxidEsales\PaymentBase\Service\FileLoggerInterface;
+use OxidEsales\PaymentBase\Webhook\Guard\TrustedProxyClientIp;
+use OxidEsales\PaymentBase\Webhook\Guard\WebhookGuardInterface;
+use OxidEsales\PaymentBase\Webhook\Guard\WebhookHttpRequest;
 use OxidEsales\PaymentBase\Webhook\WebhookRequest as ProcessorWebhookRequest;
 use OxidEsales\PaymentBase\Webhook\WebhookResult;
 use OxidEsales\Payments\Mollie\Webhook\MollieWebhookProcessor;
@@ -67,7 +70,8 @@ class WebhookController extends FrontendController
     private const PAYMENT_ID_PATTERN = '/^tr_[A-Za-z0-9]{1,64}$/';
 
     protected ?MollieWebhookProcessor $processor = null;
-    private ?WebhookRequestGuardInterface $guard = null;
+    private ?WebhookGuardInterface $guard = null;
+    private ?TrustedProxyClientIp $clientIp = null;
     private ?FileLoggerInterface $fileLogger = null;
 
     public function init(): void
@@ -84,8 +88,11 @@ class WebhookController extends FrontendController
         }
 
         try {
-            $guard = $container->get(WebhookRequestGuardInterface::class);
-            $this->guard = $guard instanceof WebhookRequestGuardInterface ? $guard : null;
+            $guard = $container->get('mollie.webhook.guard_chain');
+            $this->guard = $guard instanceof WebhookGuardInterface ? $guard : null;
+            // VR-19: the caller behind the shop's reverse proxies (payment-base settings "Webhooks").
+            $clientIp = $container->get(TrustedProxyClientIp::class);
+            $this->clientIp = $clientIp instanceof TrustedProxyClientIp ? $clientIp : null;
         } catch (Throwable $e) {
             // error, not warning (Sprint 11 Story 5 / F3): render() now refuses to serve without a
             // guard chain, so this is the reason the endpoint is down, not a background nuisance.
@@ -170,9 +177,10 @@ class WebhookController extends FrontendController
     /**
      * Protected for testable subclass override.
      */
-    protected function getGuard(): ?WebhookRequestGuardInterface
+    protected function getGuard(): ?WebhookGuardInterface
     {
-        return $this->guard;
+        // Without the client-IP resolver the rate limit would key on the proxy: no guard at all.
+        return $this->clientIp === null ? null : $this->guard;
     }
 
     /**
@@ -186,19 +194,35 @@ class WebhookController extends FrontendController
     /**
      * Protected for testable subclass override.
      */
-    protected function buildGuardRequest(): WebhookRequest
+    protected function buildGuardRequest(): WebhookHttpRequest
     {
         $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
         $contentLength = $_SERVER['CONTENT_LENGTH'] ?? 0;
 
         $this->warnIfSchemeRestsOnAForwardedHeader();
 
-        return new WebhookRequest(
+        return new WebhookHttpRequest(
             scheme: self::resolveScheme($_SERVER, $this->trustProxyHeaders()),
-            clientIp: is_string($remoteAddr) ? $remoteAddr : '',
+            clientIp: $this->resolveClientIp(is_string($remoteAddr) ? $remoteAddr : ''),
             contentLength: is_numeric($contentLength) ? (int) $contentLength : 0,
             rawBody: (string) file_get_contents('php://input'),
         );
+    }
+
+    /**
+     * VR-19: the address the rate limit keys on - the proxy's client-IP header when the request
+     * comes from a configured proxy, REMOTE_ADDR otherwise. Protected for testable subclass override.
+     */
+    protected function resolveClientIp(string $remoteAddr): string
+    {
+        $headers = [];
+        foreach ($_SERVER as $key => $value) {
+            if (is_string($key) && is_string($value) && str_starts_with($key, 'HTTP_')) {
+                $headers[str_replace('_', '-', substr($key, 5))] = $value;
+            }
+        }
+
+        return $this->clientIp?->resolve($remoteAddr, $headers) ?? $remoteAddr;
     }
 
     /**

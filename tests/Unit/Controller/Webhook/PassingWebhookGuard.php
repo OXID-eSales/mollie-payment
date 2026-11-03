@@ -9,9 +9,9 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller\Webhook;
 
-use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookGuardResult;
-use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRequest;
-use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRequestGuardInterface;
+use OxidEsales\PaymentBase\Webhook\Guard\WebhookGuardResult;
+use OxidEsales\PaymentBase\Webhook\Guard\WebhookHttpRequest;
+use OxidEsales\PaymentBase\Webhook\Guard\WebhookGuardInterface;
 
 /**
  * A guard chain that lets everything through.
@@ -20,9 +20,9 @@ use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRequestGuardInterface;
  * Story 5 (F3) — meant "no guard chain, carry on anyway". That is exactly the fail-open bug the
  * story removed, so those tests now have to state explicitly that the chain ran and passed.
  */
-final class PassingWebhookGuard implements WebhookRequestGuardInterface
+final class PassingWebhookGuard implements WebhookGuardInterface
 {
-    public function check(WebhookRequest $request): WebhookGuardResult
+    public function check(WebhookHttpRequest $request): WebhookGuardResult
     {
         return WebhookGuardResult::pass();
     }

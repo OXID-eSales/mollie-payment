@@ -15,9 +15,9 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
 use OxidEsales\Payments\Mollie\Adapter\MollieWebhookAdapterInterface;
 use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookController;
-use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookGuardResult;
-use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRequest;
-use OxidEsales\Payments\Mollie\Controller\Webhook\WebhookRequestGuardInterface;
+use OxidEsales\PaymentBase\Webhook\Guard\WebhookGuardResult;
+use OxidEsales\PaymentBase\Webhook\Guard\WebhookHttpRequest;
+use OxidEsales\PaymentBase\Webhook\Guard\WebhookGuardInterface;
 use OxidEsales\Payments\Mollie\Webhook\MollieWebhookProcessor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -63,7 +63,7 @@ final class WebhookFailClosedTest extends TestCase
 
     public function testPassingGuardChainStillProcesses(): void
     {
-        $guard = $this->createMock(WebhookRequestGuardInterface::class);
+        $guard = $this->createMock(WebhookGuardInterface::class);
         $guard->method('check')->willReturn(WebhookGuardResult::pass());
 
         $controller = new TestableWebhookController(
@@ -187,9 +187,9 @@ final class WebhookFailClosedTest extends TestCase
         }
     }
 
-    private function passingGuard(): WebhookRequestGuardInterface
+    private function passingGuard(): WebhookGuardInterface
     {
-        $guard = $this->createMock(WebhookRequestGuardInterface::class);
+        $guard = $this->createMock(WebhookGuardInterface::class);
         $guard->method('check')->willReturn(WebhookGuardResult::pass());
 
         return $guard;
