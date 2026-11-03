@@ -14,8 +14,9 @@ All notable changes to this module are documented here. Format follows
 - `ChargebackCreatedHandler` books Mollie's cumulative `amountChargedBack` through `ProviderChargebackLedgerInterface`
   (no chargeback id) instead of recording the whole total on every delivery (VR-21 S-M6); a replay answers skipped.
 - `MollieWebhookProcessor` passes payment-base's `ThrowableSummaryInterface` to `AbstractWebhookProcessor` (VR-18 L1).
-- VR-22 A1 (`MoneyInvariantViolation`): no Mollie flow over-books; the capture and refund bounds are checked against
-  Mollie's figures before any booking.
+- VR-22 A1 (`MoneyInvariantViolation`): reviewed, nothing to change - captures are written with the absolute
+  `setCapturedAmount()` (a webhook redelivery re-sets the same figure) and refunds go through the ledger, bounded by
+  `RefundBound` before booking.
 
 ### Changed (VR-20 R6) - one commit path: `paid` commits through payment-base's ContractCommitService
 - A `paid` webhook on a contract that is not committed yet commits it through `ContractCommitServiceInterface` (amount,
