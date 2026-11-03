@@ -5,6 +5,27 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed - VR-23 T1/T2: late money and "payment at risk" through payment-base
+- New `Gateway\MollieProviderPaymentGateway` (tag `oe.payment.provider_payment_gateway`): `statusOf` (Mollie `paid` ->
+  paid, `authorized` -> authorized, anything else holds nothing), `refund` (the whole payment, under the resolver's key
+  `late:<payment id>`), `release`. Without it payment-base's stale-order cleanup cannot ask Mollie about a payment.
+- **`paid` / `authorized` on a contract the shop closed without payment** (cancelled by the stale-order cleanup or an
+  admin, expired, failed) is no longer answered 5xx until Mollie gives up with the money taken: payment-base's
+  `LateMoneyResolver` refunds it (a paid payment) or releases it (an authorization) once and records it in the
+  contract's metadata; Mollie is answered 200. A refund Mollie refuses raises the order's "payment at risk" flag
+  (`late_money_not_returned`, owner mail) and is retried by the next delivery. A payment of a replaced checkout
+  attempt goes the same way (`ReplacedAttemptFinderInterface` finds the contract). A delivery for a fulfilled
+  contract is still a plain redelivery.
+- **`expired` on a committed contract** (a manual-capture authorization that ran out before the capture) raises the
+  "payment at risk" flag `authorization_expired` instead of being silently skipped as "payment already taken"; the
+  contract is still not touched (payment-base refuses `expire()` on a committed one) and Mollie is answered 200. The
+  STRP-168 pin test is rewritten accordingly.
+- Removed `Service\MollieLatePaymentRefunder` (and its test, service definition). Contracts that were refunded by it
+  keep their `lateMoney` record in the replaced-attempt history; the resolver does not read it, so a redelivery for
+  such an old payment asks Mollie again (the payment is already refunded there, the refund is refused, the order is
+  flagged once).
+- The handler takes `LateMoneyResolverInterface`, `PaymentAtRiskFlagInterface`, `ReplacedAttemptFinderInterface`.
+
 ### Changed - VR-22 A6: Mollie's gateways for payment-base's money runner
 - New `Gateway\MollieCaptureGateway`, `MollieRefundGateway`, `MollieCancelGateway` (tag `oe.payment.gateway`).
   payment-base's `MoneyOperationRunner` now owns admin capture, refund and void for the classic Payment tab and the

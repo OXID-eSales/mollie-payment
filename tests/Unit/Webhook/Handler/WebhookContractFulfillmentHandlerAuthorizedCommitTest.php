@@ -10,18 +10,20 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Webhook\Handler;
 
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
+use OxidEsales\PaymentBase\AtRisk\PaymentAtRiskFlagInterface;
 use OxidEsales\PaymentBase\Contract\BasketSnapshot;
 use OxidEsales\PaymentBase\Contract\ContractCondition;
 use OxidEsales\PaymentBase\Contract\PaymentContract;
+use OxidEsales\PaymentBase\LateMoney\LateMoneyResolverInterface;
 use OxidEsales\PaymentBase\Payment\ProviderCaptureLedgerInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\PaymentBase\Repository\ReplacedAttemptFinderInterface;
 use OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface;
 use OxidEsales\PaymentBase\Service\Commit\CommitOutcome;
 use OxidEsales\PaymentBase\Service\Commit\ContractCommitServiceInterface;
 use OxidEsales\PaymentBase\Service\Commit\PaymentConfirmation;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface;
-use OxidEsales\Payments\Mollie\Service\MollieLatePaymentRefunder;
 use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentResult;
@@ -113,7 +115,9 @@ final class WebhookContractFulfillmentHandlerAuthorizedCommitTest extends TestCa
             $this->createMock(ContractLinkedOrderUpdaterInterface::class),
             new TransactionAuditRecorder($this->transactions, $shopAdapter),
             new NullLogger(),
-            $this->createMock(MollieLatePaymentRefunder::class),
+            $this->createMock(LateMoneyResolverInterface::class),
+            $this->createMock(PaymentAtRiskFlagInterface::class),
+            $this->createMock(ReplacedAttemptFinderInterface::class),
             $this->commit,
             $this->createMock(ProviderCaptureLedgerInterface::class),
         );

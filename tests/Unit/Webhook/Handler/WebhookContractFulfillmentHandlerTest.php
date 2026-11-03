@@ -11,19 +11,23 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Webhook\Handler;
 
 use DomainException;
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
+use OxidEsales\PaymentBase\AtRisk\AtRiskReason;
+use OxidEsales\PaymentBase\AtRisk\PaymentAtRiskFlagInterface;
 use OxidEsales\PaymentBase\Contract\ContractCondition;
 use OxidEsales\PaymentBase\Contract\ContractState;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Contract\Transaction;
+use OxidEsales\PaymentBase\LateMoney\LateMoneyOutcome;
+use OxidEsales\PaymentBase\LateMoney\LateMoneyResolverInterface;
 use OxidEsales\PaymentBase\Payment\CaptureBooking;
 use OxidEsales\PaymentBase\Payment\ProviderCaptureLedgerInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\PaymentBase\Repository\ReplacedAttemptFinderInterface;
 use OxidEsales\PaymentBase\Repository\StaleContractException;
 use OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface;
-use OxidEsales\Payments\Mollie\Service\MollieLatePaymentRefunder;
 use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentResult;
@@ -44,7 +48,9 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
     private ContractLinkedOrderUpdaterInterface&MockObject $orderUpdater;
     private TransactionRepositoryInterface&MockObject $transactionRepository;
     private TransactionAuditRecorder $auditRecorder;
-    private MollieLatePaymentRefunder&MockObject $lateMoney;
+    private LateMoneyResolverInterface&MockObject $lateMoney;
+    private PaymentAtRiskFlagInterface&MockObject $atRisk;
+    private ReplacedAttemptFinderInterface&MockObject $replacedAttempts;
     private ProviderCaptureLedgerInterface&MockObject $captures;
     private CommittingContractCommit $commit;
     private WebhookContractFulfillmentHandler $handler;
@@ -52,7 +58,9 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
     protected function setUp(): void
     {
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
-        $this->lateMoney = $this->createMock(MollieLatePaymentRefunder::class);
+        $this->lateMoney = $this->createMock(LateMoneyResolverInterface::class);
+        $this->atRisk = $this->createMock(PaymentAtRiskFlagInterface::class);
+        $this->replacedAttempts = $this->createMock(ReplacedAttemptFinderInterface::class);
         $this->captures = $this->createMock(ProviderCaptureLedgerInterface::class);
         $this->captures->method('book')->willReturn(CaptureBooking::booked(10.0));
         $this->contractFulfillmentService = $this->createMock(ContractFulfillmentServiceInterface::class);
@@ -77,21 +85,84 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
     public function testHandlePaymentPaid_PaymentOfReplacedAttempt_IsGivenBackAndAnsweredNoOp(): void
     {
+        $contract = $this->contractWithState(committed: true);
         $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
-        $this->lateMoney->expects($this->once())->method('settleIfReplaced')->with('tr_old')->willReturn('ctr-1');
+        $this->replacedAttempts->method('findByReplacedAttempt')->with('tr_old')->willReturn($contract);
+        $this->lateMoney->expects($this->once())->method('resolve')->with($contract, 'tr_old')
+            ->willReturn(LateMoneyOutcome::refunded('re_1'));
 
         $result = $this->handler->handlePaymentPaid('tr_old');
 
         self::assertSame(FulfillmentOutcome::NoOp, $result->outcome);
-        self::assertSame('ctr-1', $result->contractId);
+        self::assertSame('contract-1', $result->contractId);
     }
 
     public function testHandlePaymentAuthorized_PaymentOfReplacedAttempt_IsGivenBack(): void
     {
+        $contract = $this->contractWithState(committed: true);
         $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
-        $this->lateMoney->expects($this->once())->method('settleIfReplaced')->with('tr_old')->willReturn('ctr-1');
+        $this->replacedAttempts->method('findByReplacedAttempt')->with('tr_old')->willReturn($contract);
+        $this->lateMoney->expects($this->once())->method('resolve')->with($contract, 'tr_old')
+            ->willReturn(LateMoneyOutcome::released());
 
         self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentAuthorized('tr_old')->outcome);
+    }
+
+    public function testHandlePaymentPaid_PaymentOfNoContractAndNoReplacedAttempt_IsNotFound(): void
+    {
+        $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
+        $this->replacedAttempts->method('findByReplacedAttempt')->willReturn(null);
+        $this->lateMoney->expects($this->never())->method('resolve');
+
+        self::assertSame(FulfillmentOutcome::ContractNotFound, $this->handler->handlePaymentPaid('tr_unknown')->outcome);
+    }
+
+    /**
+     * VR-23 T2 (S-H3) - the shop cancelled the contract (the nightly stale-order cleanup, an admin) and the shopper
+     * paid the open Mollie payment afterwards: the money is given back once by payment-base's resolver and Mollie is
+     * answered 200, instead of a 5xx until it gives up.
+     */
+    public function testHandlePaymentPaid_OnACancelledContract_GivesTheMoneyBackAndAnswers200(): void
+    {
+        $contract = $this->contractWithState(terminal: true);
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+        $this->lateMoney->expects($this->once())->method('resolve')->with($contract, 'tr_paid')
+            ->willReturn(LateMoneyOutcome::refunded('re_1'));
+        $this->contractFulfillmentService->expects(self::never())->method('fulfill');
+        $this->contractRepository->expects(self::never())->method('save');
+
+        $result = $this->handlerWith($this->createMock(ContractCommitServiceInterface::class))->handlePaymentPaid('tr_paid');
+
+        self::assertSame(FulfillmentOutcome::NoOp, $result->outcome);
+        self::assertSame('contract-1', $result->contractId);
+    }
+
+    public function testHandlePaymentPaid_OnACancelledContract_WhenTheRefundFailed_IsStillAnswered200(): void
+    {
+        $contract = $this->contractWithState(terminal: true);
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+        $this->lateMoney->method('resolve')->willReturn(LateMoneyOutcome::failed('RuntimeException'));
+
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentPaid('tr_paid')->outcome);
+    }
+
+    public function testHandlePaymentAuthorized_OnACancelledContract_ReleasesTheHold(): void
+    {
+        $contract = $this->contractWithState(terminal: true);
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+        $this->lateMoney->expects($this->once())->method('resolve')->with($contract, 'tr_auth')
+            ->willReturn(LateMoneyOutcome::released());
+
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentAuthorized('tr_auth')->outcome);
+    }
+
+    public function testHandlePaymentAuthorized_OnAFulfilledContract_IsARedeliveryAndGivesNothingBack(): void
+    {
+        $contract = $this->contractWithState(terminal: true, fulfilled: true);
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+        $this->lateMoney->expects($this->never())->method('resolve');
+
+        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentAuthorized('tr_auth')->outcome);
     }
 
     public function testHandlePaymentPaid_IsNoOpWhenAlreadyFulfilled(): void
@@ -279,6 +350,8 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
             $this->auditRecorder,
             new NullLogger(),
             $this->lateMoney,
+            $this->atRisk,
+            $this->replacedAttempts,
             $commit,
             $this->captures,
         );
@@ -370,21 +443,34 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
     }
 
     /**
-     * STRP-168. `committed` is not a terminal state, so the guard above let a
-     * contract whose payment had already been taken reach expire(). That used
-     * to silently rewrite settled payment history; since payment-base hardened
-     * the state machine it throws instead, which out of a webhook means a 500
-     * and a provider retrying forever. Either way the answer is to skip it.
+     * VR-23 T2 (S-M1), replaces the STRP-168 pin "the payment was already taken". `committed` is not terminal and
+     * expire() is refused there, so the delivery must not act on the contract. But an authorization that expires on
+     * a committed manual-capture contract means the money will never be captured while the order looks valid: the
+     * order is flagged "payment at risk" (the merchant decides) and Mollie is answered 200.
      */
-    public function testHandlePaymentExpired_IsNoOpWhenThePaymentWasAlreadyTaken(): void
+    public function testHandlePaymentExpired_ExpiredAuthorizationOnACommittedContract_FlagsTheOrder(): void
     {
         $contract = $this->contractWithState(committed: true);
         $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
 
         $contract->expects(self::never())->method('expire');
         $this->contractRepository->expects(self::never())->method('save');
+        $this->atRisk->expects(self::once())->method('raise')
+            ->with($contract, AtRiskReason::AuthorizationExpired, 'tr_committed')->willReturn(true);
 
-        self::assertSame(FulfillmentOutcome::NoOp, $this->handler->handlePaymentExpired('tr_committed')->outcome);
+        $result = $this->handler->handlePaymentExpired('tr_committed');
+
+        self::assertSame(FulfillmentOutcome::Acted, $result->outcome);
+        self::assertSame('contract-1', $result->contractId);
+    }
+
+    public function testHandlePaymentExpired_OnAnOpenContract_RaisesNoFlag(): void
+    {
+        $contract = $this->contractWithState(terminal: false);
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+        $this->atRisk->expects(self::never())->method('raise');
+
+        $this->handler->handlePaymentExpired('tr_open');
     }
 
     // --- handlePaymentCanceled ---

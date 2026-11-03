@@ -9,9 +9,13 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Webhook\Handler;
 
+use OxidEsales\PaymentBase\AtRisk\AtRiskReason;
+use OxidEsales\PaymentBase\AtRisk\PaymentAtRiskFlagInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
+use OxidEsales\PaymentBase\LateMoney\LateMoneyResolverInterface;
 use OxidEsales\PaymentBase\Payment\ProviderCaptureLedgerInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\PaymentBase\Repository\ReplacedAttemptFinderInterface;
 use OxidEsales\PaymentBase\Repository\StaleContractException;
 use OxidEsales\PaymentBase\Service\Commit\CommitOutcome;
 use OxidEsales\PaymentBase\Service\Commit\ContractCommitServiceInterface;
@@ -19,7 +23,6 @@ use OxidEsales\PaymentBase\Service\Commit\PaymentConfirmation;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface;
-use OxidEsales\Payments\Mollie\Service\MollieLatePaymentRefunder;
 use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use Psr\Log\LoggerInterface;
 
@@ -42,8 +45,12 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         private readonly ContractLinkedOrderUpdaterInterface $orderUpdater,
         private readonly TransactionAuditRecorder $auditRecorder,
         private readonly LoggerInterface $logger,
-        // OPC-175 / S2g: money on a payment of an attempt the contract replaced goes back.
-        private readonly MollieLatePaymentRefunder $lateMoney,
+        // VR-23 T2: money on a contract that can no longer take it (cancelled, expired, failed, or a payment of an
+        // attempt it replaced) goes back through payment-base's one rule; an expired authorization on a committed
+        // contract flags the order "payment at risk".
+        private readonly LateMoneyResolverInterface $lateMoney,
+        private readonly PaymentAtRiskFlagInterface $atRisk,
+        private readonly ReplacedAttemptFinderInterface $replacedAttempts,
         // VR-20 R6: required - the one commit path for `authorized` and `paid` (amount, currency
         // and state checks in payment-base); no hand-written ladder beside it.
         private readonly ContractCommitServiceInterface $contractCommit,
@@ -111,22 +118,46 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
     /**
      * OPC-175 / S2g: a payment no contract names now may be one of a replaced attempt.
      */
-    private function settledReplacedAttempt(string $providerOrderId): FulfillmentResult
+    private function lateMoneyOfReplacedAttempt(string $providerOrderId): FulfillmentResult
     {
-        $contractId = $this->lateMoney->settleIfReplaced($providerOrderId);
+        $contract = $this->replacedAttempts->findByReplacedAttempt($providerOrderId);
+        if ($contract === null) {
+            return FulfillmentResult::contractNotFound();
+        }
 
-        return $contractId === null ? FulfillmentResult::contractNotFound() : FulfillmentResult::noOp($contractId);
+        return $this->giveLateMoneyBack($contract, $providerOrderId);
+    }
+
+    /**
+     * VR-23 T2 (S-H3): `paid` or `authorized` for a contract the shop closed without payment (cancelled by the
+     * stale-order cleanup or an admin, expired, failed). The resolver refunds / releases once and records it; a
+     * refusal by Mollie is flagged by the resolver, not retried: Mollie is answered 200 either way, instead of a 5xx
+     * until it gives up with the money taken and no order.
+     */
+    private function giveLateMoneyBack(PaymentContractInterface $contract, string $providerOrderId): FulfillmentResult
+    {
+        $this->lateMoney->resolve($contract, $providerOrderId);
+
+        return FulfillmentResult::noOp((string) $contract->getId());
+    }
+
+    private function isClosedWithoutPayment(PaymentContractInterface $contract): bool
+    {
+        return $contract->getState()->isTerminal() && !$contract->getState()->isFulfilled();
     }
 
     private function doPaymentPaid(string $providerOrderId): FulfillmentResult
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
-            return $this->settledReplacedAttempt($providerOrderId);
+            return $this->lateMoneyOfReplacedAttempt($providerOrderId);
         }
 
         if ($contract->getState()->isFulfilled()) {
             return FulfillmentResult::noOp((string) $contract->getId());
+        }
+        if ($this->isClosedWithoutPayment($contract)) {
+            return $this->giveLateMoneyBack($contract, $providerOrderId);
         }
 
         if (!$contract->getState()->isCommitted()) {
@@ -196,13 +227,14 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             return FulfillmentResult::noOp((string) $contract->getId());
         }
 
-        // STRP-168: `committed` is not terminal, so a late or duplicate expiry
-        // for a contract whose payment has already been taken used to reach
-        // expire() and rewrite settled history. payment-base now refuses that
-        // transition outright, so acting on it would throw out of the webhook
-        // and Mollie would retry forever. Skip it.
+        // STRP-168: `committed` is not terminal, and payment-base refuses expire() there, so acting on the
+        // contract would throw out of the webhook and Mollie would retry forever. VR-23 T2 (S-M1): but an
+        // authorization that expires on a committed manual-capture contract means the money will never be
+        // captured while the order looks valid. Flag it; the merchant decides.
         if ($contract->getState()->isCommitted()) {
-            return FulfillmentResult::noOp((string) $contract->getId());
+            $this->atRisk->raise($contract, AtRiskReason::AuthorizationExpired, $providerOrderId);
+
+            return FulfillmentResult::acted((string) $contract->getId());
         }
 
         $contract->expire();
@@ -255,7 +287,10 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
-            return $this->settledReplacedAttempt($providerOrderId);
+            return $this->lateMoneyOfReplacedAttempt($providerOrderId);
+        }
+        if ($this->isClosedWithoutPayment($contract)) {
+            return $this->giveLateMoneyBack($contract, $providerOrderId);
         }
 
         if (!$contract->getState()->isNotFinished() && !$contract->getState()->isPending()) {

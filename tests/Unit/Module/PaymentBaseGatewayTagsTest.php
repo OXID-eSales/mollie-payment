@@ -11,14 +11,16 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Module;
 
 use OxidEsales\Payments\Mollie\Gateway\MollieCancelGateway;
 use OxidEsales\Payments\Mollie\Gateway\MollieCaptureGateway;
+use OxidEsales\Payments\Mollie\Gateway\MollieProviderPaymentGateway;
 use OxidEsales\Payments\Mollie\Gateway\MollieRefundGateway;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * payment-base finds a provider's ports by tag (`ProviderGatewayRegistry` is built from `!tagged_iterator`): a gateway
- * that is not tagged is invisible and the admin's capture, refund or void is refused `provider_unavailable`. The
+ * payment-base finds a provider's ports by tag (`ProviderGatewayRegistry`, `ProviderPaymentGateways` are built from
+ * `!tagged_iterator`): a gateway that is not tagged is invisible - the admin's capture, refund or void is refused
+ * `provider_unavailable`, and the stale-order cleanup / late-money resolver throw a LogicException. The
  * registry is not a public service, so the wiring is pinned where it is written.
  */
 final class PaymentBaseGatewayTagsTest extends TestCase
@@ -40,5 +42,6 @@ final class PaymentBaseGatewayTagsTest extends TestCase
         yield 'capture' => [MollieCaptureGateway::class, 'oe.payment.gateway'];
         yield 'refund' => [MollieRefundGateway::class, 'oe.payment.gateway'];
         yield 'void' => [MollieCancelGateway::class, 'oe.payment.gateway'];
+        yield 'late money / cleanup' => [MollieProviderPaymentGateway::class, 'oe.payment.provider_payment_gateway'];
     }
 }
