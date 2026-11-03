@@ -5,6 +5,10 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed - Adopts payment-base VR-24 H8 (ACP ownership guard)
+- `MollieAcpCheckoutService` is unchanged (it inherits the guard): its tests now open the contract as an ACP agent
+  would (`channel=acp`, `acp_agent_id`), and another agent's checkout is pinned as "not found" with nothing committed.
+
 ### Changed - Adopts payment-base VR wave 2 (F3/L1/A1)
 - Stock restoration is payment-base's now (`RefundSettledPolicy` after every ledger booking): removed
   `Service\OxidStockRestorationService`, its `services.yaml` binding and autowire exclude, its unit and integration

@@ -51,6 +51,8 @@ final class MollieAcpCheckoutServiceTest extends TestCase
         $this->contract->addCondition(new ContractCondition(ContractCondition::TYPE_PAYMENT_AUTHORIZED));
         $this->contract->transitionToNotFinished('order-1');
         $this->contract->transitionToPending();
+        $this->contract->setMetadata('channel', 'acp');
+        $this->contract->setMetadata('acp_agent_id', 'agent-1');
         $this->contracts->method('findById')->with('ctr-1')->willReturn($this->contract);
         $this->formatter->method('validationError')->willReturnCallback(
             static fn(string $message, ?string $param = null): array => ['error' => ['message' => $message, 'param' => $param]]
@@ -94,6 +96,16 @@ final class MollieAcpCheckoutServiceTest extends TestCase
         self::assertSame('payment_data.token', $result['error']['param']);
         self::assertStringContainsString('mollieCheckoutStart', $result['error']['message']);
         self::assertTrue($this->contract->getState()->isPending(), 'the contract stays open for the hosted checkout');
+    }
+
+    public function testAnotherAgentsCheckoutIsNotFoundAndNothingIsCommitted(): void
+    {
+        $this->formatter->method('notFoundError')->willReturn(['error' => ['message' => 'not found']]);
+        $this->commit->expects($this->never())->method('commit');
+
+        $result = $this->service()->completeCheckout('ctr-1', ['token' => 'tok_card'], new AgentContext('agent-2', 'tok'));
+
+        self::assertSame('not found', $result['error']['message']);
     }
 
     private function service(
