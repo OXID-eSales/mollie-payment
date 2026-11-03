@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Security;
 
 use OxidEsales\PaymentBase\Repository\WebhookLogRepositoryInterface;
-use OxidEsales\PaymentBase\Validation\RateLimit\InMemoryRateLimitStore;
 use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
@@ -23,6 +22,7 @@ use OxidEsales\PaymentBase\Webhook\Guard\PayloadSizeGuard;
 use OxidEsales\PaymentBase\Webhook\Guard\RateLimitGuard;
 use OxidEsales\PaymentBase\Webhook\Guard\WebhookHttpRequest;
 use OxidEsales\Payments\Mollie\Service\LegacyReturnTokenValidator;
+use OxidEsales\Payments\Mollie\Tests\Unit\Support\InMemoryRateLimitStore;
 use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use OxidEsales\Payments\Mollie\Webhook\MollieWebhookProcessor;
 use PHPUnit\Framework\Attributes\Group;

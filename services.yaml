@@ -129,6 +129,16 @@ services:
     tags:
       - { name: payment_base.client_config_provider }
 
+  # payment-base VR-24 H6: provider knowledge lives in the provider. The admin API locks the rows listed here;
+  # the client-config guard refuses a value shaped like one of these secrets.
+  OxidEsales\Payments\Mollie\Service\MolliePaymentOwnershipProvider:
+    tags:
+      - { name: oe.payment.ownership_provider }
+
+  OxidEsales\Payments\Mollie\Service\MollieClientConfigSecretPatternProvider:
+    tags:
+      - { name: payment_base.client_config_secret_pattern_provider }
+
   # ===========================================================================
   # Sprint 2: provider adapter layer.
   # The 4 segregated adapter interfaces all alias ONE shared LazyMollieAdapter,

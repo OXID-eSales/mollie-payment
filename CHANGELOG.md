@@ -5,6 +5,15 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed - Adopts payment-base VR wave 4 (H6/DC-PB7/D3/L1)
+- H6: `Service\MolliePaymentOwnershipProvider` (`mollie` / `oe_payments_mollie`, tag `oe.payment.ownership_provider`) and
+  `Service\MollieClientConfigSecretPatternProvider` (`/^access_/`, `/^(live|test)_[A-Za-z0-9]{30}$/`, tag
+  `payment_base.client_config_secret_pattern_provider`): payment-base no longer knows Mollie's payment row or key shapes.
+- DC-PB7d: the tests that used payment-base's `InMemoryRateLimitStore` (moved to its test support) use their own double.
+- D3: the integration harness passes the now-required logger and `ThrowableSummary` to `DoctrineContractRepository` and
+  `PanelActionBoundsResolver`; the ACP checkout service test passes real collaborators instead of nulls. Nothing in
+  `src/` changed for D3; the module's `EventBroker` definitions were already gone.
+
 ### Changed - VR-20 R3 (R6 adoption): the return leg runs on payment-base's guard and token
 - The Twig / OPC return (`cl=order&fnc=checkoutReturn`) asks payment-base's `ReturnAccessGuard`: the contract must
   exist, be Mollie's, and the caller must hold a valid return token **or** be the contract's shopper in the session that

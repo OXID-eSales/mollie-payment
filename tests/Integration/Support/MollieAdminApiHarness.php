@@ -28,6 +28,7 @@ use OxidEsales\PaymentBase\GraphQL\Admin\Service\PanelActionOptionsResolver;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentContractDetailsReader;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentOperationResult;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\PaymentBase\Repository\DoctrineContractRepository;
 use OxidEsales\PaymentBase\Repository\DoctrineIdempotencyRepository;
 use OxidEsales\PaymentBase\Repository\DoctrineTransactionRepository;
@@ -87,7 +88,7 @@ trait MollieAdminApiHarness
             $this->contracts(),
             new DoctrineTransactionRepository($this->connection()),
             new PanelActionOptionsResolver($registry, new NullLogger()),
-            new PanelActionBoundsResolver($registry, new NullLogger()),
+            new PanelActionBoundsResolver($registry, new NullLogger(), new ThrowableSummary([])),
         );
     }
 
@@ -290,7 +291,7 @@ trait MollieAdminApiHarness
      */
     private function contracts(): ContractRepositoryInterface
     {
-        return $this->contractRepository ??= new DoctrineContractRepository($this->connection());
+        return $this->contractRepository ??= new DoctrineContractRepository($this->connection(), new NullLogger(), new ThrowableSummary([]));
     }
 
     private function connection(): Connection
