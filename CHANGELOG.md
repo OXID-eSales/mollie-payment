@@ -23,6 +23,10 @@ All notable changes to this module are documented here. Format follows
 - Stock comes back only with the refund that leaves nothing refundable. Before, any refund - a 5 EUR goodwill refund
   on a 100 EUR order included - put every item back in stock and stornoed every order line. A refund Mollie refused to
   run (`failed` / `canceled`) restocks nothing.
+### Removed (VR-17) - code nothing called
+- `MollieRefundAdapterInterface::getRefund()` (and its two implementations): refund rows come from `listRefunds()`.
+- `MollieCaptureRequestEvent::isFullCapture()`, `MollieConfigSnapshot::keySet()` (only a test called it).
+- Translation key `MOLLIE_VALIDATION_INVALID_USER_DATA` (en, de), unused since MOL-15.
 
 ### Fixed (PSP-SWITCH) - after a PayPal cancel, "Pay" with Mollie opened PayPal again
 - The MOL-18 replay now asks payment-base for a **Mollie** attempt only. A PayPal attempt that a cancel left open is

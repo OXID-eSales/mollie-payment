@@ -30,11 +30,6 @@ final class MollieCaptureRequestEvent implements EventInterface
     ) {
     }
 
-    public function isFullCapture(): bool
-    {
-        return $this->amount === null;
-    }
-
     public function setResult(?string $captureId, ?string $errorCode = null, ?string $errorMessage = null): void
     {
         $this->captureId = $captureId;

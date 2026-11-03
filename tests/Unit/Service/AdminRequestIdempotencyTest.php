@@ -90,11 +90,6 @@ final class AdminRequestIdempotencyTest extends TestCase
                 return $refund;
             }
 
-            public function getRefund(string $paymentId, string $refundId): MollieRefundDto
-            {
-                throw new \RuntimeException('not used in this test');
-            }
-
             public function listRefunds(string $paymentId): array
             {
                 throw new \RuntimeException('not used in this test');
