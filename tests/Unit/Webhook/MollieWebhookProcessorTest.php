@@ -172,6 +172,102 @@ final class MollieWebhookProcessorTest extends TestCase
         self::assertSame('refunded', $event->type);
     }
 
+    // ── VR-26 M2: chargeback + refund identity ────────────────────────────────────────────────
+
+    public function testTheEventIdNamesWhatChanged(): void
+    {
+        self::assertSame('tr_cb:chargedback:3000', $this->eventFor($this->paymentDto('tr_cb', 'paid', amountChargedBack: 30.0))->id);
+        self::assertSame('tr_rf:refunded:1000', $this->eventFor($this->paymentDto('tr_rf', 'paid', amountRefunded: 10.0))->id);
+    }
+
+    /**
+     * A refund that arrives after a chargeback is a NEW delivery: it used to be typed `chargedback` with the
+     * chargeback's unchanged id, so it was answered `duplicate` and never booked.
+     */
+    public function testARefundAfterAChargebackIsADifferentDelivery(): void
+    {
+        $afterChargeback = $this->eventFor($this->paymentDto('tr_x', 'paid', amountChargedBack: 30.0));
+        $afterRefund = $this->eventFor($this->paymentDto('tr_x', 'paid', amountRefunded: 10.0, amountChargedBack: 30.0));
+
+        self::assertSame('tr_x:chargedback:3000', $afterChargeback->id);
+        self::assertSame('tr_x:refunded:1000:chargedback:3000', $afterRefund->id);
+        self::assertSame('refunded+chargedback', $afterRefund->type);
+    }
+
+    public function testRefundAfterChargebackIsBooked(): void
+    {
+        $this->webhookAdapter->method('fetchByWebhookId')->willReturn(
+            $this->paymentDto('tr_x', 'paid', amountRefunded: 10.0, amountChargedBack: 30.0),
+        );
+        $this->logRepository->method('claimEvent')->willReturn(true);
+        $refunds = $this->handlerFor('refunded', MollieWebhookOutcome::of(WebhookResult::success('refund_recorded'), 'contract-1'), true);
+        $chargebacks = $this->handlerFor('chargedback', MollieWebhookOutcome::of(WebhookResult::skipped('No new chargeback to record'), 'contract-1'), true);
+
+        $result = $this->createProcessor([$refunds, $chargebacks])->process($this->webhookRequest('id=tr_x'));
+
+        self::assertTrue($result->isSuccess());
+        self::assertSame('refund_recorded', $result->action, 'the booking of the refund is what the delivery reports');
+    }
+
+    public function testBothMoneyChangesOfOneDeliveryAreHandledEvenWhenTheFirstFails(): void
+    {
+        $this->webhookAdapter->method('fetchByWebhookId')->willReturn(
+            $this->paymentDto('tr_x', 'paid', amountRefunded: 10.0, amountChargedBack: 30.0),
+        );
+        $this->logRepository->method('claimEvent')->willReturn(true);
+        $refunds = $this->createMock(MollieWebhookEventHandlerInterface::class);
+        $refunds->method('handledStatuses')->willReturn(['refunded']);
+        $refunds->method('handle')->willThrowException(new \RuntimeException('listing refunds failed'));
+        $chargebacks = $this->handlerFor('chargedback', MollieWebhookOutcome::of(WebhookResult::success('chargeback_recorded'), 'contract-1'), true);
+
+        $result = $this->createProcessor([$refunds, $chargebacks])->process($this->webhookRequest('id=tr_x'));
+
+        self::assertTrue($result->isFailure(), 'the failed refund listing still fails the delivery so Mollie retries it');
+    }
+
+    public function testReplayIsDuplicate(): void
+    {
+        $this->webhookAdapter->method('fetchByWebhookId')->willReturn(
+            $this->paymentDto('tr_x', 'paid', amountRefunded: 10.0, amountChargedBack: 30.0),
+        );
+        $this->logRepository->method('claimEvent')->willReturn(false);
+        $refunds = $this->handlerFor('refunded', MollieWebhookOutcome::of(WebhookResult::success('refund_recorded')), false);
+        $chargebacks = $this->handlerFor('chargedback', MollieWebhookOutcome::of(WebhookResult::success('chargeback_recorded')), false);
+
+        $result = $this->createProcessor([$refunds, $chargebacks])->process($this->webhookRequest('id=tr_x'));
+
+        self::assertTrue($result->isSuccess());
+        self::assertSame('skipped', $result->action);
+    }
+
+    private function eventFor(MolliePaymentDto $payment): WebhookEvent
+    {
+        $adapter = $this->createMock(MollieWebhookAdapterInterface::class);
+        $adapter->method('fetchByWebhookId')->willReturn($payment);
+        $processor = new MollieWebhookProcessor(
+            $this->logRepository,
+            $this->logger,
+            new ThrowableSummary([]),
+            $adapter,
+            new MollieStatusMapper(),
+            [],
+        );
+
+        $event = $this->invokeProtected($processor, 'parseAndValidateRequest', $this->webhookRequest('id=' . $payment->id));
+        self::assertInstanceOf(WebhookEvent::class, $event);
+
+        return $event;
+    }
+
+    private function handlerFor(string $status, MollieWebhookOutcome $outcome, bool $expectCalled): MollieWebhookEventHandlerInterface&MockObject
+    {
+        $handler = $this->createMock(MollieWebhookEventHandlerInterface::class);
+        $handler->method('handledStatuses')->willReturn([$status]);
+        $handler->expects($expectCalled ? self::once() : self::never())->method('handle')->willReturn($outcome);
+
+        return $handler;
+    }
+
     /**
      * @param list<MollieWebhookEventHandlerInterface> $handlers
      */

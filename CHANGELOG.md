@@ -5,6 +5,18 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed - VR-26 M2: Mollie chargeback raises "payment at risk"; a refund after a chargeback is booked
+- Once `amountChargedBack > 0`, every delivery of the payment was typed `chargedback` with the id
+  `tr_x:chargedback:<cents>`: a refund issued after the chargeback arrived with an unchanged id, was answered `duplicate`
+  and never booked. The event id now names what changed - `tr_x:refunded:<cents>`, `tr_x:chargedback:<cents>`, both
+  parts when both amounts are set (`tr_x:refunded:1000:chargedback:3000`) - and the processor runs the handler of EVERY
+  change of the delivery (refunds book through payment-base's `ProviderRefundLedger` by Mollie refund id, chargebacks
+  through `ProviderChargebackLedger` as a delta), each independent of the other: a failing refund listing still fails
+  the delivery (Mollie retries) but no longer leaves the chargeback unbooked. A replay keeps its id and stays a duplicate.
+- `ChargebackCreatedHandler` raises payment-base's `PaymentAtRiskFlagInterface` with `AtRiskReason::Chargeback`
+  (reference: the Mollie payment id) when the ledger books a positive delta, so the merchant gets the badge and the mail
+  once; a replay or a reversal raises nothing. Needs payment-base with `AtRiskReason::Chargeback`.
+
 ### Fixed - VR-26 M3: no SDK error text in logs or stored failure text
 - Mollie's `ApiException` message embeds the request body (card token `tkn_...`, addresses, e-mail). It reached
   `oxideshop.log` and the contract row. Now: `MollieExceptionConverter` builds `MollieAdapterException` with a fixed message

@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Webhook\Handler;
 
+use OxidEsales\PaymentBase\AtRisk\AtRiskReason;
+use OxidEsales\PaymentBase\AtRisk\PaymentAtRiskFlagInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Refund\ChargebackBooking;
 use OxidEsales\PaymentBase\Refund\ProviderChargebackLedgerInterface;
@@ -29,6 +31,7 @@ final class ChargebackCreatedHandlerTest extends TestCase
 {
     private ContractRepositoryInterface&MockObject $contractRepository;
     private ProviderChargebackLedgerInterface&MockObject $ledger;
+    private PaymentAtRiskFlagInterface&MockObject $atRisk;
     private ChargebackCreatedHandler $handler;
 
     protected function setUp(): void
@@ -36,7 +39,9 @@ final class ChargebackCreatedHandlerTest extends TestCase
         $this->contractRepository = $this->createMock(ContractRepositoryInterface::class);
         $this->ledger = $this->createMock(ProviderChargebackLedgerInterface::class);
 
-        $this->handler = new ChargebackCreatedHandler($this->contractRepository, $this->ledger);
+        $this->atRisk = $this->createMock(PaymentAtRiskFlagInterface::class);
+
+        $this->handler = new ChargebackCreatedHandler($this->contractRepository, $this->ledger, $this->atRisk);
     }
 
     public function testHandledStatuses_ReturnsChargedback(): void
@@ -67,6 +72,40 @@ final class ChargebackCreatedHandlerTest extends TestCase
 
         self::assertSame('skipped', $outcome->result->action);
         self::assertSame('contract-1', $outcome->contractId);
+    }
+
+    /**
+     * VR-26 M2 (#2): a chargeback is money leaving the merchant, so the merchant is told - once. The flag is keyed by
+     * the payment id, so a later delta on the same payment does not notify again.
+     */
+    public function testChargebackRaisesAtRiskOnce(): void
+    {
+        $contract = $this->contractStub();
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+        $this->ledger->method('book')->willReturn(new ChargebackBooking(true, 15.0, 15.0));
+        $this->atRisk->expects(self::once())->method('raise')
+            ->with($contract, AtRiskReason::Chargeback, 'tr_cb')
+            ->willReturn(true);
+
+        $this->handler->handle($this->event('tr_cb', 15.0));
+    }
+
+    public function testAReplayRaisesNothing(): void
+    {
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($this->contractStub());
+        $this->ledger->method('book')->willReturn(new ChargebackBooking(false, 0.0, 15.0));
+        $this->atRisk->expects(self::never())->method('raise');
+
+        $this->handler->handle($this->event('tr_cb', 15.0));
+    }
+
+    public function testAReversalOfAChargebackRaisesNothing(): void
+    {
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($this->contractStub());
+        $this->ledger->method('book')->willReturn(new ChargebackBooking(true, -5.0, 10.0));
+        $this->atRisk->expects(self::never())->method('raise');
+
+        $this->handler->handle($this->event('tr_cb', 10.0));
     }
 
     public function testChargeback_DoesNotReverseContractState(): void

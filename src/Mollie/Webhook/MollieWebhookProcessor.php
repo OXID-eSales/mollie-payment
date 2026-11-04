@@ -22,6 +22,7 @@ use OxidEsales\Payments\Mollie\Adapter\MollieWebhookAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * Mollie webhook processor.
@@ -86,12 +87,12 @@ final class MollieWebhookProcessor extends AbstractWebhookProcessor
             );
         }
 
-        $type = $this->determineEventType($payment);
+        $changes = $this->moneyChanges($payment);
 
         return new WebhookEvent(
-            id: $this->buildEventId($payment, $type),
-            type: $type,
-            data: ['object' => $this->toEventObject($payment)],
+            id: $this->buildEventId($payment, $changes),
+            type: $changes === [] ? $this->statusType($payment) : implode('+', $changes),
+            data: ['object' => $this->toEventObject($payment, $changes)],
             created: time(),
         );
     }
@@ -104,23 +105,27 @@ final class MollieWebhookProcessor extends AbstractWebhookProcessor
      * payment id therefore let the first delivery claim it forever, so the decisive `paid` webhook
      * that followed an `authorized`/`pending` one was answered `200 skipped` and never retried.
      *
-     * `{paymentId}:{type}` is not sufficient on its own: two successive PARTIAL refunds both map to
-     * type `refunded`. The cumulative amount in integer cents discriminates them — cents rather
-     * than a float so `12.5` and `12.50` cannot become two ids for one refund.
+     * The id says what CHANGED on the payment: `{paymentId}:refunded:{cents}` and `{paymentId}:chargedback:{cents}`,
+     * both parts when both amounts are set (`tr_x:refunded:1000:chargedback:3000`). Two successive partial refunds
+     * differ by the cumulative amount; a refund that arrives after a chargeback differs from the chargeback's own
+     * delivery by its `refunded` part (VR-26 M2: it used to be typed `chargedback` with the chargeback's unchanged id,
+     * answered `duplicate` and never booked). Cents rather than a float so `12.5` and `12.50` cannot become two ids.
      *
-     * A true replay (same status, same cumulative amount) still produces the same id and is still
+     * A true replay (same status, same cumulative amounts) still produces the same id and is still
      * correctly deduplicated, which is the idempotency actually worth having.
+     *
+     * @param list<string> $changes {@see moneyChanges()}
      */
-    private function buildEventId(MolliePaymentDto $payment, string $type): string
+    private function buildEventId(MolliePaymentDto $payment, array $changes): string
     {
-        $eventId = $payment->id . ':' . $type;
-
-        if ($type === self::TYPE_REFUNDED) {
-            return $eventId . ':' . $this->toCents($payment->amountRefunded);
+        if ($changes === []) {
+            return $payment->id . ':' . $this->statusType($payment);
         }
 
-        if ($type === self::TYPE_CHARGEDBACK) {
-            return $eventId . ':' . $this->toCents($payment->amountChargedBack);
+        $eventId = $payment->id;
+        foreach ($changes as $change) {
+            $amount = $change === self::TYPE_REFUNDED ? $payment->amountRefunded : $payment->amountChargedBack;
+            $eventId .= ':' . $change . ':' . $this->toCents($amount);
         }
 
         return $eventId;
@@ -135,18 +140,70 @@ final class MollieWebhookProcessor extends AbstractWebhookProcessor
     {
         $this->lastContractId = null;
 
-        foreach ($this->handlers as $handler) {
-            if (!in_array($event->type, $handler->handledStatuses(), true)) {
-                continue;
+        $outcomes = [];
+        $failure = null;
+        foreach ($this->routingTypes($event) as $type) {
+            // Every money change of the delivery is handled even when an earlier one failed: a failed refund
+            // listing must not leave the chargeback of the same delivery unbooked. The first failure is rethrown
+            // afterwards so the delivery still fails and Mollie retries it.
+            try {
+                $outcomes[] = $this->handleType($event, $type);
+            } catch (Throwable $e) {
+                $failure ??= $e;
             }
-
-            $outcome = $handler->handle($event);
-            $this->lastContractId = $outcome->contractId;
-
-            return $outcome->result;
+        }
+        if ($failure !== null) {
+            throw $failure;
         }
 
-        return WebhookResult::skipped("Unhandled Mollie payment status: {$event->type}");
+        return $this->combine($outcomes);
+    }
+
+    /**
+     * @return list<string> the statuses whose handlers run for this delivery: the money changes it carries, or its type
+     */
+    private function routingTypes(WebhookEvent $event): array
+    {
+        $changes = $event->getObject()['changes'] ?? [];
+        if (!is_array($changes) || $changes === []) {
+            return [$event->type];
+        }
+
+        return array_values(array_filter($changes, is_string(...)));
+    }
+
+    private function handleType(WebhookEvent $event, string $type): MollieWebhookOutcome
+    {
+        foreach ($this->handlers as $handler) {
+            if (in_array($type, $handler->handledStatuses(), true)) {
+                return $handler->handle($event);
+            }
+        }
+
+        return MollieWebhookOutcome::of(WebhookResult::skipped("Unhandled Mollie payment status: {$type}"));
+    }
+
+    /**
+     * One answer for the delivery: a failure wins (Mollie must retry), then a success (something was booked), else the
+     * first skip. The contract id is the first one a handler reported.
+     *
+     * @param list<MollieWebhookOutcome> $outcomes
+     */
+    private function combine(array $outcomes): WebhookResult
+    {
+        $answer = $outcomes[0];
+        foreach ($outcomes as $outcome) {
+            $this->lastContractId ??= $outcome->contractId;
+            if ($outcome->result->isFailure()) {
+                $answer = $outcome;
+                break;
+            }
+            if ($outcome->result->action !== 'skipped' && $answer->result->action === 'skipped') {
+                $answer = $outcome;
+            }
+        }
+
+        return $answer->result;
     }
 
     protected function getContractIdFromResult(WebhookResult $result): ?string
@@ -171,30 +228,39 @@ final class MollieWebhookProcessor extends AbstractWebhookProcessor
     }
 
     /**
-     * Determine the routing "status" for the event. Chargebacks and refunds take priority over
-     * the raw Mollie status string because Mollie reports both on the SAME payment resource
-     * (there is no distinct chargeback/refund object id in the webhook, only the payment id) —
-     * a payment can remain `paid` while also carrying a nonzero amountRefunded/amountChargedBack.
+     * What changed on the payment's money, in a fixed order. Mollie reports refunds and chargebacks on the SAME payment
+     * resource (there is no distinct refund/chargeback object id in the webhook, only the payment id) — a payment can
+     * remain `paid` while also carrying a nonzero amountRefunded/amountChargedBack, and both can be set at once.
+     *
+     * @return list<string> `refunded` and/or `chargedback`; empty when neither amount is set
      */
-    private function determineEventType(MolliePaymentDto $payment): string
+    private function moneyChanges(MolliePaymentDto $payment): array
     {
-        if ($payment->amountChargedBack > 0.0) {
-            return self::TYPE_CHARGEDBACK;
-        }
-
+        $changes = [];
         if ($payment->amountRefunded > 0.0) {
-            return self::TYPE_REFUNDED;
+            $changes[] = self::TYPE_REFUNDED;
+        }
+        if ($payment->amountChargedBack > 0.0) {
+            $changes[] = self::TYPE_CHARGEDBACK;
         }
 
+        return $changes;
+    }
+
+    private function statusType(MolliePaymentDto $payment): string
+    {
         return strtolower($this->statusMapper->map($payment->status)->name);
     }
 
     /**
+     * @param list<string> $changes {@see moneyChanges()}
+     *
      * @return array<string, mixed>
      */
-    private function toEventObject(MolliePaymentDto $payment): array
+    private function toEventObject(MolliePaymentDto $payment, array $changes): array
     {
         return [
+            'changes' => $changes,
             'id' => $payment->id,
             'status' => $payment->status,
             'amount' => $payment->amount->value,

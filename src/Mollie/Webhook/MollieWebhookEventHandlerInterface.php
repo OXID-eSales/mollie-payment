@@ -14,7 +14,7 @@ use OxidEsales\PaymentBase\Webhook\WebhookEvent;
 /**
  * Mollie-local handler interface for webhook event processing.
  *
- * Routing is by mapped status string (see {@see MollieWebhookProcessor::determineEventType()}),
+ * Routing is by mapped status string (see {@see MollieWebhookProcessor}),
  * not by a raw Mollie payload field — Mollie webhooks carry no event type at all, only a
  * payment id. Tagged `mollie.webhook_handler` in services.yaml and collected by
  * MollieWebhookProcessor via `!tagged_iterator`. OCP: a new status is handled by registering a
