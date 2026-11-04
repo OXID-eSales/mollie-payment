@@ -10,12 +10,13 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Webhook\Handler;
 
 use DomainException;
+use OxidEsales\PaymentBase\Adapter\ContractLinkedOrderUpdaterInterface;
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
 use OxidEsales\PaymentBase\AtRisk\AtRiskReason;
 use OxidEsales\PaymentBase\AtRisk\PaymentAtRiskFlagInterface;
 use OxidEsales\PaymentBase\Contract\ContractCondition;
-use OxidEsales\PaymentBase\Contract\ContractTerminationService;
 use OxidEsales\PaymentBase\Contract\ContractState;
+use OxidEsales\PaymentBase\Contract\ContractTerminationService;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Contract\Transaction;
 use OxidEsales\PaymentBase\LateMoney\LateMoneyOutcome;
@@ -26,17 +27,17 @@ use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Repository\ReplacedAttemptFinderInterface;
 use OxidEsales\PaymentBase\Repository\StaleContractException;
 use OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface;
+use OxidEsales\PaymentBase\Service\Commit\CommitOutcome;
+use OxidEsales\PaymentBase\Service\Commit\ContractCommitServiceInterface;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-use OxidEsales\PaymentBase\Adapter\ContractLinkedOrderUpdaterInterface;
 use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
+use OxidEsales\Payments\Mollie\Tests\Unit\Webhook\Handler\Support\CommittingContractCommit;
+use OxidEsales\Payments\Mollie\Tests\Unit\Webhook\Handler\Support\WebhookHandlerAssembly;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentResult;
 use OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandler;
 use PHPUnit\Framework\Attributes\CoversClass;
-use OxidEsales\PaymentBase\Service\Commit\CommitOutcome;
-use OxidEsales\PaymentBase\Service\Commit\ContractCommitServiceInterface;
-use OxidEsales\Payments\Mollie\Tests\Unit\Webhook\Handler\Support\CommittingContractCommit;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -344,12 +345,11 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
     private function handlerWith(ContractCommitServiceInterface $commit): WebhookContractFulfillmentHandler
     {
-        return new WebhookContractFulfillmentHandler(
+        return WebhookHandlerAssembly::build(
             $this->contractRepository,
             $this->contractFulfillmentService,
             new ContractTerminationService($this->contractRepository, $this->orderUpdater),
             $this->auditRecorder,
-            new NullLogger(),
             $this->lateMoney,
             $this->atRisk,
             $this->replacedAttempts,

@@ -13,6 +13,7 @@ use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
 use OxidEsales\PaymentBase\AtRisk\PaymentAtRiskFlagInterface;
 use OxidEsales\PaymentBase\Contract\BasketSnapshot;
 use OxidEsales\PaymentBase\Contract\ContractCondition;
+use OxidEsales\PaymentBase\Contract\ContractTerminationServiceInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContract;
 use OxidEsales\PaymentBase\LateMoney\LateMoneyResolverInterface;
 use OxidEsales\PaymentBase\Payment\ProviderCaptureLedgerInterface;
@@ -23,8 +24,8 @@ use OxidEsales\PaymentBase\Service\Commit\CommitOutcome;
 use OxidEsales\PaymentBase\Service\Commit\ContractCommitServiceInterface;
 use OxidEsales\PaymentBase\Service\Commit\PaymentConfirmation;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
-use OxidEsales\PaymentBase\Contract\ContractTerminationServiceInterface;
 use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
+use OxidEsales\Payments\Mollie\Tests\Unit\Webhook\Handler\Support\WebhookHandlerAssembly;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentResult;
 use OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandler;
@@ -109,12 +110,11 @@ final class WebhookContractFulfillmentHandlerAuthorizedCommitTest extends TestCa
         $shopAdapter = $this->createMock(ShopAdapterInterface::class);
         $shopAdapter->method('getShopId')->willReturn('1');
 
-        return new WebhookContractFulfillmentHandler(
+        return WebhookHandlerAssembly::build(
             $this->contracts,
             $this->createMock(ContractFulfillmentServiceInterface::class),
             $this->createMock(ContractTerminationServiceInterface::class),
             new TransactionAuditRecorder($this->transactions, $shopAdapter),
-            new NullLogger(),
             $this->createMock(LateMoneyResolverInterface::class),
             $this->createMock(PaymentAtRiskFlagInterface::class),
             $this->createMock(ReplacedAttemptFinderInterface::class),

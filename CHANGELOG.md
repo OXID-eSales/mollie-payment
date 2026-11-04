@@ -5,6 +5,12 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed - sprint-25 D5 (Mollie part): the webhook fulfilment handler split by status
+- `Webhook\Handler\WebhookContractFulfillmentHandler` (413 lines, 12 constructor arguments) keeps the interface, the public
+  method names and the shared "contract moved under the webhook" retry; the work moved to `PaidPaymentFulfiller` (`paid`),
+  `AuthorizedPaymentCommitter` (`authorized`), `UnpaidPaymentTerminator` (`failed` / `expired` / `canceled`) and the
+  shared `ClosedContractLateMoney`. No behaviour change; the existing handler tests run unchanged through the facade.
+
 ### Changed - sprint-25 D3 (Mollie part): required collaborators
 - No constructor parameter defaults a collaborator to `null` / `new X()` any more: `CheckoutSessionStarter` (replay, logger),
   `CheckoutUserDataGate` (logger), `MollieReturnResolver` (config, logger), `MollieReleaseAuthorizationRequestHandler`

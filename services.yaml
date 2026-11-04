@@ -400,6 +400,12 @@ services:
       $connection: '@doctrine.dbal.connection'
     public: true
 
+  # One collaborator per Mollie status (sprint-25 D5); the handler keeps the shared retry.
+  OxidEsales\Payments\Mollie\Webhook\Handler\ClosedContractLateMoney: ~
+  OxidEsales\Payments\Mollie\Webhook\Handler\PaidPaymentFulfiller: ~
+  OxidEsales\Payments\Mollie\Webhook\Handler\AuthorizedPaymentCommitter: ~
+  OxidEsales\Payments\Mollie\Webhook\Handler\UnpaidPaymentTerminator: ~
+
   OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandler:
     public: true
 
