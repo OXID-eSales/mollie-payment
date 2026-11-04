@@ -189,18 +189,6 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
     }
 
     /**
-     * Mollie confirms the outcome via the redirect return + webhook, so there is nothing to do
-     * here — mirrors PayPal's/Stripe's OPC handlers.
-     */
-    public function confirmPayment(string $transactionId): PaymentHandlerResult
-    {
-        return PaymentHandlerResult::success(
-            contractId: $transactionId,
-            metadata: ['note' => 'Mollie confirms via redirect return + webhook'],
-        );
-    }
-
-    /**
      * @return array<string, mixed>
      */
     public function getFrontendConfig(): array
