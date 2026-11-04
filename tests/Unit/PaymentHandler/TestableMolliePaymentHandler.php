@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\PaymentHandler;
 
+use Throwable;
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\PaymentBase\Adapter\PaymentContextInterface;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface;
@@ -43,6 +45,7 @@ final class TestableMolliePaymentHandler extends MolliePaymentHandler
         ?NotOrderableItemsMessages $notOrderableMessages = null,
         ?InFlightCheckoutReplayInterface $replay = null,
         array $userDataProblems = [],
+        private readonly ?Throwable $basketFailure = null,
     ) {
         parent::__construct(
             new CheckoutSessionStarter(
@@ -51,16 +54,21 @@ final class TestableMolliePaymentHandler extends MolliePaymentHandler
                 new FixedUserDataGate($userDataProblems),
                 $replay ?? new NoInFlightReplay(),
                 $logger ?? new NullLogger(),
+                new ThrowableSummary([]),
             ),
             $logger ?? new NullLogger(),
             $iframeSettings ?? new FixedIframeSettings(),
             $notOrderableMessages ?? new NotOrderableItemsMessages(new OxidLanguageTranslator()),
+            new ThrowableSummary([]),
         );
     }
 
     protected function prepareOxidBasket(PaymentContextInterface $context): void
     {
-        // no-op: no OXID session/basket in unit tests
+        // no OXID session/basket in unit tests; a scripted failure stands for a broken basket preparation
+        if ($this->basketFailure !== null) {
+            throw $this->basketFailure;
+        }
     }
 
     protected function sessionId(): string

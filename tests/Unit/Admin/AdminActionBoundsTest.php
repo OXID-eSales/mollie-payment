@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Admin;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\PaymentBase\Admin\Contract\AdminActionBounds as ProviderBounds;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminActionBounds;
@@ -273,7 +274,7 @@ final class AdminActionBoundsTest extends TestCase
                 self::stringContains('could not load the Mollie payment'),
                 self::callback(static fn (array $context): bool => $context['contractId'] === 'contract_77'
                     && $context['providerOrderId'] === 'tr_boom'
-                    && $context['error'] === 'mollie down'),
+                    && $context['exception'] === ['class' => \RuntimeException::class, 'code' => 0]),
             );
 
         self::assertSame(0.0, $this->boundsWith($adapter, $logger)->refundBound($contract));
@@ -383,6 +384,6 @@ final class AdminActionBoundsTest extends TestCase
         MolliePaymentsAdapterInterface $adapter,
         LoggerInterface $logger,
     ): AdminActionBounds {
-        return new AdminActionBounds(new MolliePaymentSnapshotProvider($adapter, $logger));
+        return new AdminActionBounds(new MolliePaymentSnapshotProvider($adapter, $logger, new ThrowableSummary([])));
     }
 }

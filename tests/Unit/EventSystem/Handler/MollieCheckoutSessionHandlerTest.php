@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\EventSystem\Handler;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
 use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
@@ -205,7 +206,7 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
         $contract = $this->contractStub();
         $contract->expects(self::once())
             ->method('fail')
-            ->with(self::stringContains('boom'));
+            ->with('mollie_create_payment_failed: ' . MollieAdapterException::class . ' (code 422)');
         $contract->expects(self::never())->method('setProvider');
 
         ['handler' => $handler, 'checkoutPaymentService' => $checkoutPaymentService, 'adapter' => $adapter, 'repository' => $repository]
@@ -216,7 +217,10 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
             description: 'x',
             redirectUrl: 'https://shop.test/return',
         ));
-        $adapter->method('createPayment')->willThrowException(new MollieAdapterException('boom'));
+        // The SDK text of a real failure embeds the request body: it must reach neither the row nor the log.
+        $adapter->method('createPayment')->willThrowException(
+            new MollieAdapterException('Request body: {"cardToken":"tkn_fixture1"} shopper@example.test', 422),
+        );
 
         $repository->expects(self::once())->method('save')->with($contract);
 
@@ -398,6 +402,7 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
             $shopAdapter,
             new MollieRedirectUrlValidator(),
             new NullLogger(),
+            new ThrowableSummary([]),
         );
 
         return [

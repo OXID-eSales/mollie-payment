@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Command;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractStateQueryInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieConfirmedFigures;
@@ -44,6 +45,7 @@ final class ReconcilePaidContractsCommandTest extends TestCase
             $this->payments,
             new MollieStatusMapper(),
             $this->fulfillment,
+            new ThrowableSummary([]),
         ));
     }
 
@@ -104,6 +106,19 @@ final class ReconcilePaidContractsCommandTest extends TestCase
         $this->tester->execute([]);
 
         self::assertStringContainsString('provider_amount_missing', $this->tester->getDisplay());
+    }
+
+    public function testAnUnreachableMollieIsReportedWithoutTheSdkText(): void
+    {
+        $this->contracts->method('findByStateAndProvider')->willReturn([$this->contract('c-7', 'tr_7')]);
+        $this->payments->method('getPayment')->willThrowException(
+            new RuntimeException('Request body: {"cardToken":"tkn_fixture1"} shopper@example.test', 503),
+        );
+
+        $this->tester->execute([]);
+
+        self::assertStringContainsString('Mollie unreachable (RuntimeException (code 503))', $this->tester->getDisplay());
+        self::assertStringNotContainsString('tkn_fixture', $this->tester->getDisplay());
     }
 
     private function contract(string $id, ?string $providerOrderId): PaymentContractInterface

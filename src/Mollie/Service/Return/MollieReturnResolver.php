@@ -11,6 +11,7 @@ namespace OxidEsales\Payments\Mollie\Service\Return;
 
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContextInterface;
+use OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface;
 use OxidEsales\PaymentBase\Return\ReturnResolution;
 use OxidEsales\PaymentBase\Return\ReturnResolverInterface;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
@@ -44,6 +45,7 @@ final class MollieReturnResolver implements ReturnResolverInterface
         // Both feed the manual-capture diagnostic below.
         private readonly ModuleConfigurationServiceInterface $config,
         private readonly LoggerInterface $logger,
+        private readonly ThrowableSummaryInterface $throwableSummary,
     ) {
     }
 
@@ -101,7 +103,13 @@ final class MollieReturnResolver implements ReturnResolverInterface
         try {
             $payment = $this->paymentsAdapter->getPayment($paymentId);
         } catch (MollieAdapterException $e) {
-            return ReturnResolution::failed('get_payment_failed', $e->getMessage(), $paymentId);
+            $this->logger->error('[MollieReturnResolver] could not fetch the Mollie payment', [
+                'contractId' => $contract->getId(),
+                'paymentId' => $paymentId,
+                'exception' => $this->throwableSummary->fromThrowable($e),
+            ]);
+
+            return ReturnResolution::failed('get_payment_failed', 'Mollie payment could not be fetched.', $paymentId);
         }
 
         $this->warnIfManualCaptureWasIgnored($payment);

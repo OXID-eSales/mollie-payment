@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieCaptureDto;
@@ -44,6 +45,7 @@ final class TransactionHistoryServiceTest extends TestCase
             $this->captureAdapter,
             new MollieStatusMapper(),
             new NullLogger(),
+            new ThrowableSummary([]),
         );
     }
 
@@ -156,5 +158,31 @@ final class TransactionHistoryServiceTest extends TestCase
 
         self::assertCount(1, $rows);
         self::assertSame(TransactionRow::TYPE_PAYMENT, $rows[0]->type);
+    }
+
+    public function testALostPaymentIsLoggedBySummaryNotByTheSdkText(): void
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $contract->method('getProviderOrderId')->willReturn('tr_9');
+        $this->paymentsAdapter->method('getPayment')->willThrowException(
+            new \RuntimeException('Request body: {"cardToken":"tkn_fixture1"} shopper@example.test', 502),
+        );
+        $logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+        $logger->expects(self::once())->method('warning')->with(
+            self::anything(),
+            self::callback(static fn (array $c): bool => $c['providerOrderId'] === 'tr_9'
+                && $c['exception'] === ['class' => \RuntimeException::class, 'code' => 502]
+                && !str_contains(json_encode($c) ?: '', 'tkn_fixture')),
+        );
+        $service = new TransactionHistoryService(
+            $this->paymentsAdapter,
+            $this->refundAdapter,
+            $this->captureAdapter,
+            new MollieStatusMapper(),
+            $logger,
+            new ThrowableSummary([]),
+        );
+
+        self::assertSame([], $service->fetch($contract));
     }
 }

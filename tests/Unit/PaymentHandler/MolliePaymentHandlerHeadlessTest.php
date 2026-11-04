@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\PaymentHandler;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\Eshop\Application\Model\User;
 use OxidEsales\PaymentBase\Adapter\ContractFirstPaymentHandlerInterface;
@@ -44,10 +45,11 @@ final class SessionRecordingMollieHandler extends MolliePaymentHandler
     {
         $logger = new NullLogger();
         parent::__construct(
-            new CheckoutSessionStarter($dispatcher, $buyability, new FixedUserDataGate(), new NoInFlightReplay(), $logger),
+            new CheckoutSessionStarter($dispatcher, $buyability, new FixedUserDataGate(), new NoInFlightReplay(), $logger, new ThrowableSummary([])),
             $logger,
             new FixedIframeSettings(),
             new NotOrderableItemsMessages(new OxidLanguageTranslator()),
+            new ThrowableSummary([]),
         );
     }
 

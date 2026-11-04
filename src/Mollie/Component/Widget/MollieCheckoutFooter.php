@@ -13,6 +13,7 @@ use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\EshopCommunity\Core\Di\ContainerFacade;
 use OxidEsales\Eshop\Application\Component\Widget\WidgetController;
 use OxidEsales\Eshop\Core\ViewConfig;
+use OxidEsales\Payments\Mollie\Core\LoggableThrowable;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use Throwable;
 use OxidEsales\Payments\Mollie\Service\ValidationRulesProvider;
@@ -87,7 +88,7 @@ class MollieCheckoutFooter extends WidgetController
             return $allowed;
         } catch (Throwable $e) {
             Registry::getLogger()->error('[MollieCheckoutFooter] failed to build the allowed-symbols map', [
-                'error' => $e->getMessage(),
+                'exception' => LoggableThrowable::summary($e),
             ]);
 
             return [];

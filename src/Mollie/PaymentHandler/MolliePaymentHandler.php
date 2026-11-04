@@ -16,6 +16,7 @@ use OxidEsales\PaymentBase\Adapter\ContractFirstPaymentHandlerInterface;
 use OxidEsales\PaymentBase\Adapter\PaymentContextInterface;
 use OxidEsales\PaymentBase\Adapter\PaymentHandlerInterface;
 use OxidEsales\PaymentBase\Adapter\PaymentHandlerResult;
+use OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface;
 use OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
@@ -70,6 +71,7 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
         private readonly LoggerInterface $logger,
         private readonly IframeCheckoutSettingsInterface $iframeSettings,
         private readonly NotOrderableItemsMessages $notOrderableMessages,
+        private readonly ThrowableSummaryInterface $throwableSummary,
     ) {
     }
 
@@ -120,7 +122,7 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
             return $this->resultFromOutcome($outcome);
         } catch (Throwable $e) {
             $this->logger->error('[MolliePaymentHandler] processPayment failed', [
-                'error' => $e->getMessage(),
+                'exception' => $this->throwableSummary->fromThrowable($e),
             ]);
             // MOL-22: core refused inside finalizeOrder() because an item is not orderable; the
             // exception's text is a raw translation key - the footer would print it as is.
@@ -129,10 +131,7 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
                 return $this->notOrderableResult($notOrderable);
             }
 
-            return PaymentHandlerResult::error(
-                'Mollie payment processing failed: ' . $e->getMessage(),
-                'MOLLIE_PAYMENT_FAILED',
-            );
+            return PaymentHandlerResult::error('Mollie payment processing failed.', 'MOLLIE_PAYMENT_FAILED');
         }
     }
 

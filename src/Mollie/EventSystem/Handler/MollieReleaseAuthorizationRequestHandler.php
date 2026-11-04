@@ -12,10 +12,12 @@ namespace OxidEsales\Payments\Mollie\EventSystem\Handler;
 use DomainException;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Handler\HandlerInterface;
+use OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieReleaseAuthorizationRequestEvent;
 use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use OxidEsales\Payments\Mollie\Service\ReleaseAuthorizationServiceInterface;
+use Psr\Log\LoggerInterface;
 use Throwable;
 
 /**
@@ -26,11 +28,14 @@ use Throwable;
 final class MollieReleaseAuthorizationRequestHandler implements HandlerInterface
 {
     private const MESSAGE_FAILED = 'MOLLIE_ADMIN_RELEASE_FAILED';
+    private const MESSAGE_RELEASE_FAILED = 'Mollie could not release the authorization.';
 
     public function __construct(
         private readonly ReleaseAuthorizationServiceInterface $releaseService,
         private readonly AdminValidationFeedbackInterface $feedback,
         private readonly LanguageTranslatorInterface $translator,
+        private readonly LoggerInterface $logger,
+        private readonly ThrowableSummaryInterface $throwableSummary,
     ) {
     }
 
@@ -57,7 +62,11 @@ final class MollieReleaseAuthorizationRequestHandler implements HandlerInterface
             $event->setResult(false, 'state_error', $e->getMessage());
             $this->tellTheAdmin($event->contract);
         } catch (Throwable $e) {
-            $event->setResult(false, 'release_failed', $e->getMessage());
+            $this->logger->error('[MollieReleaseAuthorizationRequestHandler] release failed', [
+                'contractId' => $event->contract->getId(),
+                'exception' => $this->throwableSummary->fromThrowable($e),
+            ]);
+            $event->setResult(false, 'release_failed', self::MESSAGE_RELEASE_FAILED);
             $this->tellTheAdmin($event->contract);
         }
     }

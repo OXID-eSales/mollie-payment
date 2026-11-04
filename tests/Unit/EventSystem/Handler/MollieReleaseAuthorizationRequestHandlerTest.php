@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\EventSystem\Handler;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use DomainException;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Handler\HandlerInterface;
@@ -20,6 +21,8 @@ use OxidEsales\Payments\Mollie\Service\ReleaseAuthorizationServiceInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 #[CoversClass(MollieReleaseAuthorizationRequestHandler::class)]
 final class MollieReleaseAuthorizationRequestHandlerTest extends TestCase
@@ -37,6 +40,8 @@ final class MollieReleaseAuthorizationRequestHandlerTest extends TestCase
             $this->releaseService,
             $this->createStub(AdminValidationFeedbackInterface::class),
             $this->createStub(LanguageTranslatorInterface::class),
+            new NullLogger(),
+            new ThrowableSummary([]),
         );
 
         self::assertInstanceOf(HandlerInterface::class, $handler);
@@ -57,6 +62,8 @@ final class MollieReleaseAuthorizationRequestHandlerTest extends TestCase
             $this->releaseService,
             $this->createStub(AdminValidationFeedbackInterface::class),
             $this->createStub(LanguageTranslatorInterface::class),
+            new NullLogger(),
+            new ThrowableSummary([]),
         ))->handle($event);
 
         self::assertTrue($event->isSuccess());
@@ -70,6 +77,8 @@ final class MollieReleaseAuthorizationRequestHandlerTest extends TestCase
             $this->releaseService,
             $this->createStub(AdminValidationFeedbackInterface::class),
             $this->createStub(LanguageTranslatorInterface::class),
+            new NullLogger(),
+            new ThrowableSummary([]),
         ))->handle(new \stdClass());
     }
 
@@ -86,9 +95,34 @@ final class MollieReleaseAuthorizationRequestHandlerTest extends TestCase
         $translator->method('translateString')->with('MOLLIE_ADMIN_RELEASE_FAILED')->willReturn('Release failed');
         $feedback->expects(self::once())->method('rejectWithMessage')->with('order-5', 'Release failed');
 
-        (new MollieReleaseAuthorizationRequestHandler($this->releaseService, $feedback, $translator))->handle($event);
+        (new MollieReleaseAuthorizationRequestHandler($this->releaseService, $feedback, $translator, new NullLogger(), new ThrowableSummary([])))->handle($event);
 
         self::assertFalse($event->isSuccess());
         self::assertSame('state_error', $event->getErrorCode());
+    }
+
+    public function testAnUnexpectedFailureIsAnsweredWithTheModulesOwnSentenceAndLoggedBySummary(): void
+    {
+        $contract = $this->createMock(PaymentContractInterface::class);
+        $event = new MollieReleaseAuthorizationRequestEvent($contract, 'reason');
+        $this->releaseService->method('release')->willThrowException(
+            new \RuntimeException('Request body: {"cardToken":"tkn_fixture1"} shopper@example.test', 500),
+        );
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('error')->with(
+            self::anything(),
+            self::callback(static fn (array $c): bool => $c['exception'] === ['class' => \RuntimeException::class, 'code' => 500]),
+        );
+
+        (new MollieReleaseAuthorizationRequestHandler(
+            $this->releaseService,
+            $this->createStub(AdminValidationFeedbackInterface::class),
+            $this->createStub(LanguageTranslatorInterface::class),
+            $logger,
+            new ThrowableSummary([]),
+        ))->handle($event);
+
+        self::assertSame('release_failed', $event->getErrorCode());
+        self::assertSame('Mollie could not release the authorization.', $event->getErrorMessage());
     }
 }

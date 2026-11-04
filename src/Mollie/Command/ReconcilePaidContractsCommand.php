@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Command;
 
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
+use OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface;
 use OxidEsales\PaymentBase\Repository\ContractStateQueryInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieConfirmedFigures;
 use OxidEsales\Payments\Mollie\Adapter\MollieOutcome;
@@ -43,6 +44,7 @@ final class ReconcilePaidContractsCommand extends Command
         private readonly MolliePaymentsAdapterInterface $payments,
         private readonly MollieStatusMapper $statusMapper,
         private readonly WebhookContractFulfillmentHandlerInterface $fulfillment,
+        private readonly ThrowableSummaryInterface $throwableSummary,
     ) {
         parent::__construct();
     }
@@ -92,7 +94,7 @@ final class ReconcilePaidContractsCommand extends Command
             $payment = $this->payments->getPayment($paymentId);
             $outcome = $this->statusMapper->map($payment->status);
         } catch (Throwable $e) {
-            $io->writeln("  skip  $label: Mollie unreachable (" . $e->getMessage() . ')');
+            $io->writeln("  skip  $label: Mollie unreachable (" . $this->throwableSummary->toLine($e) . ')');
 
             return false;
         }

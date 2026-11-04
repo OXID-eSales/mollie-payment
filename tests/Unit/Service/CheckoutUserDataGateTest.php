@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Eshop\Application\Model\User;
 use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
 use OxidEsales\PaymentBase\Validation\User\FieldValidationFailure;
@@ -17,6 +18,7 @@ use OxidEsales\Payments\Mollie\Service\CheckoutUserDataGate;
 use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
 
@@ -62,7 +64,21 @@ final class CheckoutUserDataGateTest extends TestCase
         self::assertSame([], $this->gate($validator)->problemsFor($this->user()));
     }
 
-    private function gate(UserDataValidatorInterface $validator): CheckoutUserDataGate
+    public function testTheFailOpenLogCarriesTheThrowableSummaryNotItsMessage(): void
+    {
+        $validator = $this->createMock(UserDataValidatorInterface::class);
+        $validator->method('validateForUser')->willThrowException(new RuntimeException('rules for shopper@example.test gone', 5));
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning')->with(
+            self::anything(),
+            self::callback(static fn (array $c): bool => $c['exception'] === ['class' => RuntimeException::class, 'code' => 5]
+                && !str_contains(json_encode($c) ?: '', 'shopper@example.test')),
+        );
+
+        $this->gate($validator, $logger)->problemsFor($this->user());
+    }
+
+    private function gate(UserDataValidatorInterface $validator, ?LoggerInterface $logger = null): CheckoutUserDataGate
     {
         $formatter = $this->createMock(MessageFormatterInterface::class);
         $formatter->method('format')->willReturnCallback(static fn (string $field) => 'msg:' . $field);
@@ -71,7 +87,7 @@ final class CheckoutUserDataGateTest extends TestCase
             static fn (string $key) => $key === 'MOLLIE_VALIDATION_REVIEW_ADDRESS' ? 'Please review your address details.' : $key
         );
 
-        return new CheckoutUserDataGate($validator, $formatter, $translator, new NullLogger());
+        return new CheckoutUserDataGate($validator, $formatter, $translator, $logger ?? new NullLogger(), new ThrowableSummary([]));
     }
 
     private function user(): User

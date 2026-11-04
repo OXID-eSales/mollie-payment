@@ -90,7 +90,7 @@ class ViewConfig extends ViewConfig_parent
             // Review 2026-10-14 (A-M5): same safe-or-LOUD rule as isMollieTestMode() below — a
             // silently empty list made "the inline method selector disappeared" undiagnosable.
             Registry::getLogger()->warning('[ViewConfig] Mollie method list unavailable', [
-                'error' => $e->getMessage(),
+                'exception' => LoggableThrowable::summary($e),
             ]);
 
             return [];
@@ -137,7 +137,7 @@ class ViewConfig extends ViewConfig_parent
             // Review 2026-10-14 (A-M5): logged, not swallowed — a null ISO silently widens the
             // method list to country-agnostic, which reads as a merchant-config problem otherwise.
             Registry::getLogger()->warning('[ViewConfig] billing country ISO unavailable', [
-                'error' => $e->getMessage(),
+                'exception' => LoggableThrowable::summary($e),
             ]);
 
             return null;
@@ -162,7 +162,7 @@ class ViewConfig extends ViewConfig_parent
         } catch (Throwable $e) {
             Registry::getLogger()->error(
                 '[MollieViewConfig] could not determine Mollie mode; assuming test for display only',
-                ['error' => $e->getMessage()],
+                ['exception' => LoggableThrowable::summary($e)],
             );
 
             return true;
@@ -220,7 +220,7 @@ class ViewConfig extends ViewConfig_parent
             // Review 2026-10-14 (A-M5): logged, not swallowed — null silently falls back to the
             // classic redirect button, hiding a broken payment-base wiring from the operator.
             Registry::getLogger()->warning('[ViewConfig] iframe settings unavailable', [
-                'error' => $e->getMessage(),
+                'exception' => LoggableThrowable::summary($e),
             ]);
 
             return null;

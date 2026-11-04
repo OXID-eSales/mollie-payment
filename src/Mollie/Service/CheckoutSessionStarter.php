@@ -11,6 +11,7 @@ namespace OxidEsales\Payments\Mollie\Service;
 
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
+use OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use Psr\Log\LoggerInterface;
@@ -51,6 +52,7 @@ class CheckoutSessionStarter
         private readonly CheckoutUserDataGateInterface $userDataGate,
         private readonly InFlightCheckoutReplayInterface $replay,
         private readonly LoggerInterface $logger,
+        private readonly ThrowableSummaryInterface $throwableSummary,
     ) {
     }
 
@@ -100,7 +102,7 @@ class CheckoutSessionStarter
             $this->dispatcher->dispatch(new MollieCheckoutSessionRequestEvent($context));
         } catch (Throwable $e) {
             $this->logger->error('[CheckoutSessionStarter] checkout session event failed', [
-                'error' => $e->getMessage(),
+                'exception' => $this->throwableSummary->fromThrowable($e),
             ]);
             // MOL-22 race window: core refused inside finalizeOrder() because an item is not
             // orderable (out of stock for the ordered quantity, turned unbuyable, removed) —

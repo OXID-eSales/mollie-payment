@@ -14,6 +14,7 @@ use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\EshopCommunity\Core\Di\ContainerFacade;
 use OxidEsales\PaymentBase\Controller\HandlesCheckoutReturn;
+use OxidEsales\Payments\Mollie\Core\LoggableThrowable;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
 use OxidEsales\Payments\Mollie\Service\CheckoutStartOutcome;
@@ -324,7 +325,7 @@ class MollieOrderController extends MollieOrderController_parent
             // unanswerable question.
             Registry::getLogger()->warning('[MollieOrderController] service unavailable', [
                 'service' => $className,
-                'error' => $e->getMessage(),
+                'exception' => LoggableThrowable::summary($e),
             ]);
 
             return null;

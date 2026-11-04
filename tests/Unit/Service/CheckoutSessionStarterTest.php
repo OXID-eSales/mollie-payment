@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\Eshop\Application\Model\User;
 use OxidEsales\PaymentBase\Adapter\Exception\ShopOrderException;
@@ -206,18 +207,36 @@ final class CheckoutSessionStarterTest extends TestCase
         self::assertSame('ctr-stuck', $outcome->contractId);
     }
 
+    public function testAFailingDispatchIsLoggedBySummaryNotByTheSdkText(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willThrowException(
+            new RuntimeException('Request body: {"cardToken":"tkn_fixture1"} shopper@example.test', 502),
+        );
+        $logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+        $logger->expects(self::once())->method('error')->with(
+            self::anything(),
+            self::callback(static fn (array $c): bool => $c['exception'] === ['class' => RuntimeException::class, 'code' => 502]
+                && !str_contains(json_encode($c) ?: '', 'tkn_fixture')),
+        );
+
+        $this->starter(dispatcher: $dispatcher, logger: $logger)->start($this->request());
+    }
+
     private function starter(
         ?EventDispatcherInterface $dispatcher = null,
         ?BasketBuyabilityValidator $buyability = null,
         ?CheckoutUserDataGateInterface $gate = null,
         ?InFlightCheckoutReplayInterface $replay = null,
+        ?\Psr\Log\LoggerInterface $logger = null,
     ): CheckoutSessionStarter {
         return new CheckoutSessionStarter(
             $dispatcher ?? $this->createStub(EventDispatcherInterface::class),
             $buyability ?? $this->buyabilityPassing(),
             $gate ?? $this->gateWithProblems([]),
             $replay ?? new NoInFlightReplay(),
-            new NullLogger(),
+            $logger ?? new NullLogger(),
+            new ThrowableSummary([]),
         );
     }
 

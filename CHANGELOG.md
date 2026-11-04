@@ -5,6 +5,25 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed - VR-26 M3: no SDK error text in logs or stored failure text
+- Mollie's `ApiException` message embeds the request body (card token `tkn_...`, addresses, e-mail). It reached
+  `oxideshop.log` and the contract row. Now: `MollieExceptionConverter` builds `MollieAdapterException` with a fixed message
+  (`Mollie API call failed (HTTP 422, field billingAddress.email)`) and no chained SDK exception; the exception carries
+  `field` and `requestId`. New `MollieApiExceptionSummary` (tag `payment_base.throwable_summary`) tells payment-base's
+  `ThrowableSummaryInterface` the HTTP status, field name and request id of such a failure - never `getMessage()`.
+- Every log context and stored failure text goes through `ThrowableSummaryInterface` (`CheckoutUserDataGate`,
+  `CheckoutSessionStarter`, `MollieCheckoutSessionHandler` incl. `contract->fail()`, `MolliePaymentHandler`,
+  `MollieReturnResolver`, `TransactionHistoryService`, `MolliePaymentSnapshotProvider`, `MollieReleaseAuthorizationRequestHandler`,
+  `ReconcilePaidContractsCommand`, the webhook processor's verification failure; the classes the shop instantiates itself -
+  controllers, `ViewConfig`, `Events`, the checkout-footer widget - use `Core\LoggableThrowable`). Shoppers and admins see the module's own
+  fixed sentences (`Mollie payment processing failed.`, `Mollie payment could not be fetched.`, `Mollie could not release the
+  authorization.`). The own-domain refusals (`AdminActionRefusedException`, `HeadlessCheckoutException`, state `DomainException`)
+  keep their translated sentences.
+- The webhook controller writes a payment-base `WebhookDeliveryLogRecord` (`webhook` line: provider, payment id, contract id,
+  action, reason, HTTP code, duration) for every delivery, also `missing_id`, `processor_unavailable`, `guard_unavailable` and
+  guard refusals; it replaces the `webhook_rejected` / `webhook_processed` lines.
+- `.gitleaks.toml` allow-lists `tkn_fixture[0-9A-Za-z]*` for the new integration test `NoPiiInLogsTest`.
+
 ### Fixed - VR-26 M1: Mollie commits on Mollie's own figures
 - The browser return (`MollieReturnResolver`) and the `paid` / `authorized` webhooks (`PaidPaymentFulfiller`,
   `AuthorizedPaymentCommitter`) reported the CONTRACT's amount and currency to payment-base, so its `ConfirmedAmount` check

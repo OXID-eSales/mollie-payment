@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Service;
 
 use OxidEsales\Eshop\Application\Model\User;
+use OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface;
 use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
 use OxidEsales\PaymentBase\Validation\User\OxidUserFieldReader;
 use OxidEsales\PaymentBase\Validation\User\UserDataValidatorInterface;
@@ -36,6 +37,7 @@ final class CheckoutUserDataGate implements CheckoutUserDataGateInterface
         private readonly MessageFormatterInterface $messageFormatter,
         private readonly LanguageTranslatorInterface $translator,
         private readonly LoggerInterface $logger,
+        private readonly ThrowableSummaryInterface $throwableSummary,
     ) {
     }
 
@@ -55,7 +57,7 @@ final class CheckoutUserDataGate implements CheckoutUserDataGateInterface
             );
         } catch (Throwable $e) {
             $this->logger->warning('[CheckoutUserDataGate] user-data validation unavailable; allowing checkout', [
-                'error' => $e->getMessage(),
+                'exception' => $this->throwableSummary->fromThrowable($e),
             ]);
 
             return [];

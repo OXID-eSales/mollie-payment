@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Service\Return;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContextInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
@@ -38,7 +39,7 @@ final class MollieReturnResolverManualCaptureTest extends TestCase
         $config = $this->createMock(ModuleConfigurationServiceInterface::class);
         $config->method('isManualCapture')->willReturn($manual);
 
-        return new MollieReturnResolver($adapter, new MollieStatusMapper(), $config, $logger);
+        return new MollieReturnResolver($adapter, new MollieStatusMapper(), $config, $logger, new ThrowableSummary([]));
     }
 
     private function payment(string $status, ?string $method): MolliePaymentDto

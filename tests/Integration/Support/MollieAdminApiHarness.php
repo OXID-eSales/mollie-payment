@@ -119,7 +119,7 @@ trait MollieAdminApiHarness
 
     private function bounds(): AdminActionBounds
     {
-        return new AdminActionBounds(new MolliePaymentSnapshotProvider($this->paymentsAdapter(), new NullLogger()));
+        return new AdminActionBounds(new MolliePaymentSnapshotProvider($this->paymentsAdapter(), new NullLogger(), new ThrowableSummary([])));
     }
 
     private function releaseAction(): MollieReleaseAction

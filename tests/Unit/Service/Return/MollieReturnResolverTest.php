@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Service\Return;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\Return\ReturnResolution;
@@ -113,6 +114,19 @@ final class MollieReturnResolverTest extends TestCase
         self::assertSame('get_payment_failed', $resolution->errorCode);
     }
 
+    public function testAFailedFetchIsAnsweredWithTheModulesOwnSentenceAndLoggedBySummary(): void
+    {
+        [$resolver, $adapter] = $this->resolver();
+        $adapter->method('getPayment')->willThrowException(
+            new MollieAdapterException('Request body: {"cardToken":"tkn_fixture1"} shopper@example.test', 502),
+        );
+
+        $resolution = $resolver->resolve($this->contractStub(), new EventContext());
+
+        self::assertSame('get_payment_failed', $resolution->errorCode);
+        self::assertSame('Mollie payment could not be fetched.', $resolution->errorMessage);
+    }
+
     public function testResolveIsIdempotentForRepeatedPaidStatus(): void
     {
         $contract = $this->contractStub();
@@ -187,6 +201,7 @@ final class MollieReturnResolverTest extends TestCase
             new MollieStatusMapper(),
             $this->createMock(ModuleConfigurationServiceInterface::class),
             new NullLogger(),
+            new ThrowableSummary([]),
         );
 
         return [$resolver, $adapter];

@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Admin;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
@@ -123,10 +124,11 @@ final class MolliePaymentSnapshotProviderTest extends TestCase
                 self::stringContains('could not load the Mollie payment'),
                 self::callback(static fn (array $c): bool => $c['contractId'] === 'contract_1'
                     && $c['providerOrderId'] === 'tr_boom'
-                    && $c['error'] === 'mollie down'),
+                    && $c['exception'] === ['class' => RuntimeException::class, 'code' => 0]
+                    && !array_key_exists('error', $c)),
             );
 
-        $provider = new MolliePaymentSnapshotProvider($adapter, $logger);
+        $provider = new MolliePaymentSnapshotProvider($adapter, $logger, new ThrowableSummary([]));
         $contract = $this->contract('tr_boom');
 
         // A failing payment must not be retried — nor re-logged — once per
@@ -139,7 +141,7 @@ final class MolliePaymentSnapshotProviderTest extends TestCase
 
     private function provider(MolliePaymentsAdapterInterface $adapter): MolliePaymentSnapshotProvider
     {
-        return new MolliePaymentSnapshotProvider($adapter, new NullLogger());
+        return new MolliePaymentSnapshotProvider($adapter, new NullLogger(), new ThrowableSummary([]));
     }
 
     private function contract(?string $providerOrderId): PaymentContractInterface

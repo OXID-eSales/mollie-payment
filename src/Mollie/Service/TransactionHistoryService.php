@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Service;
 
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
+use OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieCaptureDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieRefundDto;
@@ -36,6 +37,7 @@ final class TransactionHistoryService implements TransactionHistoryServiceInterf
         private readonly MollieCaptureAdapterInterface $captureAdapter,
         private readonly MollieStatusMapper $statusMapper,
         private readonly LoggerInterface $logger,
+        private readonly ThrowableSummaryInterface $throwableSummary,
     ) {
     }
 
@@ -112,7 +114,7 @@ final class TransactionHistoryService implements TransactionHistoryServiceInterf
             $this->logger->warning(
                 '[TransactionHistoryService] could not load the Mollie payment; the admin transaction '
                 . 'panel will render empty',
-                ['providerOrderId' => $providerOrderId, 'error' => $e->getMessage()],
+                ['providerOrderId' => $providerOrderId, 'exception' => $this->throwableSummary->fromThrowable($e)],
             );
 
             return null;

@@ -78,6 +78,20 @@ final class MollieWebhookProcessorTest extends TestCase
         $this->invokeProtected($this->createProcessor(), 'parseAndValidateRequest', $request);
     }
 
+    public function testTheVerificationFailureNamesThePaymentButCarriesNoSdkText(): void
+    {
+        $this->webhookAdapter->method('fetchByWebhookId')->willThrowException(
+            new MollieAdapterException('Request body: {"cardToken":"tkn_fixture1"} shopper@example.test', 404),
+        );
+
+        try {
+            $this->invokeProtected($this->createProcessor(), 'parseAndValidateRequest', $this->webhookRequest('id=tr_unknown'));
+            self::fail('expected a WebhookSignatureException');
+        } catch (WebhookSignatureException $e) {
+            self::assertSame('Could not verify Mollie payment "tr_unknown": ' . MollieAdapterException::class . ' (code 404)', $e->getMessage());
+        }
+    }
+
     public function testParseAndValidate_WhenIdMissing_ThrowsSignatureException(): void
     {
         $this->webhookAdapter->expects(self::never())->method('fetchByWebhookId');

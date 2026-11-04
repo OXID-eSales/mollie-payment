@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Support;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator;
 use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
@@ -40,6 +41,7 @@ final class ScriptedLadderStarter extends CheckoutSessionStarter
             new FixedUserDataGate($userDataProblems),
             $replay ?? new NoInFlightReplay(),
             new NullLogger(),
+            new ThrowableSummary([]),
         );
     }
 

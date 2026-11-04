@@ -128,6 +128,12 @@ services:
     tags:
       - { name: oe.payment.ownership_provider }
 
+  # VR-26 M3: the HTTP status, field name and request id of a Mollie API failure are what a log line may say about it;
+  # the SDK's message embeds the request body.
+  OxidEsales\Payments\Mollie\Adapter\MollieApiExceptionSummary:
+    tags:
+      - { name: payment_base.throwable_summary }
+
   OxidEsales\Payments\Mollie\Service\MollieClientConfigSecretPatternProvider:
     tags:
       - { name: payment_base.client_config_secret_pattern_provider }
@@ -228,6 +234,7 @@ services:
       - '@OxidEsales\Payments\Mollie\Service\CheckoutUserDataGateInterface'
       - '@OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplayInterface'
       - '@oxid_esales.monolog.logger'
+      - '@OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface'
     public: true
 
   OxidEsales\PaymentBase\EventSystem\Handler\EarlyOrderCreationHandler:
@@ -242,6 +249,8 @@ services:
     public: false
 
   OxidEsales\Payments\Mollie\EventSystem\Handler\MollieCheckoutSessionHandler:
+    arguments:
+      $throwableSummary: '@OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface'
     tags:
       - { name: payment.event_handler }
     public: true
@@ -261,6 +270,7 @@ services:
       $iframeSettings: '@OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface'
       # MOL-22: a not-orderable basket item is named to the shopper instead of a raw core key.
       $notOrderableMessages: '@OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages'
+      $throwableSummary: '@OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface'
     tags:
       - { name: oe.payment.handler }
     public: true
@@ -298,6 +308,7 @@ services:
       # merchant with no capture button and no explanation.
       $config: '@OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface'
       $logger: '@oxid_esales.monolog.logger'
+      $throwableSummary: '@OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface'
 
   OxidEsales\Payments\Mollie\Service\CheckoutPaymentServiceInterface:
     alias: OxidEsales\Payments\Mollie\Service\CheckoutPaymentService
@@ -344,6 +355,7 @@ services:
       $validator: '@OxidEsales\PaymentBase\Validation\User\UserDataValidatorInterface'
       $messageFormatter: '@OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter'
       $translator: '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
+      $throwableSummary: '@OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface'
     public: true
 
   OxidEsales\Payments\Mollie\Service\CheckoutUserDataGateInterface:
@@ -537,6 +549,7 @@ services:
       $payments: '@OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface'
       $statusMapper: '@OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper'
       $fulfillment: '@OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandlerInterface'
+      $throwableSummary: '@OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface'
     tags:
       - { name: 'console.command', command: 'mollie:reconcile-paid' }
     public: true
@@ -547,6 +560,8 @@ services:
     arguments:
       $feedback: '@OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface'
       $translator: '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
+      $logger: '@oxid_esales.monolog.logger'
+      $throwableSummary: '@OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface'
     tags:
       - { name: payment.event_handler }
     public: true
@@ -578,6 +593,8 @@ services:
     alias: OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider
     public: true
   OxidEsales\Payments\Mollie\Admin\MolliePaymentSnapshotProvider:
+    arguments:
+      $throwableSummary: '@OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface'
     public: true
 
   # One name for the method a customer paid with and one release rule, shared by the classic panel and the admin API.

@@ -54,7 +54,7 @@ class Events
                 '[Mollie] payment-method installation failed during module activation; Mollie will '
                 . 'not be offered in checkout. Re-run `oe:module:activate oe_payments_mollie` after '
                 . 'fixing the cause.',
-                ['error' => $e->getMessage()],
+                ['exception' => LoggableThrowable::summary($e)],
             );
         }
     }

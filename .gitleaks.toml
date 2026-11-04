@@ -49,6 +49,8 @@ regexes = [
   '''(live|test)_DUMMYVALUE[A-Za-z0-9]*''',
   # payment-base fixture tokens.
   '''spt_(granted|denied|expired)_[0-9A-Za-z]*''',
+  # Mollie card-token shaped fixture (VR-26 M3: the PII-in-logs test feeds one through the log paths).
+  '''tkn_fixture[0-9A-Za-z]*''',
 ]
 
 # gitleaks has no rule for a Stripe webhook signing secret, and its

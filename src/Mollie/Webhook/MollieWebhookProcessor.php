@@ -76,7 +76,11 @@ final class MollieWebhookProcessor extends AbstractWebhookProcessor
             $payment = $this->webhookAdapter->fetchByWebhookId($paymentId);
         } catch (MollieAdapterException $e) {
             throw new WebhookSignatureException(
-                sprintf('Could not verify Mollie payment "%s": %s', $paymentId, $e->getMessage()),
+                sprintf(
+                    'Could not verify Mollie payment "%s": %s',
+                    $paymentId,
+                    $this->throwableSummary->toLine($e),
+                ),
                 0,
                 $e,
             );
@@ -146,6 +150,14 @@ final class MollieWebhookProcessor extends AbstractWebhookProcessor
     }
 
     protected function getContractIdFromResult(WebhookResult $result): ?string
+    {
+        return $this->lastContractId;
+    }
+
+    /**
+     * The contract the last processed delivery touched (null when it touched none), for the delivery log line.
+     */
+    public function contractIdOfLastDelivery(): ?string
     {
         return $this->lastContractId;
     }

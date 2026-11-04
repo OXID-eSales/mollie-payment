@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Admin;
 
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
+use OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use Psr\Log\LoggerInterface;
@@ -39,6 +40,7 @@ final class MolliePaymentSnapshotProvider implements MolliePaymentSnapshotProvid
     public function __construct(
         private readonly MolliePaymentsAdapterInterface $paymentsAdapter,
         private readonly LoggerInterface $logger,
+        private readonly ThrowableSummaryInterface $throwableSummary,
     ) {
     }
 
@@ -80,7 +82,7 @@ final class MolliePaymentSnapshotProvider implements MolliePaymentSnapshotProvid
                 [
                     'contractId' => $contract->getId(),
                     'providerOrderId' => $providerOrderId,
-                    'error' => $e->getMessage(),
+                    'exception' => $this->throwableSummary->fromThrowable($e),
                 ],
             );
 

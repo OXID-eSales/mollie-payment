@@ -15,6 +15,7 @@ use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\Handler\HandlerInterface;
+use OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
@@ -47,6 +48,7 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
         private readonly ShopAdapterInterface $shopAdapter,
         private readonly MollieRedirectUrlValidator $redirectUrlValidator,
         private readonly LoggerInterface $logger,
+        private readonly ThrowableSummaryInterface $throwableSummary,
     ) {
     }
 
@@ -206,10 +208,13 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
 
     private function failContract(PaymentContractInterface $contract, MollieAdapterException $e): void
     {
-        $contract->fail('mollie_create_payment_failed: ' . $e->getMessage());
+        // The stored failure text is a code plus the exception's class and HTTP status: Mollie's own message embeds
+        // the request body (card token, addresses) and would land in the contract row.
+        $contract->fail('mollie_create_payment_failed: ' . $this->throwableSummary->toLine($e));
         $this->contractRepository->save($contract);
         $this->logger->error('MollieCheckoutSessionHandler: create payment failed', [
-            'error' => $e->getMessage(),
+            'contractId' => $contract->getId(),
+            'exception' => $this->throwableSummary->fromThrowable($e),
         ]);
     }
 

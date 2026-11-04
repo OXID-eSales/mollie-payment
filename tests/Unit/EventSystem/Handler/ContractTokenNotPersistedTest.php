@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\EventSystem\Handler;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
 use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
@@ -138,6 +139,7 @@ final class ContractTokenNotPersistedTest extends TestCase
             $shopAdapter,
             new MollieRedirectUrlValidator(),
             new NullLogger(),
+            new ThrowableSummary([]),
         );
 
         $context = new EventContext(['cardToken' => $cardToken]);

@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Admin;
 
+use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Eshop\Application\Model\Order;
 use OxidEsales\PaymentBase\Contract\ContractState;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
@@ -275,7 +276,7 @@ final class MolliePanelViewDataBuilderTest extends TestCase
             amount: MollieAmountDto::fromComponents('EUR', 20.9),
             amountCaptured: 0.0,
         ));
-        $snapshots = new MolliePaymentSnapshotProvider($adapter, new NullLogger());
+        $snapshots = new MolliePaymentSnapshotProvider($adapter, new NullLogger(), new ThrowableSummary([]));
         $builder = new MolliePanelViewDataBuilder(
             $this->contracts,
             $this->transactionHistory,
@@ -328,7 +329,7 @@ final class MolliePanelViewDataBuilderTest extends TestCase
                 $this->paidPayment(refunded: 25.0),
             );
 
-        $snapshots = new MolliePaymentSnapshotProvider($adapter, new NullLogger());
+        $snapshots = new MolliePaymentSnapshotProvider($adapter, new NullLogger(), new ThrowableSummary([]));
         $bounds = new AdminActionBounds($snapshots);
         $builder = new MolliePanelViewDataBuilder(
             $this->contracts,
@@ -547,7 +548,7 @@ final class MolliePanelViewDataBuilderTest extends TestCase
             ->method('getPayment')
             ->willReturn($this->payment('creditcard', 'Visa', '4242'));
 
-        $snapshots = new MolliePaymentSnapshotProvider($adapter, new NullLogger());
+        $snapshots = new MolliePaymentSnapshotProvider($adapter, new NullLogger(), new ThrowableSummary([]));
 
         $builder = new MolliePanelViewDataBuilder(
             $this->contracts,

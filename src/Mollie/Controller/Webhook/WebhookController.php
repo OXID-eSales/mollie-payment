@@ -19,6 +19,8 @@ use OxidEsales\PaymentBase\Webhook\Guard\WebhookGuardInterface;
 use OxidEsales\PaymentBase\Webhook\Guard\WebhookHttpRequest;
 use OxidEsales\PaymentBase\Webhook\WebhookRequest as ProcessorWebhookRequest;
 use OxidEsales\PaymentBase\Webhook\WebhookResult;
+use OxidEsales\Payments\Mollie\Core\LoggableThrowable;
+use OxidEsales\Payments\Mollie\Webhook\MollieDeliveryRecord;
 use OxidEsales\Payments\Mollie\Webhook\MollieWebhookProcessor;
 use Throwable;
 
@@ -67,6 +69,8 @@ class WebhookController extends FrontendController
      * the never-firing token bucket it replaces (F6), actually prevents an unauthenticated POST from
      * buying itself an outbound Mollie API round-trip.
      */
+    private const ACTION_REJECTED = 'webhook_rejected';
+
     private const PAYMENT_ID_PATTERN = '/^tr_[A-Za-z0-9]{1,64}$/';
 
     protected ?MollieWebhookProcessor $processor = null;
@@ -84,7 +88,9 @@ class WebhookController extends FrontendController
             $processor = $container->get(MollieWebhookProcessor::class);
             $this->processor = $processor instanceof MollieWebhookProcessor ? $processor : null;
         } catch (Throwable $e) {
-            Registry::getLogger()->error('Mollie webhook processor unavailable', ['error' => $e->getMessage()]);
+            Registry::getLogger()->error('Mollie webhook processor unavailable', [
+                'exception' => LoggableThrowable::summary($e),
+            ]);
         }
 
         try {
@@ -96,7 +102,9 @@ class WebhookController extends FrontendController
         } catch (Throwable $e) {
             // error, not warning: render() now refuses to serve without a
             // guard chain, so this is the reason the endpoint is down, not a background nuisance.
-            Registry::getLogger()->error('Mollie webhook guard chain unavailable', ['error' => $e->getMessage()]);
+            Registry::getLogger()->error('Mollie webhook guard chain unavailable', [
+                'exception' => LoggableThrowable::summary($e),
+            ]);
         }
 
         try {
@@ -111,6 +119,7 @@ class WebhookController extends FrontendController
 
     public function render(): string
     {
+        $startedAt = hrtime(true);
         $this->setResponseContentType();
 
         // Three distinct cases, explicitly. This used to be a `?->` plus a
@@ -119,11 +128,7 @@ class WebhookController extends FrontendController
         // 503 rather than 500: retry-worthy, so a transient container problem does not lose the event.
         $guard = $this->getGuard();
         if ($guard === null) {
-            $this->getFileLogger()?->log('webhook_rejected', [
-                'reason' => 'guard_unavailable',
-                'status' => 503,
-            ]);
-            $this->sendResponse(503, 'guard_unavailable');
+            $this->refuse($startedAt, null, self::ACTION_REJECTED, 'guard_unavailable', 503);
         }
 
         // Built ONCE (review 2026-10-14, A-L2): a second build re-read php://input and re-emitted
@@ -132,20 +137,22 @@ class WebhookController extends FrontendController
 
         $guardResult = $guard->check($guardRequest);
         if (!$guardResult->ok) {
-            $this->getFileLogger()?->log('webhook_rejected', [
-                'reason' => $guardResult->reason ?? 'rejected',
-                'status' => $guardResult->httpStatus,
-            ]);
-            $this->sendResponse($guardResult->httpStatus, $guardResult->reason ?? 'rejected');
+            $this->refuse(
+                $startedAt,
+                null,
+                self::ACTION_REJECTED,
+                $guardResult->reason ?? 'rejected',
+                $guardResult->httpStatus,
+            );
         }
 
         $paymentId = $this->extractPaymentId();
         if ($paymentId === null) {
-            $this->sendResponse(400, 'missing_id');
+            $this->refuse($startedAt, null, 'missing_id', 'missing_id', 400);
         }
 
         if ($this->processor === null) {
-            $this->sendResponse(500, 'processor_unavailable');
+            $this->refuse($startedAt, $paymentId, 'processor_unavailable', 'processor_unavailable', 500);
         }
 
         $result = $this->processor->process(new ProcessorWebhookRequest(
@@ -155,15 +162,33 @@ class WebhookController extends FrontendController
             receivedAt: new DateTimeImmutable(),
         ));
 
-        $this->getFileLogger()?->log('webhook_processed', [
-            'action' => $result->action,
-            'success' => $result->isSuccess(),
-        ]);
+        $httpCode = $this->statusCodeFor($result);
+        $this->getFileLogger()?->log('webhook', MollieDeliveryRecord::processed(
+            $startedAt,
+            $paymentId,
+            $this->processor->contractIdOfLastDelivery(),
+            $result,
+            $httpCode,
+        )->toContext());
 
-        $this->sendResponse($this->statusCodeFor($result), $result->action);
+        $this->sendResponse($httpCode, $result->action);
 
         // @phpstan-ignore-next-line - unreachable but required for the declared return type
         return '';
+    }
+
+    /**
+     * One line per delivery in the file audit trail (payment-base's {@see MollieDeliveryRecord}): ids and a
+     * machine-readable reason, also for the deliveries that never reach the processor.
+     */
+    private function refuse(int $startedAt, ?string $paymentId, string $action, string $reason, int $httpCode): never
+    {
+        $this->getFileLogger()?->log(
+            'webhook',
+            MollieDeliveryRecord::refused($startedAt, $paymentId, $action, $reason, $httpCode)->toContext(),
+        );
+
+        $this->sendResponse($httpCode, $reason);
     }
 
     /**

@@ -153,6 +153,25 @@ final class MolliePaymentHandlerTest extends TestCase
         self::assertSame('MOLLIE_NO_CHECKOUT_URL', $result->getErrorCode());
     }
 
+    public function testAFailureOutsideTheLadderShowsTheModulesOwnSentenceAndLogsOnlyTheSummary(): void
+    {
+        $logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+        $logger->expects(self::once())->method('error')->with(
+            self::anything(),
+            self::callback(static fn (array $c): bool => $c['exception'] === ['class' => RuntimeException::class, 'code' => 0]
+                && !str_contains(json_encode($c) ?: '', 'tkn_fixture')),
+        );
+
+        $result = (new TestableMolliePaymentHandler(
+            $this->createMock(EventDispatcherInterface::class),
+            $logger,
+            basketFailure: new RuntimeException('Request body: {"cardToken":"tkn_fixture1"} shopper@example.test'),
+        ))->processPayment($this->createMock(PaymentContextInterface::class));
+
+        self::assertSame('MOLLIE_PAYMENT_FAILED', $result->getErrorCode());
+        self::assertSame('Mollie payment processing failed.', $result->getErrorMessage());
+    }
+
     // ── Review 2026-10-14 A-H1: the OPC path climbs the SAME ladder as cl=order ────────────────
 
     /**
