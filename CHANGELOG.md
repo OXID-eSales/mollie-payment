@@ -5,6 +5,10 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed - sprint-25 D6 (Mollie part): comments
+- "Sprint N Story M (F#)" history tags removed from `src/` docblocks and comments (the why stays; ticket ids stay), stale
+  "cycle" / "Mollie must adopt it" / "Sprint 1 creates" claims in services.yaml and CLAUDE.md corrected. Comments only.
+
 ### Changed - sprint-25 D5 (Mollie part): the webhook fulfilment handler split by status
 - `Webhook\Handler\WebhookContractFulfillmentHandler` (413 lines, 12 constructor arguments) keeps the interface, the public
   method names and the shared "contract moved under the webhook" retry; the work moved to `PaidPaymentFulfiller` (`paid`),
