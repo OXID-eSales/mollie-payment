@@ -15,6 +15,7 @@ use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
 use OxidEsales\Payments\Mollie\Service\CheckoutStartRequest;
 use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplayInterface;
 use OxidEsales\Payments\Mollie\Service\NotOrderableCheckoutFailure;
+use Psr\Log\NullLogger;
 
 /**
  * The REAL {@see CheckoutSessionStarter} ladder with its collaborators scripted: the buyability
@@ -37,7 +38,8 @@ final class ScriptedLadderStarter extends CheckoutSessionStarter
             $dispatcher,
             new BasketBuyabilityValidator(),
             new FixedUserDataGate($userDataProblems),
-            $replay,
+            $replay ?? new NoInFlightReplay(),
+            new NullLogger(),
         );
     }
 

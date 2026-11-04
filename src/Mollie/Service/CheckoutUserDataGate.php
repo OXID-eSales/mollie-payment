@@ -15,7 +15,6 @@ use OxidEsales\PaymentBase\Validation\User\OxidUserFieldReader;
 use OxidEsales\PaymentBase\Validation\User\UserDataValidatorInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 use Throwable;
 
 /**
@@ -32,15 +31,12 @@ final class CheckoutUserDataGate implements CheckoutUserDataGateInterface
 {
     private const REVIEW_KEY = 'MOLLIE_VALIDATION_REVIEW_ADDRESS';
 
-    private readonly LoggerInterface $logger;
-
     public function __construct(
         private readonly UserDataValidatorInterface $validator,
         private readonly MessageFormatterInterface $messageFormatter,
         private readonly LanguageTranslatorInterface $translator,
-        ?LoggerInterface $logger = null,
+        private readonly LoggerInterface $logger,
     ) {
-        $this->logger = $logger ?? new NullLogger();
     }
 
     /**

@@ -23,8 +23,13 @@ use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEve
 use OxidEsales\Payments\Mollie\PaymentHandler\MolliePaymentHandler;
 use OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator;
 use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
+use OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages;
+use OxidEsales\Payments\Mollie\Service\OxidLanguageTranslator;
+use OxidEsales\Payments\Mollie\Tests\Unit\Support\FixedIframeSettings;
 use OxidEsales\Payments\Mollie\Tests\Unit\Support\FixedUserDataGate;
+use OxidEsales\Payments\Mollie\Tests\Unit\Support\NoInFlightReplay;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 /**
  * The handler with its two PHP-session seams recorded instead of executed, around the REAL
@@ -37,7 +42,13 @@ final class SessionRecordingMollieHandler extends MolliePaymentHandler
 
     public function __construct(EventDispatcherInterface $dispatcher, BasketBuyabilityValidator $buyability)
     {
-        parent::__construct(new CheckoutSessionStarter($dispatcher, $buyability, new FixedUserDataGate()));
+        $logger = new NullLogger();
+        parent::__construct(
+            new CheckoutSessionStarter($dispatcher, $buyability, new FixedUserDataGate(), new NoInFlightReplay(), $logger),
+            $logger,
+            new FixedIframeSettings(),
+            new NotOrderableItemsMessages(new OxidLanguageTranslator()),
+        );
     }
 
     protected function prepareOxidBasket(PaymentContextInterface $context): void

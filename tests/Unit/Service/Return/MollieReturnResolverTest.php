@@ -15,12 +15,14 @@ use OxidEsales\PaymentBase\Return\ReturnResolution;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
-use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
+use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
+use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use OxidEsales\Payments\Mollie\Service\Return\MollieReturnResolver;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 #[CoversClass(MollieReturnResolver::class)]
 final class MollieReturnResolverTest extends TestCase
@@ -128,7 +130,12 @@ final class MollieReturnResolverTest extends TestCase
     private function resolver(): array
     {
         $adapter = $this->createMock(MolliePaymentsAdapterInterface::class);
-        $resolver = new MollieReturnResolver($adapter, new MollieStatusMapper());
+        $resolver = new MollieReturnResolver(
+            $adapter,
+            new MollieStatusMapper(),
+            $this->createMock(ModuleConfigurationServiceInterface::class),
+            new NullLogger(),
+        );
 
         return [$resolver, $adapter];
     }

@@ -29,8 +29,8 @@ final class MollieReleaseAuthorizationRequestHandler implements HandlerInterface
 
     public function __construct(
         private readonly ReleaseAuthorizationServiceInterface $releaseService,
-        private readonly ?AdminValidationFeedbackInterface $feedback = null,
-        private readonly ?LanguageTranslatorInterface $translator = null,
+        private readonly AdminValidationFeedbackInterface $feedback,
+        private readonly LanguageTranslatorInterface $translator,
     ) {
     }
 
@@ -65,7 +65,7 @@ final class MollieReleaseAuthorizationRequestHandler implements HandlerInterface
     private function tellTheAdmin(PaymentContractInterface $contract): void
     {
         $orderId = $contract->getOrderId();
-        if ($this->feedback === null || $this->translator === null || $orderId === null || $orderId === '') {
+        if ($orderId === null || $orderId === '') {
             return;
         }
 

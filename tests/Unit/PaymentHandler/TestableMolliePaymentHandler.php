@@ -17,8 +17,12 @@ use OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator;
 use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
 use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplayInterface;
 use OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages;
+use OxidEsales\Payments\Mollie\Service\OxidLanguageTranslator;
+use OxidEsales\Payments\Mollie\Tests\Unit\Support\FixedIframeSettings;
 use OxidEsales\Payments\Mollie\Tests\Unit\Support\FixedUserDataGate;
+use OxidEsales\Payments\Mollie\Tests\Unit\Support\NoInFlightReplay;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 /**
  * Overrides the two OXID-Registry-bound seams so the handler's ladder → result logic can be
@@ -45,11 +49,12 @@ final class TestableMolliePaymentHandler extends MolliePaymentHandler
                 $dispatcher,
                 $buyability ?? new BasketBuyabilityValidator(),
                 new FixedUserDataGate($userDataProblems),
-                $replay,
+                $replay ?? new NoInFlightReplay(),
+                $logger ?? new NullLogger(),
             ),
-            $logger,
-            $iframeSettings,
-            $notOrderableMessages,
+            $logger ?? new NullLogger(),
+            $iframeSettings ?? new FixedIframeSettings(),
+            $notOrderableMessages ?? new NotOrderableItemsMessages(new OxidLanguageTranslator()),
         );
     }
 

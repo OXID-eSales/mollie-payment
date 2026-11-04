@@ -33,7 +33,11 @@ final class MollieReleaseAuthorizationRequestHandlerTest extends TestCase
 
     public function testImplementsHandlerInterfaceAndHandlesTheReleaseEvent(): void
     {
-        $handler = new MollieReleaseAuthorizationRequestHandler($this->releaseService);
+        $handler = new MollieReleaseAuthorizationRequestHandler(
+            $this->releaseService,
+            $this->createStub(AdminValidationFeedbackInterface::class),
+            $this->createStub(LanguageTranslatorInterface::class),
+        );
 
         self::assertInstanceOf(HandlerInterface::class, $handler);
         self::assertSame(
@@ -49,7 +53,11 @@ final class MollieReleaseAuthorizationRequestHandlerTest extends TestCase
 
         $this->releaseService->expects(self::once())->method('release')->with($contract, 'merchant release');
 
-        (new MollieReleaseAuthorizationRequestHandler($this->releaseService))->handle($event);
+        (new MollieReleaseAuthorizationRequestHandler(
+            $this->releaseService,
+            $this->createStub(AdminValidationFeedbackInterface::class),
+            $this->createStub(LanguageTranslatorInterface::class),
+        ))->handle($event);
 
         self::assertTrue($event->isSuccess());
     }
@@ -58,7 +66,11 @@ final class MollieReleaseAuthorizationRequestHandlerTest extends TestCase
     {
         $this->releaseService->expects(self::never())->method('release');
 
-        (new MollieReleaseAuthorizationRequestHandler($this->releaseService))->handle(new \stdClass());
+        (new MollieReleaseAuthorizationRequestHandler(
+            $this->releaseService,
+            $this->createStub(AdminValidationFeedbackInterface::class),
+            $this->createStub(LanguageTranslatorInterface::class),
+        ))->handle(new \stdClass());
     }
 
     public function testHandle_OnFailure_TellsTheAdmin(): void

@@ -23,7 +23,6 @@ use OxidEsales\Payments\Mollie\Service\CheckoutStartOutcome;
 use OxidEsales\Payments\Mollie\Service\CheckoutStartRequest;
 use OxidEsales\Payments\Mollie\Service\NotOrderableCheckoutFailure;
 use OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages;
-use OxidEsales\Payments\Mollie\Service\OxidLanguageTranslator;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -66,16 +65,12 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
     /** Error code the footer receives when the shopper's address data must be fixed first (MOL-15). */
     public const ERROR_USER_DATA_INVALID = 'MOLLIE_USER_DATA_INVALID';
 
-    private readonly NotOrderableItemsMessages $notOrderableMessages;
-
     public function __construct(
         private readonly CheckoutSessionStarter $checkoutStarter,
-        private readonly ?LoggerInterface $logger = null,
-        private readonly ?IframeCheckoutSettingsInterface $iframeSettings = null,
-        ?NotOrderableItemsMessages $notOrderableMessages = null,
+        private readonly LoggerInterface $logger,
+        private readonly IframeCheckoutSettingsInterface $iframeSettings,
+        private readonly NotOrderableItemsMessages $notOrderableMessages,
     ) {
-        $this->notOrderableMessages = $notOrderableMessages
-            ?? new NotOrderableItemsMessages(new OxidLanguageTranslator());
     }
 
     public function getId(): string
@@ -124,7 +119,7 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
 
             return $this->resultFromOutcome($outcome);
         } catch (Throwable $e) {
-            $this->logger?->error('[MolliePaymentHandler] processPayment failed', [
+            $this->logger->error('[MolliePaymentHandler] processPayment failed', [
                 'error' => $e->getMessage(),
             ]);
             // MOL-22: core refused inside finalizeOrder() because an item is not orderable; the
@@ -161,7 +156,7 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
         }
 
         if ($outcome->isRedirect() && $outcome->checkoutUrl !== null) {
-            $this->logger?->info('[MolliePaymentHandler] Mollie checkout redirect ready', [
+            $this->logger->info('[MolliePaymentHandler] Mollie checkout redirect ready', [
                 'contractId' => $outcome->contractId,
             ]);
 
@@ -228,7 +223,7 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
         // method selector + Mollie Components card) instead of the generic redirect button. The
         // payment itself still resolves via a redirect (hosted method page / 3-D Secure), so
         // renderMode stays 'redirect' — only the footer UI changes.
-        if ($this->iframeSettings?->isEnabled() ?? false) {
+        if ($this->iframeSettings->isEnabled()) {
             $config['footerWidget'] = 'molliecheckoutfooter';
         }
 
@@ -241,12 +236,12 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
      */
     private function logIframeFallbackIfRequested(): void
     {
-        if ($this->iframeFallbackLogged || !($this->iframeSettings?->isEnabled() ?? false)) {
+        if ($this->iframeFallbackLogged || !$this->iframeSettings->isEnabled()) {
             return;
         }
 
         $this->iframeFallbackLogged = true;
-        $this->logger?->info(
+        $this->logger->info(
             '[MolliePaymentHandler] Iframe checkout requested but Mollie\'s hosted page cannot be '
             . 'framed (X-Frame-Options: DENY / frame-ancestors); falling back to redirect.',
         );

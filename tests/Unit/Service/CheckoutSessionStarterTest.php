@@ -22,8 +22,10 @@ use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
 use OxidEsales\Payments\Mollie\Service\CheckoutStartRequest;
 use OxidEsales\Payments\Mollie\Service\CheckoutUserDataGateInterface;
 use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplayInterface;
+use OxidEsales\Payments\Mollie\Tests\Unit\Support\NoInFlightReplay;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use RuntimeException;
 
 /**
@@ -214,7 +216,8 @@ final class CheckoutSessionStarterTest extends TestCase
             $dispatcher ?? $this->createStub(EventDispatcherInterface::class),
             $buyability ?? $this->buyabilityPassing(),
             $gate ?? $this->gateWithProblems([]),
-            $replay,
+            $replay ?? new NoInFlightReplay(),
+            new NullLogger(),
         );
     }
 

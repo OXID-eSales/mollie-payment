@@ -5,6 +5,15 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed - sprint-25 D3 (Mollie part): required collaborators
+- No constructor parameter defaults a collaborator to `null` / `new X()` any more: `CheckoutSessionStarter` (replay, logger),
+  `CheckoutUserDataGate` (logger), `MollieReturnResolver` (config, logger), `MollieReleaseAuthorizationRequestHandler`
+  (feedback, translator), `MollieCheckoutSessionHandler` (redirect-URL validator, logger) and `MolliePaymentHandler`
+  (logger, iframe settings, not-orderable messages, which fell back to `new NotOrderableItemsMessages(new OxidLanguageTranslator())`).
+  services.yaml already wired all of them; the `?->` branches they selected are gone.
+- `tests/Unit/Smoke/RequiredCollaboratorsTest` (payment-base's scanner, with an allow-list: request/outcome value objects and
+  graphql-base's optional `Authentication`) fails on a new defaulted collaborator, a `?? new X()` fallback or a new `@?` reference.
+
 ### Changed - D1 adoption (VR-25 D1 / sprint-25 D2): payment-base's shared pieces
 - Deleted the provider copies of `UserDataValidator(+Interface)`, `UserFieldReaderInterface`, `OxidUserFieldReader`,
   `FieldValidationFailure`, `ContractLinkedOrderUpdater(+Interface)`, `OxpaidReconciliationService(+Interface)`,

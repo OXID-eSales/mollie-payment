@@ -10,10 +10,10 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\EventSystem\Handler;
 
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
+use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
-use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\CreatePaymentRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
@@ -26,6 +26,7 @@ use OxidEsales\Payments\Mollie\Service\CheckoutPaymentServiceInterface;
 use OxidEsales\Payments\Mollie\Service\MollieRedirectUrlValidator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 #[CoversClass(MollieCheckoutSessionHandler::class)]
 final class MollieCheckoutSessionHandlerTest extends TestCase
@@ -396,6 +397,7 @@ final class MollieCheckoutSessionHandlerTest extends TestCase
             $tokenService,
             $shopAdapter,
             new MollieRedirectUrlValidator(),
+            new NullLogger(),
         );
 
         return [

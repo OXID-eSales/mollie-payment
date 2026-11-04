@@ -49,8 +49,8 @@ class CheckoutSessionStarter
         private readonly EventDispatcherInterface $dispatcher,
         private readonly BasketBuyabilityValidator $buyability,
         private readonly CheckoutUserDataGateInterface $userDataGate,
-        private readonly ?InFlightCheckoutReplayInterface $replay = null,
-        private readonly ?LoggerInterface $logger = null,
+        private readonly InFlightCheckoutReplayInterface $replay,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -67,7 +67,7 @@ class CheckoutSessionStarter
                 return CheckoutStartOutcome::userDataProblems($problems);
             }
 
-            $replayUrl = $this->replay?->checkoutUrl();
+            $replayUrl = $this->replay->checkoutUrl();
             if ($replayUrl !== null) {
                 return CheckoutStartOutcome::replay($replayUrl);
             }
@@ -99,7 +99,7 @@ class CheckoutSessionStarter
         try {
             $this->dispatcher->dispatch(new MollieCheckoutSessionRequestEvent($context));
         } catch (Throwable $e) {
-            $this->logger?->error('[CheckoutSessionStarter] checkout session event failed', [
+            $this->logger->error('[CheckoutSessionStarter] checkout session event failed', [
                 'error' => $e->getMessage(),
             ]);
             // MOL-22 race window: core refused inside finalizeOrder() because an item is not

@@ -10,20 +10,22 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\EventSystem\Handler;
 
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
+use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
-use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
+use OxidEsales\Payments\Mollie\Adapter\Dto\CreatePaymentRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEvent;
 use OxidEsales\Payments\Mollie\EventSystem\Handler\MollieCheckoutSessionHandler;
 use OxidEsales\Payments\Mollie\Service\CheckoutPaymentServiceInterface;
-use OxidEsales\Payments\Mollie\Adapter\Dto\CreatePaymentRequest;
+use OxidEsales\Payments\Mollie\Service\MollieRedirectUrlValidator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 /**
  * Sprint 11 Story 10 (F18) — the return URL carries a live `contract_token`, so it must not be
@@ -134,6 +136,8 @@ final class ContractTokenNotPersistedTest extends TestCase
             $this->createMock(ContractRepositoryInterface::class),
             $tokenService,
             $shopAdapter,
+            new MollieRedirectUrlValidator(),
+            new NullLogger(),
         );
 
         $context = new EventContext(['cardToken' => $cardToken]);

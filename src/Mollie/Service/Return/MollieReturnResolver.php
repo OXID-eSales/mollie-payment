@@ -40,10 +40,9 @@ final class MollieReturnResolver implements ReturnResolverInterface
     public function __construct(
         private readonly MolliePaymentsAdapterInterface $paymentsAdapter,
         private readonly MollieStatusMapper $statusMapper,
-        // Optional so an unwired consumer keeps working; both only feed the
-        // manual-capture diagnostic below.
-        private readonly ?ModuleConfigurationServiceInterface $config = null,
-        private readonly ?LoggerInterface $logger = null,
+        // Both feed the manual-capture diagnostic below.
+        private readonly ModuleConfigurationServiceInterface $config,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -64,7 +63,7 @@ final class MollieReturnResolver implements ReturnResolverInterface
      */
     private function warnIfManualCaptureWasIgnored(MolliePaymentDto $payment): void
     {
-        if ($this->config === null || $this->logger === null || !$this->config->isManualCapture()) {
+        if (!$this->config->isManualCapture()) {
             return;
         }
 

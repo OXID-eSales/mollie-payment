@@ -11,12 +11,13 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 
 use OxidEsales\Eshop\Application\Model\User;
 use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
-use OxidEsales\Payments\Mollie\Service\CheckoutUserDataGate;
 use OxidEsales\PaymentBase\Validation\User\FieldValidationFailure;
-use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use OxidEsales\PaymentBase\Validation\User\UserDataValidatorInterface;
+use OxidEsales\Payments\Mollie\Service\CheckoutUserDataGate;
+use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use RuntimeException;
 
 #[CoversClass(CheckoutUserDataGate::class)]
@@ -70,7 +71,7 @@ final class CheckoutUserDataGateTest extends TestCase
             static fn (string $key) => $key === 'MOLLIE_VALIDATION_REVIEW_ADDRESS' ? 'Please review your address details.' : $key
         );
 
-        return new CheckoutUserDataGate($validator, $formatter, $translator);
+        return new CheckoutUserDataGate($validator, $formatter, $translator, new NullLogger());
     }
 
     private function user(): User

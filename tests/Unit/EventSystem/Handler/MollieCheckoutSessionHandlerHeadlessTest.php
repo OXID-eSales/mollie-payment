@@ -11,10 +11,10 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\EventSystem\Handler;
 
 use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
+use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
-use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\CreatePaymentRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
@@ -26,6 +26,7 @@ use OxidEsales\Payments\Mollie\Service\CheckoutPaymentServiceInterface;
 use OxidEsales\Payments\Mollie\Service\MollieRedirectUrlValidator;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 /**
  * GRAPH-QL / MS1, 138c — a headless contract returns to the client's URL unchanged (no contract id
@@ -60,6 +61,7 @@ final class MollieCheckoutSessionHandlerHeadlessTest extends TestCase
             $this->tokenService,
             $shopAdapter,
             new MollieRedirectUrlValidator(),
+            new NullLogger(),
         );
     }
 

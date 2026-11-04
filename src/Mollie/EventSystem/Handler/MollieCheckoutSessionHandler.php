@@ -45,8 +45,8 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
         // VR-20 R3: payment-base's one return token (expiring, bound to the contract's shopper).
         private readonly ContractReturnTokenServiceInterface $returnTokens,
         private readonly ShopAdapterInterface $shopAdapter,
-        private readonly MollieRedirectUrlValidator $redirectUrlValidator = new MollieRedirectUrlValidator(),
-        private readonly ?LoggerInterface $logger = null,
+        private readonly MollieRedirectUrlValidator $redirectUrlValidator,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -208,7 +208,7 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
     {
         $contract->fail('mollie_create_payment_failed: ' . $e->getMessage());
         $this->contractRepository->save($contract);
-        $this->logger?->error('MollieCheckoutSessionHandler: create payment failed', [
+        $this->logger->error('MollieCheckoutSessionHandler: create payment failed', [
             'error' => $e->getMessage(),
         ]);
     }
@@ -217,7 +217,7 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
     {
         $contract->fail('untrusted_redirect_host: ' . $paymentId);
         $this->contractRepository->save($contract);
-        $this->logger?->error('MollieCheckoutSessionHandler: checkoutUrl host not allowed', [
+        $this->logger->error('MollieCheckoutSessionHandler: checkoutUrl host not allowed', [
             'paymentId' => $paymentId,
         ]);
     }
