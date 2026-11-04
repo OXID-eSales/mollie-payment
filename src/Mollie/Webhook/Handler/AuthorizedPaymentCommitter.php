@@ -59,7 +59,8 @@ final class AuthorizedPaymentCommitter
      * `authorized`, not `paid`; a headless shopper who never returns would leave the money reserved on an unfinished
      * order, so the authorization commits the open contract through payment-base's ContractCommitService with
      * `requiresCapture`: the order is committed, not marked paid; the admin capture (committed is capturable) and the
-     * following `paid` webhook fulfil it. Same semantics as Stripe's `payment_intent.amount_capturable_updated` handler.
+     * following `paid` webhook fulfil it. Same semantics as Stripe's `payment_intent.amount_capturable_updated`
+     * handler.
      *
      * The commit service saves its own copy of the contract, so the one loaded here is NOT saved afterwards (it would
      * overwrite the committed state with PENDING). The confirmed amount is the contract's: this handler only knows the

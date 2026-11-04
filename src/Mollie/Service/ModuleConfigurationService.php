@@ -34,7 +34,8 @@ use OxidEsales\Payments\Mollie\Module;
  * {@see ModuleConfigurationUnreadableException} rather than guess. Everything else still degrades to a
  * default, but no longer in silence.
  */
-class ModuleConfigurationService extends AbstractModuleConfigurationService implements ModuleConfigurationServiceInterface
+class ModuleConfigurationService extends AbstractModuleConfigurationService implements
+    ModuleConfigurationServiceInterface
 {
     protected function moduleId(): string
     {
