@@ -11,6 +11,7 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Command;
 
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractStateQueryInterface;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieConfirmedFigures;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
@@ -51,7 +52,7 @@ final class ReconcilePaidContractsCommandTest extends TestCase
         $this->contracts->method('findByStateAndProvider')->with('committed', 'mollie', null)
             ->willReturn([$this->contract('c-1', 'tr_1')]);
         $this->payments->method('getPayment')->with('tr_1')->willReturn($this->payment('paid'));
-        $this->fulfillment->expects(self::once())->method('handlePaymentPaid')->with('tr_1')
+        $this->fulfillment->expects(self::once())->method('handlePaymentPaid')->with('tr_1', new MollieConfirmedFigures(10.0, 'EUR'))
             ->willReturn(FulfillmentResult::acted('contract-1'));
 
         self::assertSame(Command::SUCCESS, $this->tester->execute([]));
@@ -92,6 +93,17 @@ final class ReconcilePaidContractsCommandTest extends TestCase
         self::assertSame(Command::SUCCESS, $this->tester->execute([]));
         self::assertStringContainsString('Mollie unreachable', $this->tester->getDisplay());
         self::assertStringContainsString('no Mollie payment linked', $this->tester->getDisplay());
+    }
+
+    public function testSkipsAPaidPaymentThatCarriesNoAmount(): void
+    {
+        $this->contracts->method('findByStateAndProvider')->willReturn([$this->contract('c-6', 'tr_6')]);
+        $this->payments->method('getPayment')->willReturn(MolliePaymentDto::fromArray(['id' => 'tr_6', 'status' => 'paid']));
+        $this->fulfillment->expects(self::never())->method('handlePaymentPaid');
+
+        $this->tester->execute([]);
+
+        self::assertStringContainsString('provider_amount_missing', $this->tester->getDisplay());
     }
 
     private function contract(string $id, ?string $providerOrderId): PaymentContractInterface

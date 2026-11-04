@@ -14,6 +14,7 @@ use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Service\Commit\CommitOutcome;
 use OxidEsales\PaymentBase\Service\Commit\ContractCommitServiceInterface;
 use OxidEsales\PaymentBase\Service\Commit\PaymentConfirmation;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieConfirmedFigures;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use Psr\Log\LoggerInterface;
@@ -37,7 +38,7 @@ final class AuthorizedPaymentCommitter
     ) {
     }
 
-    public function commit(string $providerOrderId): FulfillmentResult
+    public function commit(string $providerOrderId, MollieConfirmedFigures $figures): FulfillmentResult
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
@@ -51,7 +52,7 @@ final class AuthorizedPaymentCommitter
             return FulfillmentResult::noOp((string) $contract->getId());
         }
 
-        return $this->commitAuthorization($contract, $providerOrderId);
+        return $this->commitAuthorization($contract, $providerOrderId, $figures);
     }
 
     /**
@@ -63,20 +64,21 @@ final class AuthorizedPaymentCommitter
      * handler.
      *
      * The commit service saves its own copy of the contract, so the one loaded here is NOT saved afterwards (it would
-     * overwrite the committed state with PENDING). The confirmed amount is the contract's: this handler only knows the
-     * Mollie payment id, and Mollie's amount was checked when the payment was created from the contract.
+     * overwrite the committed state with PENDING). The confirmed figures are Mollie's own (VR-26 M1), so payment-base's
+     * amount check compares the contract with what Mollie actually holds.
      */
     private function commitAuthorization(
         PaymentContractInterface $contract,
         string $providerOrderId,
+        MollieConfirmedFigures $figures,
     ): FulfillmentResult {
         $outcome = $this->contractCommit->commit(new PaymentConfirmation(
             contractId: (string) $contract->getId(),
             providerName: MollieDefinitions::PROVIDER_NAME,
             authorizationId: $providerOrderId,
             providerOrderId: $providerOrderId,
-            amount: $contract->getAmount(),
-            currency: $contract->getCurrency(),
+            amount: $figures->amount,
+            currency: $figures->currency,
             requiresCapture: true,
             source: 'webhook',
             extraContext: ['molliePaymentId' => $providerOrderId],

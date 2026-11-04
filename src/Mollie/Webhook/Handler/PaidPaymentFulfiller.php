@@ -15,6 +15,7 @@ use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Service\Commit\ContractCommitServiceInterface;
 use OxidEsales\PaymentBase\Service\Commit\PaymentConfirmation;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieConfirmedFigures;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use Psr\Log\LoggerInterface;
 
@@ -39,7 +40,7 @@ final class PaidPaymentFulfiller
     ) {
     }
 
-    public function fulfil(string $providerOrderId): FulfillmentResult
+    public function fulfil(string $providerOrderId, MollieConfirmedFigures $figures): FulfillmentResult
     {
         $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
         if ($contract === null) {
@@ -54,7 +55,7 @@ final class PaidPaymentFulfiller
         }
 
         if (!$contract->getState()->isCommitted()) {
-            $refusal = $this->commitPaid($contract, $providerOrderId);
+            $refusal = $this->commitPaid($contract, $providerOrderId, $figures);
             if ($refusal !== null) {
                 return $refusal;
             }
@@ -90,15 +91,18 @@ final class PaidPaymentFulfiller
      * automatic-capture case) commits through the shared commit service. A refusal (amount mismatch, closed
      * contract) or an open second condition answers Failed: Mollie retries and the merchant sees it in the webhook log.
      */
-    private function commitPaid(PaymentContractInterface $contract, string $providerOrderId): ?FulfillmentResult
-    {
+    private function commitPaid(
+        PaymentContractInterface $contract,
+        string $providerOrderId,
+        MollieConfirmedFigures $figures,
+    ): ?FulfillmentResult {
         $outcome = $this->contractCommit->commit(new PaymentConfirmation(
             contractId: (string) $contract->getId(),
             providerName: MollieDefinitions::PROVIDER_NAME,
             authorizationId: $providerOrderId,
             providerOrderId: $providerOrderId,
-            amount: $contract->getAmount(),
-            currency: $contract->getCurrency(),
+            amount: $figures->amount,
+            currency: $figures->currency,
             requiresCapture: false,
             source: 'webhook',
             extraContext: ['molliePaymentId' => $providerOrderId],

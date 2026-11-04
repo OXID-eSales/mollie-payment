@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Webhook\Handler;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Webhook\WebhookEvent;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieConfirmedFigures;
 use OxidEsales\Payments\Mollie\Webhook\Handler\PaymentPaidHandler;
 use OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandlerInterface;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
@@ -44,12 +45,12 @@ final class PaymentPaidHandlerTest extends TestCase
     {
         $this->fulfillmentHandler->expects(self::once())
             ->method('handlePaymentPaid')
-            ->with('tr_paid')
+            ->with('tr_paid', new MollieConfirmedFigures(25.0, 'EUR'))
             ->willReturn(FulfillmentResult::acted('contract-1'));
 
         $contract = $this->createMock(PaymentContractInterface::class);
         $contract->method('getId')->willReturn('contract-1');
-        $this->contractRepository->method('findByProviderOrderId')->with('tr_paid')->willReturn($contract);
+        $this->contractRepository->method('findByProviderOrderId')->with('tr_paid', new MollieConfirmedFigures(25.0, 'EUR'))->willReturn($contract);
 
         $outcome = $this->handler->handle($this->event('tr_paid'));
 
@@ -60,7 +61,7 @@ final class PaymentPaidHandlerTest extends TestCase
 
     public function testPaid_WhenAlreadyFulfilled_IsNoOp(): void
     {
-        $this->fulfillmentHandler->method('handlePaymentPaid')->with('tr_paid')->willReturn(FulfillmentResult::noOp('contract-1'));
+        $this->fulfillmentHandler->method('handlePaymentPaid')->with('tr_paid', new MollieConfirmedFigures(25.0, 'EUR'))->willReturn(FulfillmentResult::noOp('contract-1'));
         $this->contractRepository->method('findByProviderOrderId')->willReturn(null);
 
         $outcome = $this->handler->handle($this->event('tr_paid'));
@@ -89,12 +90,27 @@ final class PaymentPaidHandlerTest extends TestCase
         self::assertTrue($outcome->result->isFailure());
     }
 
+    public function testAPaymentWithoutAmountOrCurrencyIsRefusedNotCommittedOnTheContractsFigures(): void
+    {
+        $this->fulfillmentHandler->expects(self::never())->method('handlePaymentPaid');
+
+        $outcome = $this->handler->handle(new WebhookEvent(
+            id: 'tr_x:paid',
+            type: 'paid',
+            data: ['object' => ['id' => 'tr_x', 'amount' => 0.0, 'currency' => '']],
+            created: time(),
+        ));
+
+        self::assertTrue($outcome->result->isFailure());
+        self::assertSame('provider_amount_missing', $outcome->result->action);
+    }
+
     private function event(string $paymentId): WebhookEvent
     {
         return new WebhookEvent(
             id: $paymentId,
             type: 'paid',
-            data: ['object' => ['id' => $paymentId]],
+            data: ['object' => ['id' => $paymentId, 'amount' => 25.0, 'currency' => 'EUR']],
             created: time(),
         );
     }

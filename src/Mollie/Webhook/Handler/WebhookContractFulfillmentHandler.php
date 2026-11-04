@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Webhook\Handler;
 
 use OxidEsales\PaymentBase\Repository\StaleContractException;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieConfirmedFigures;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -31,14 +32,14 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
     ) {
     }
 
-    public function handlePaymentAuthorized(string $providerOrderId): FulfillmentResult
+    public function handlePaymentAuthorized(string $providerOrderId, MollieConfirmedFigures $figures): FulfillmentResult
     {
-        return $this->attemptTwice(fn () => $this->authorized->commit($providerOrderId));
+        return $this->attemptTwice(fn () => $this->authorized->commit($providerOrderId, $figures));
     }
 
-    public function handlePaymentPaid(string $providerOrderId): FulfillmentResult
+    public function handlePaymentPaid(string $providerOrderId, MollieConfirmedFigures $figures): FulfillmentResult
     {
-        return $this->attemptTwice(fn () => $this->paid->fulfil($providerOrderId));
+        return $this->attemptTwice(fn () => $this->paid->fulfil($providerOrderId, $figures));
     }
 
     public function handlePaymentFailed(string $providerOrderId, string $reason): FulfillmentResult

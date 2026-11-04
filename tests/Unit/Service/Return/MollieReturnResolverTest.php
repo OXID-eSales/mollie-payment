@@ -12,6 +12,7 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Service\Return;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\Return\ReturnResolution;
+use OxidEsales\PaymentBase\Service\Commit\ConfirmedAmount;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieAmountDto;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
@@ -124,6 +125,57 @@ final class MollieReturnResolverTest extends TestCase
         self::assertEquals($first, $second);
     }
 
+    public function testReportsMolliesAmountNotTheContracts(): void
+    {
+        $contract = $this->contractStub();
+        [$resolver, $adapter] = $this->resolver();
+        $adapter->method('getPayment')->willReturn($this->paymentDto('paid', 10.0));
+
+        $resolution = $resolver->resolve($contract, new EventContext());
+
+        self::assertSame(10.0, $resolution->amount, 'the figure is what Mollie holds, not the contract total');
+        self::assertSame('EUR', $resolution->currency);
+        self::assertFalse(ConfirmedAmount::matches($contract, $resolution->amount, $resolution->currency));
+    }
+
+    public function testAnAuthorizedPaymentReportsMolliesAmountToo(): void
+    {
+        [$resolver, $adapter] = $this->resolver();
+        $adapter->method('getPayment')->willReturn($this->paymentDto('authorized', 10.0));
+
+        $resolution = $resolver->resolve($this->contractStub(), new EventContext());
+
+        self::assertSame(10.0, $resolution->amount);
+    }
+
+    public function testCurrencyMismatchIsRefused(): void
+    {
+        $contract = $this->contractStub();
+        [$resolver, $adapter] = $this->resolver();
+        $adapter->method('getPayment')->willReturn($this->paymentDto('paid', 25.0, 'USD'));
+
+        $resolution = $resolver->resolve($contract, new EventContext());
+
+        self::assertSame('USD', $resolution->currency);
+        self::assertFalse(ConfirmedAmount::matches($contract, $resolution->amount, $resolution->currency));
+    }
+
+    public function testAPaymentWithoutAmountOrCurrencyIsRefusedWithoutFallingBackToTheContract(): void
+    {
+        [$resolver, $adapter] = $this->resolver();
+        $adapter->method('getPayment')->willReturn(new MolliePaymentDto(
+            id: 'tr_1',
+            status: 'paid',
+            amount: MollieAmountDto::fromArray([]),
+        ));
+
+        $resolution = $resolver->resolve($this->contractStub(), new EventContext());
+
+        self::assertFalse($resolution->isSuccessful());
+        self::assertSame('provider_amount_missing', $resolution->errorCode);
+        self::assertSame('tr_1', $resolution->providerOrderId);
+    }
+
     /**
      * @return array{0: MollieReturnResolver, 1: MolliePaymentsAdapterInterface&MockObject}
      */
@@ -150,12 +202,12 @@ final class MollieReturnResolverTest extends TestCase
         return $contract;
     }
 
-    private function paymentDto(string $status): MolliePaymentDto
+    private function paymentDto(string $status, float $amount = 25.0, string $currency = 'EUR'): MolliePaymentDto
     {
         return new MolliePaymentDto(
             id: 'tr_1',
             status: $status,
-            amount: MollieAmountDto::fromComponents('EUR', 25.0),
+            amount: MollieAmountDto::fromComponents($currency, $amount),
         );
     }
 }

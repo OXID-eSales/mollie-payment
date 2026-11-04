@@ -5,6 +5,15 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed - VR-26 M1: Mollie commits on Mollie's own figures
+- The browser return (`MollieReturnResolver`) and the `paid` / `authorized` webhooks (`PaidPaymentFulfiller`,
+  `AuthorizedPaymentCommitter`) reported the CONTRACT's amount and currency to payment-base, so its `ConfirmedAmount` check
+  compared the contract with itself and a payment of the wrong amount or currency at Mollie committed the order. They now
+  report the Mollie payment's `amount` and `currency` (new `MollieConfirmedFigures`). A payment without a usable amount or
+  currency is refused (`provider_amount_missing`: the return fails, the webhook answers a failure so Mollie retries, the
+  reconcile command skips it) - no fallback to the contract. `WebhookContractFulfillmentHandlerInterface::handlePaymentPaid()` /
+  `handlePaymentAuthorized()` take the figures as a second argument.
+
 ### Added - DC-5 dead-code gate (VR-17 DC-5, Mollie part)
 - `composer dead-code` (`shipmonk/dead-code-detector` through `phpstan-dead-code.neon`; only `src/` and `metadata.php` are
   usage sources, tests are not) and `composer dead-assets` (`bin/dead-assets`: language keys of `views/` and `translations/`,

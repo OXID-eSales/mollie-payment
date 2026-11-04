@@ -11,6 +11,7 @@ namespace OxidEsales\Payments\Mollie\Command;
 
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractStateQueryInterface;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieConfirmedFigures;
 use OxidEsales\Payments\Mollie\Adapter\MollieOutcome;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
@@ -88,7 +89,8 @@ final class ReconcilePaidContractsCommand extends Command
         }
 
         try {
-            $outcome = $this->statusMapper->map($this->payments->getPayment($paymentId)->status);
+            $payment = $this->payments->getPayment($paymentId);
+            $outcome = $this->statusMapper->map($payment->status);
         } catch (Throwable $e) {
             $io->writeln("  skip  $label: Mollie unreachable (" . $e->getMessage() . ')');
 
@@ -101,13 +103,20 @@ final class ReconcilePaidContractsCommand extends Command
             return false;
         }
 
+        $figures = MollieConfirmedFigures::fromAmount($payment->amount);
+        if ($figures === null) {
+            $io->writeln("  skip  $label: provider_amount_missing (Mollie reports no amount or currency)");
+
+            return false;
+        }
+
         if ($dryRun) {
             $io->writeln("  would fulfil  $label");
 
             return true;
         }
 
-        $result = $this->fulfillment->handlePaymentPaid($paymentId);
+        $result = $this->fulfillment->handlePaymentPaid($paymentId, $figures);
         $io->writeln(sprintf('  %s  %s', str_pad($result->outcome->name, 8), $label));
 
         return $result->outcome->name === 'Acted';

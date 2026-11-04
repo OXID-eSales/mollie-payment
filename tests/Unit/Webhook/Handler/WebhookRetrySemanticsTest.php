@@ -126,7 +126,7 @@ final class WebhookRetrySemanticsTest extends TestCase
 
     private function event(?string $createdAt): WebhookEvent
     {
-        $object = ['id' => self::PAYMENT_ID, 'status' => 'paid'];
+        $object = ['id' => self::PAYMENT_ID, 'status' => 'paid', 'amount' => 25.0, 'currency' => 'EUR'];
         if ($createdAt !== null) {
             $object['createdAt'] = $createdAt === 'not-a-date'
                 ? 'not-a-date'

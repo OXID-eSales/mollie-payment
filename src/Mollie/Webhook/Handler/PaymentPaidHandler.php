@@ -11,6 +11,7 @@ namespace OxidEsales\Payments\Mollie\Webhook\Handler;
 
 use OxidEsales\PaymentBase\Webhook\WebhookEvent;
 use OxidEsales\PaymentBase\Webhook\WebhookResult;
+use OxidEsales\Payments\Mollie\Adapter\Dto\MollieConfirmedFigures;
 use OxidEsales\Payments\Mollie\Webhook\MollieWebhookOutcome;
 
 /**
@@ -32,7 +33,15 @@ final class PaymentPaidHandler extends AbstractMollieWebhookHandler
             return MollieWebhookOutcome::of(WebhookResult::failure('invalid_event', 'Missing Mollie payment id'));
         }
 
-        $result = $this->fulfillmentHandler->handlePaymentPaid($providerOrderId);
+        $figures = MollieConfirmedFigures::fromEventObject($event->getObject());
+        if ($figures === null) {
+            return MollieWebhookOutcome::of(WebhookResult::failure(
+                'provider_amount_missing',
+                sprintf('Mollie payment %s carries no amount or currency; nothing is committed', $providerOrderId),
+            ));
+        }
+
+        $result = $this->fulfillmentHandler->handlePaymentPaid($providerOrderId, $figures);
 
         return $this->mapHandlerResult(
             $result,
