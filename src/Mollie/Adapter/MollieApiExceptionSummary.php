@@ -15,8 +15,8 @@ use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
 use Throwable;
 
 /**
- * What a log line may say about a Mollie API failure: the HTTP status, the NAME of the offending field and the
- * request id. Never `getMessage()`: the SDK's text embeds the request body (card token `tkn_...`, addresses, e-mail).
+ * What a log line may say about a Mollie API failure: the HTTP status and the NAME of the offending field. Never
+ * `getMessage()`: the SDK's text embeds the request body (card token `tkn_...`, addresses, e-mail).
  *
  * Handles the SDK exception itself and the module's {@see MollieAdapterException}, which carries the same facts.
  * Tagged `payment_base.throwable_summary`, so every {@see \OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface}
@@ -35,7 +35,6 @@ final class MollieApiExceptionSummary implements ThrowableSummaryExtractorInterf
             return [
                 'httpStatus' => $throwable->getCode(),
                 'field' => $throwable->field,
-                'requestId' => $throwable->requestId,
             ];
         }
 
@@ -43,12 +42,9 @@ final class MollieApiExceptionSummary implements ThrowableSummaryExtractorInterf
             return [];
         }
 
-        $requestId = $throwable->getResponse()?->getHeaderLine(MollieExceptionConverter::REQUEST_ID_HEADER);
-
         return [
             'httpStatus' => $throwable->getCode(),
             'field' => $throwable->getField(),
-            'requestId' => $requestId === '' ? null : $requestId,
         ];
     }
 }

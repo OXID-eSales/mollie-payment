@@ -21,8 +21,8 @@ All notable changes to this module are documented here. Format follows
 - Mollie's `ApiException` message embeds the request body (card token `tkn_...`, addresses, e-mail). It reached
   `oxideshop.log` and the contract row. Now: `MollieExceptionConverter` builds `MollieAdapterException` with a fixed message
   (`Mollie API call failed (HTTP 422, field billingAddress.email)`) and no chained SDK exception; the exception carries
-  `field` and `requestId`. New `MollieApiExceptionSummary` (tag `payment_base.throwable_summary`) tells payment-base's
-  `ThrowableSummaryInterface` the HTTP status, field name and request id of such a failure - never `getMessage()`.
+  `field`. New `MollieApiExceptionSummary` (tag `payment_base.throwable_summary`) tells payment-base's
+  `ThrowableSummaryInterface` the HTTP status and field name of such a failure - never `getMessage()`.
 - Every log context and stored failure text goes through `ThrowableSummaryInterface` (`CheckoutUserDataGate`,
   `CheckoutSessionStarter`, `MollieCheckoutSessionHandler` incl. `contract->fail()`, `MolliePaymentHandler`,
   `MollieReturnResolver`, `TransactionHistoryService`, `MolliePaymentSnapshotProvider`, `MollieReleaseAuthorizationRequestHandler`,

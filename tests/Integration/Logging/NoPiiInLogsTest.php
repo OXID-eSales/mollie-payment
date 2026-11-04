@@ -9,8 +9,6 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Integration\Logging;
 
-use GuzzleHttp\Psr7\Request;
-use GuzzleHttp\Psr7\Response;
 use Mollie\Api\Exceptions\ApiException;
 use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
 use OxidEsales\PaymentBase\Checkout\Return\ContractReturnTokenServiceInterface;
@@ -170,16 +168,11 @@ final class NoPiiInLogsTest extends TestCase
 
     private function fixtureApiException(): ApiException
     {
-        $body = json_encode(['cardToken' => self::CARD_TOKEN, 'billingAddress' => ['email' => self::E_MAIL]]);
-        $request = new Request('POST', 'https://api.mollie.com/v2/payments', [], (string) $body);
-        $response = new Response(422, ['X-Request-Id' => 'req_fixture_1'], (string) json_encode([
-            'status' => 422,
-            'title' => 'Unprocessable Entity',
-            'detail' => 'The email address ' . self::E_MAIL . ' is not valid',
-            'field' => 'billingAddress.email',
-        ]));
-
-        return ApiException::createFromResponse($response, $request);
+        return new ApiException(
+            'The email address ' . self::E_MAIL . ' is not valid. Request body: {"cardToken":"' . self::CARD_TOKEN . '"}',
+            422,
+            'billingAddress.email',
+        );
     }
 
     private function assertNoPii(string $text): void

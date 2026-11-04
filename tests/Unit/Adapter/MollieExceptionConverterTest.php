@@ -9,8 +9,6 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Adapter;
 
-use GuzzleHttp\Psr7\Request;
-use GuzzleHttp\Psr7\Response;
 use Mollie\Api\Exceptions\ApiException;
 use OxidEsales\Payments\Mollie\Adapter\MollieExceptionConverter;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -21,9 +19,10 @@ final class MollieExceptionConverterTest extends TestCase
 {
     public function testTheConvertedMessageCarriesNoSdkText(): void
     {
-        $sdk = ApiException::createFromResponse(
-            new Response(422, [], '{"status":422,"title":"Unprocessable","detail":"bad email shopper@example.test","field":"billingAddress.email"}'),
-            new Request('POST', 'https://api.mollie.com/v2/payments', [], '{"cardToken":"tkn_fixture1234"}'),
+        $sdk = new ApiException(
+            'bad email shopper@example.test. Request body: {"cardToken":"tkn_fixture1234"}',
+            422,
+            'billingAddress.email',
         );
 
         $converted = MollieExceptionConverter::convert($sdk);
@@ -40,6 +39,5 @@ final class MollieExceptionConverterTest extends TestCase
 
         self::assertSame('Mollie API call failed (HTTP 503)', $converted->getMessage());
         self::assertNull($converted->field);
-        self::assertNull($converted->requestId);
     }
 }

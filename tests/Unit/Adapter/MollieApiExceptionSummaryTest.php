@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Adapter;
 
-use GuzzleHttp\Psr7\Response;
 use Mollie\Api\Exceptions\ApiException;
 use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
@@ -27,7 +26,7 @@ final class MollieApiExceptionSummaryTest extends TestCase
         $summary = (new MollieApiExceptionSummary())->summarize($this->sdkException());
 
         self::assertSame(
-            ['httpStatus' => 422, 'field' => 'billingAddress.email', 'requestId' => 'req_fixture_1'],
+            ['httpStatus' => 422, 'field' => 'billingAddress.email'],
             $summary,
         );
     }
@@ -38,7 +37,7 @@ final class MollieApiExceptionSummaryTest extends TestCase
 
         $summary = (new MollieApiExceptionSummary())->summarize($adapterException);
 
-        self::assertSame(['httpStatus' => 422, 'field' => 'billingAddress.email', 'requestId' => 'req_fixture_1'], $summary);
+        self::assertSame(['httpStatus' => 422, 'field' => 'billingAddress.email'], $summary);
     }
 
     public function testSupportsTheSdkAndTheAdapterExceptionOnly(): void
@@ -58,20 +57,16 @@ final class MollieApiExceptionSummaryTest extends TestCase
 
         self::assertStringNotContainsString('tkn_fixture', $context);
         self::assertStringNotContainsString('shopper@example.test', $context);
-        self::assertStringContainsString('req_fixture_1', $context);
+        self::assertStringContainsString('billingAddress.email', $context);
     }
 
     private function sdkException(): ApiException
     {
-        $body = '{"cardToken":"tkn_fixture1234","billingAddress":{"email":"shopper@example.test"}}';
-        $request = new \GuzzleHttp\Psr7\Request('POST', 'https://api.mollie.com/v2/payments', [], $body);
-        $response = new Response(422, ['X-Request-Id' => 'req_fixture_1'], json_encode([
-            'status' => 422,
-            'title' => 'Unprocessable Entity',
-            'detail' => 'The email is invalid',
-            'field' => 'billingAddress.email',
-        ]));
-
-        return ApiException::createFromResponse($response, $request);
+        return new ApiException(
+            'Error executing API call (422: Unprocessable): The email shopper@example.test is invalid. '
+            . 'Field: billingAddress.email. Request body: {"cardToken":"tkn_fixture1234"}',
+            422,
+            'billingAddress.email',
+        );
     }
 }
