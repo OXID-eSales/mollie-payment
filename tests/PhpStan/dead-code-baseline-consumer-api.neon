@@ -1,0 +1,39 @@
+# Called by a framework or by payment-base through a contract this repository's PHPStan run cannot see:
+#  - `getPriority()` of the event handlers: read by payment-base's EventListenerProvider when it orders the handlers;
+#  - `NamespaceMapper::get*NamespaceMapping()`: graphql-base calls them through its NamespaceMapperInterface (the class
+#    implements nothing of graphql-base on purpose, so the module activates without it);
+#  - `MollieCheckoutError::getCategory()`: webonyx/graphql-php's ClientAware contract.
+# Remove an entry only together with the code. Ticket: VR-17 DC-5.
+
+parameters:
+    ignoreErrors:
+        -
+            message: '#^Unused OxidEsales\\Payments\\Mollie\\EventSystem\\Handler\\MollieCheckoutSessionHandler\:\:getPriority$#'
+            identifier: shipmonk.deadMethod
+            count: 1
+            path: ../../src/Mollie/EventSystem/Handler/MollieCheckoutSessionHandler.php
+        -
+            message: '#^Unused OxidEsales\\Payments\\Mollie\\EventSystem\\Handler\\MollieContractCreationHandler\:\:getPriority$#'
+            identifier: shipmonk.deadMethod
+            count: 1
+            path: ../../src/Mollie/EventSystem/Handler/MollieContractCreationHandler.php
+        -
+            message: '#^Unused OxidEsales\\Payments\\Mollie\\EventSystem\\Handler\\MollieReleaseAuthorizationRequestHandler\:\:getPriority$#'
+            identifier: shipmonk.deadMethod
+            count: 1
+            path: ../../src/Mollie/EventSystem/Handler/MollieReleaseAuthorizationRequestHandler.php
+        -
+            message: '#^Unused OxidEsales\\Payments\\Mollie\\GraphQL\\Exception\\MollieCheckoutError\:\:getCategory$#'
+            identifier: shipmonk.deadMethod
+            count: 1
+            path: ../../src/Mollie/GraphQL/Exception/MollieCheckoutError.php
+        -
+            message: '#^Unused OxidEsales\\Payments\\Mollie\\GraphQL\\Service\\NamespaceMapper\:\:getControllerNamespaceMapping$#'
+            identifier: shipmonk.deadMethod
+            count: 1
+            path: ../../src/Mollie/GraphQL/Service/NamespaceMapper.php
+        -
+            message: '#^Unused OxidEsales\\Payments\\Mollie\\GraphQL\\Service\\NamespaceMapper\:\:getTypeNamespaceMapping$#'
+            identifier: shipmonk.deadMethod
+            count: 1
+            path: ../../src/Mollie/GraphQL/Service/NamespaceMapper.php

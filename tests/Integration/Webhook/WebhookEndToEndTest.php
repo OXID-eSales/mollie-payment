@@ -137,7 +137,7 @@ final class WebhookEndToEndTest extends TestCase
 
         $transactionTypes = $this->fetchTransactionTypes($contract->getId());
         self::assertCount(1, $transactionTypes);
-        self::assertSame(MollieDefinitions::TRANSACTION_TYPE_CAPTURE, $transactionTypes[0]);
+        self::assertSame('capture' /* booked by payment-base's capture ledger */, $transactionTypes[0]);
     }
 
     public function testReplay_Returns200Duplicate_NoDoubleSideEffects(): void

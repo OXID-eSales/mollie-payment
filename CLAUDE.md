@@ -100,6 +100,8 @@ composer phpcs                     # PSR-12 (php_codesniffer)
 composer phpstan                   # PHPStan level max — no new baseline entries
 composer phpmd                     # PHP Mess Detector
 composer static                    # phpcs + phpstan + phpmd
+composer dead-code                 # shipmonk dead-code gate (phpstan-dead-code.neon); baselines may only shrink
+composer dead-assets               # unreferenced language keys / templates / assets (dead-assets.allow)
 composer phpunit                   # PHPUnit (tests/phpunit.xml)
 ./bin/pre-commit-check.sh          # all gates + unit tests; run before staging
 ./bin/pre-commit-check.sh --full   # full suite incl. integration

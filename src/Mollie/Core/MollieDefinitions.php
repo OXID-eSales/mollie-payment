@@ -37,12 +37,9 @@ final class MollieDefinitions
     public const WEBHOOK_CONTROLLER_ID = 'MollieWebhookController';
 
     // Transaction types recorded via TransactionRepositoryInterface by the webhook pipeline.
-    public const TRANSACTION_TYPE_CAPTURE = 'capture';
-    public const TRANSACTION_TYPE_REFUND = 'refund';
     public const TRANSACTION_TYPE_FAILURE = 'failure';
     public const TRANSACTION_TYPE_EXPIRATION = 'expiration';
     public const TRANSACTION_TYPE_CANCELLATION = 'cancellation';
-    public const TRANSACTION_TYPE_CHARGEBACK = 'chargeback';
     public const TRANSACTION_TYPE_AUTHORIZATION = 'authorization';
 
     // Transaction statuses recorded via TransactionRepositoryInterface.

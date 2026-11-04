@@ -1,0 +1,62 @@
+# Dead inside this repository and not named by any entry point: the DELETION BACKLOG of the Mollie dead-code gate
+# (sprint 17 DC-5), baselined only so that the gate can go live and stop NEW dead code. Each needs a per-item decision
+# (value-object field kept for symmetry with Mollie's payload, test-only builder, or delete + CHANGELOG "Removed").
+# Nothing may be added here: new code needs a caller. Shrink only. Ticket: VR-17 DC-5.
+
+parameters:
+    ignoreErrors:
+        -
+            message: '#^Property OxidEsales\\Payments\\Mollie\\Adapter\\Dto\\MollieCaptureDto\:\:\$paymentId is never read$#'
+            identifier: shipmonk.deadProperty.neverRead
+            count: 1
+            path: ../../src/Mollie/Adapter/Dto/MollieCaptureDto.php
+        -
+            message: '#^Property OxidEsales\\Payments\\Mollie\\Adapter\\Dto\\MolliePaymentDto\:\:\$redirectUrl is never read$#'
+            identifier: shipmonk.deadProperty.neverRead
+            count: 1
+            path: ../../src/Mollie/Adapter/Dto/MolliePaymentDto.php
+        -
+            message: '#^Property OxidEsales\\Payments\\Mollie\\Adapter\\Dto\\MolliePaymentDto\:\:\$webhookUrl is never read$#'
+            identifier: shipmonk.deadProperty.neverRead
+            count: 1
+            path: ../../src/Mollie/Adapter/Dto/MolliePaymentDto.php
+        -
+            message: '#^Unused OxidEsales\\Payments\\Mollie\\Adapter\\Dto\\MolliePaymentDto\:\:fromArray$#'
+            identifier: shipmonk.deadMethod
+            count: 1
+            path: ../../src/Mollie/Adapter/Dto/MolliePaymentDto.php
+        -
+            message: '#^Property OxidEsales\\Payments\\Mollie\\Adapter\\Dto\\MollieRefundDto\:\:\$paymentId is never read$#'
+            identifier: shipmonk.deadProperty.neverRead
+            count: 1
+            path: ../../src/Mollie/Adapter/Dto/MollieRefundDto.php
+        -
+            message: '#^Property OxidEsales\\Payments\\Mollie\\Adapter\\Dto\\RefundRequest\:\:\$reason is never read$#'
+            identifier: shipmonk.deadProperty.neverRead
+            count: 1
+            path: ../../src/Mollie/Adapter/Dto/RefundRequest.php
+        -
+            message: '#^Property OxidEsales\\Payments\\Mollie\\EventSystem\\Event\\MollieReleaseAuthorizationRequestEvent\:\:\$idempotencyKey is never read$#'
+            identifier: shipmonk.deadProperty.neverRead
+            count: 1
+            path: ../../src/Mollie/EventSystem/Event/MollieReleaseAuthorizationRequestEvent.php
+        -
+            message: '#^Unused OxidEsales\\Payments\\Mollie\\EventSystem\\Event\\MollieReleaseAuthorizationRequestEvent\:\:getErrorCode$#'
+            identifier: shipmonk.deadMethod
+            count: 1
+            path: ../../src/Mollie/EventSystem/Event/MollieReleaseAuthorizationRequestEvent.php
+        -
+            message: '#^Unused OxidEsales\\Payments\\Mollie\\EventSystem\\Event\\MollieReleaseAuthorizationRequestEvent\:\:getErrorMessage$#'
+            identifier: shipmonk.deadMethod
+            count: 1
+            path: ../../src/Mollie/EventSystem/Event/MollieReleaseAuthorizationRequestEvent.php
+        -
+            message: '#^Property OxidEsales\\Payments\\Mollie\\Service\\BuyabilityFailure\:\:\$articleId is never read$#'
+            identifier: shipmonk.deadProperty.neverRead
+            count: 1
+            path: ../../src/Mollie/Service/BuyabilityFailure.php
+        -
+            message: '#^Unused OxidEsales\\Payments\\Mollie\\Service\\CheckoutStartOutcome\:\:isUnavailable$#'
+            identifier: shipmonk.deadMethod
+            count: 1
+            path: ../../src/Mollie/Service/CheckoutStartOutcome.php

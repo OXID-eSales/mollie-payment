@@ -5,6 +5,19 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Added - DC-5 dead-code gate (VR-17 DC-5, Mollie part)
+- `composer dead-code` (`shipmonk/dead-code-detector` through `phpstan-dead-code.neon`; only `src/` and `metadata.php` are
+  usage sources, tests are not) and `composer dead-assets` (`bin/dead-assets`: language keys of `views/` and `translations/`,
+  Twig templates, `assets/`; `dead-assets.allow` for the sourcemap). CI job `dead-code` in `mollie-tests-oxid7.4.yml`.
+  `tests/PhpStan/DeadCode/OxidEntryPointUsageProvider` names what only a framework calls: GraphQLite attributes,
+  `metadata.php` events, shop-called controllers / view config, constructors and factory methods of `services.yaml`,
+  methods that implement a payment-base contract, members read by Twig. PR template with the "new code has a caller" box.
+- Removed as dead: `Service\MoneyComparison`, `MollieCaptureDto::fromArray`, `MollieRefundDto::fromArray`,
+  `MollieDefinitions::TRANSACTION_TYPE_CAPTURE` / `_REFUND` / `_CHARGEBACK`, `ModuleConfigurationServiceInterface::getLogLevel`.
+- Baselines (`tests/PhpStan/dead-code-baseline-*.neon`, shrink only): `mcp-acp` (kept by owner; nothing flagged),
+  `consumer-api` (6: handler `getPriority`, graphql-base / webonyx contracts), `unreviewed` (11: unread DTO fields, the
+  test-only `MolliePaymentDto::fromArray` builder, event result getters, `CheckoutStartOutcome::isUnavailable`).
+
 ### Changed - sprint-25 D6 (Mollie part): comments
 - "Sprint N Story M (F#)" history tags removed from `src/` docblocks and comments (the why stays; ticket ids stay), stale
   "cycle" / "Mollie must adopt it" / "Sprint 1 creates" claims in services.yaml and CLAUDE.md corrected. Comments only.

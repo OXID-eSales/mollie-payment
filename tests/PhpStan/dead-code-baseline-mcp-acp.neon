@@ -1,0 +1,6 @@
+# Kept by the owner decision "MCP/ACP is kept" (sprint 17, owner decisions 1).
+# The detector reported nothing in src/Mollie/Mcp/ when the gate was added; an entry may only be added together with
+# the owner decision, and removed together with the code. Ticket: VR-17 DC-5.
+
+parameters:
+    ignoreErrors: []

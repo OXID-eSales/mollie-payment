@@ -1,0 +1,32 @@
+# Dead-code gate (sprint 17 DC-5): `composer dead-code`.
+#
+# Runs shipmonk/dead-code-detector on top of the regular tests/PhpStan/phpstan.neon. Only src/ and metadata.php are
+# analysed: tests are not a usage source, so code that only a test keeps alive is reported. metadata.php is a usage
+# source because it names the controllers, the events and the constants of the module.
+#
+# A new finding fails the build. Fix it by deleting the code (preferred) or by giving it a production caller.
+# The baseline files below hold only what was knowingly kept; see each file's header.
+includes:
+    - tests/PhpStan/phpstan.neon
+    - vendor/shipmonk/dead-code-detector/rules.neon
+    - tests/PhpStan/dead-code-baseline-mcp-acp.neon
+    - tests/PhpStan/dead-code-baseline-consumer-api.neon
+    - tests/PhpStan/dead-code-baseline-unreviewed.neon
+
+parameters:
+    paths!:
+        - src
+        - metadata.php
+    # payment-base's interfaces and base classes are called by payment-base: a method that implements one is used.
+    scanDirectories:
+        - vendor/oxid-esales/payment-base/src
+    # The detector skips partial analysis, so inline `@phpstan-ignore` entries of other tools may look unmatched.
+    reportUnmatchedIgnoredErrors: false
+
+services:
+    -
+        class: OxidEsales\Payments\Mollie\Tests\PhpStan\DeadCode\OxidEntryPointUsageProvider
+        arguments:
+            servicesFile: %currentWorkingDirectory%/services.yaml
+        tags:
+            - shipmonk.deadCode.memberUsageProvider

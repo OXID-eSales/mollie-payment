@@ -361,6 +361,61 @@ jobs:
         run: |
           ./bin/pre-commit-check.sh
 
+  # Dead-code gate (sprint 17 DC-5): no member without a production caller, no unreferenced language key /
+  # template / asset. Independent of the shop line, so it runs once, here. A new finding is fixed by deleting the
+  # code, never by growing tests/PhpStan/dead-code-baseline-*.neon.
+  dead-code:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current module
+        uses: actions/checkout@v5
+        with:
+          path: source/test-module
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: gd, zip
+
+      - name: Checkout payment-base (private dependency)
+        uses: actions/checkout@v5
+        with:
+          repository: OXID-eSales/payment-base
+          ref: ${{ env.PAYMENT_BASE_BRANCH }}
+          path: source/payment-base
+          token: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN || github.token }}
+
+      - name: Configure path repository for payment-base
+        working-directory: source/test-module
+        run: |
+          composer config repositories --unset
+          composer config repositories.payment-base \
+            --json '{"type":"path","url":"../payment-base","options":{"symlink":true}}'
+
+      - name: Pin payment-base
+        working-directory: source/test-module
+        run: composer require "oxid-esales/payment-base:dev-${PAYMENT_BASE_BRANCH}${PAYMENT_BASE_VERSION_ALIAS}" --no-update --no-interaction
+
+      - name: Install module dependencies
+        working-directory: source/test-module
+        env:
+          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+        run: |
+          if [ -n "${GH_TOKEN}" ]; then
+            export COMPOSER_AUTH="{\"github-oauth\":{\"github.com\":\"${GH_TOKEN}\"}}"
+          fi
+          composer update --no-interaction
+
+      - name: Dead PHP members (shipmonk/dead-code-detector)
+        working-directory: source/test-module
+        run: composer dead-code
+
+      - name: Dead language keys, templates and assets
+        working-directory: source/test-module
+        run: composer dead-assets
+
   isolated_unit_tests:
     strategy:
       fail-fast: false

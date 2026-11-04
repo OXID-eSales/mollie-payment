@@ -40,7 +40,7 @@ final class TransactionAuditRecorderTest extends TestCase
                 self::assertSame('contract-1', $transaction->getContractId());
                 self::assertSame(MollieDefinitions::PROVIDER_NAME, $transaction->getProvider());
                 self::assertSame('tr_123', $transaction->getProviderOrderId());
-                self::assertSame(MollieDefinitions::TRANSACTION_TYPE_CAPTURE, $transaction->getType());
+                self::assertSame(MollieDefinitions::TRANSACTION_TYPE_AUTHORIZATION, $transaction->getType());
                 self::assertSame(MollieDefinitions::TRANSACTION_STATUS_COMPLETED, $transaction->getStatus());
                 self::assertSame(19.99, $transaction->getAmount());
                 self::assertSame('EUR', $transaction->getCurrency());
@@ -51,7 +51,7 @@ final class TransactionAuditRecorderTest extends TestCase
 
         $recorder->record(
             $contract,
-            MollieDefinitions::TRANSACTION_TYPE_CAPTURE,
+            MollieDefinitions::TRANSACTION_TYPE_AUTHORIZATION,
             MollieDefinitions::TRANSACTION_STATUS_COMPLETED,
             19.99,
         );
@@ -100,6 +100,6 @@ final class TransactionAuditRecorderTest extends TestCase
 
         $recorder = new TransactionAuditRecorder($transactionRepository, $shopAdapter);
 
-        $recorder->record($contract, MollieDefinitions::TRANSACTION_TYPE_CHARGEBACK, MollieDefinitions::TRANSACTION_STATUS_COMPLETED, 5.0);
+        $recorder->record($contract, MollieDefinitions::TRANSACTION_TYPE_FAILURE, MollieDefinitions::TRANSACTION_STATUS_COMPLETED, 5.0);
     }
 }

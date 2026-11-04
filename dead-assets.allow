@@ -1,0 +1,2 @@
+# Items that no code in this repository references by name (bin/dead-assets). One path per line, the reason after "#".
+assets/js/mollie-frontend.min.js.map  # named by the sourceMappingURL comment inside the minified bundle

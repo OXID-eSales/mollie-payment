@@ -48,8 +48,6 @@ interface ModuleConfigurationServiceInterface
      */
     public function getWebhookUrlOverride(): string;
 
-    public function getLogLevel(): string;
-
     /**
      * True for any level except "off". Gates the webhook file-logger channel
      * (see {@see \OxidEsales\Payments\Mollie\Service\Factory\MollieWebhookFileLoggerFactory}).
