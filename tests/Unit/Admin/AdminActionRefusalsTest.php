@@ -12,7 +12,7 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Admin;
 use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminActionRefusals;
 use OxidEsales\Payments\Mollie\Admin\AdminValidationFeedbackInterface;
-use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
+use OxidEsales\PaymentBase\Validation\User\FieldValidationFailure;
 use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use PHPUnit\Framework\TestCase;
 

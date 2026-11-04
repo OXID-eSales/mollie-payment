@@ -22,9 +22,9 @@ use OxidEsales\Payments\Mollie\Admin\MollieReleaseAction;
 use OxidEsales\Payments\Mollie\Admin\ReleaseActionInterface;
 use OxidEsales\Payments\Mollie\Admin\ReleaseRule;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieReleaseAuthorizationRequestEvent;
-use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
+use OxidEsales\PaymentBase\Validation\User\FieldValidationFailure;
 use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
-use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
+use OxidEsales\PaymentBase\Validation\User\UserDataValidatorInterface;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 

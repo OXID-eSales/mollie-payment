@@ -76,14 +76,13 @@ services:
   #   - Sprints 4-6 tag handlers `payment.event_handler`, the translator
   #     `oe.payment.event_translator`, and the panel `oe.payment.admin_panel`.
   #
-  # NOTE: PaymentMethodInstaller is constructed directly in Core\Events (activation
-  # hook, outside the request container), so it is intentionally NOT autowired here.
+  # NOTE: the payment-method installer is payment-base's (Install\PaymentMethodInstaller); Core\Events
+  # builds it directly (activation hook, outside the request container).
   # ===========================================================================
 
   OxidEsales\Payments\Mollie\Service\:
     resource: 'src/Mollie/Service/*'
     exclude:
-      - 'src/Mollie/Service/PaymentMethodInstaller.php'
       - 'src/Mollie/Service/Factory/*'
       - 'src/Mollie/Service/Result/*'
       # MOL-22 value objects (built by the validator / from a throwable, never by the container)
@@ -96,12 +95,7 @@ services:
       - 'src/Mollie/Service/Return/*'
       # Sprint 4 (Story 6): VOs / narrow interfaces / OXID-model-bound readers excluded from
       # the autowire sweep for the same reasons Stripe excludes their counterparts — they either
-      # carry scalar/object constructor args Symfony cannot autowire (FieldValidationFailure,
-      # OxidUserFieldReader is bound to a specific live User) or are plain interfaces.
-      - 'src/Mollie/Service/FieldValidationFailure.php'
-      - 'src/Mollie/Service/OxidUserFieldReader.php'
-      - 'src/Mollie/Service/UserFieldReaderInterface.php'
-      - 'src/Mollie/Service/UserDataValidatorInterface.php'
+      # are plain interfaces.
       - 'src/Mollie/Service/LanguageTranslatorInterface.php'
       - 'src/Mollie/Service/CheckoutPaymentServiceInterface.php'
       - 'src/Mollie/Service/MollieOrderDataProviderInterface.php'
@@ -323,12 +317,6 @@ services:
   # conflicts when multiple providers are active in the same shop.
   # ===========================================================================
 
-  OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface:
-    class: OxidEsales\Payments\Mollie\Service\UserDataValidator
-    arguments:
-      - '@OxidEsales\PaymentBase\Validation\ValidationBaseFactory'
-    public: true
-
   OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface:
     class: OxidEsales\Payments\Mollie\Service\OxidLanguageTranslator
     public: false
@@ -353,7 +341,7 @@ services:
   # step; answers with the translated per-field messages. Public: OXID controllers fetch it at runtime.
   OxidEsales\Payments\Mollie\Service\CheckoutUserDataGate:
     arguments:
-      $validator: '@OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface'
+      $validator: '@OxidEsales\PaymentBase\Validation\User\UserDataValidatorInterface'
       $messageFormatter: '@OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter'
       $translator: '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
     public: true
@@ -367,38 +355,9 @@ services:
   #
   # Mollie's checkout return (Sprint 4) commits nothing — commit + fulfillment
   # is left to this webhook, which commits through payment-base's
-  # ContractCommitService (VR-20 R6). Registered here so
-  # `oe:module:activate oe_payments_mollie` validates standalone (Symfony
-  # tolerates the same interface being (re)bound by another active module —
-  # Stripe and PayPal carry the exact same definitions).
+  # ContractCommitService (VR-20 R6). The event dispatcher, the fulfilment and order-payment-state
+  # services and the repositories payment-base defines are not bound again here.
   # ===========================================================================
-
-  OxidEsales\PaymentBase\EventSystem\EventListenerProviderInterface:
-    class: OxidEsales\PaymentBase\EventSystem\EventListenerProvider
-    arguments:
-      - !tagged_iterator payment.event_handler
-    public: true
-
-  OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface:
-    class: OxidEsales\PaymentBase\EventSystem\EventDispatcher
-    arguments:
-      - '@OxidEsales\PaymentBase\EventSystem\EventListenerProviderInterface'
-    public: true
-
-  OxidEsales\PaymentBase\Service\OrderPaymentStateServiceInterface:
-    class: OxidEsales\PaymentBase\Service\OrderPaymentStateService
-    arguments:
-      $connection: '@doctrine.dbal.connection'
-      $logger: '@oxid_esales.monolog.logger'
-    public: true
-
-  OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface:
-    class: OxidEsales\PaymentBase\Service\ContractFulfillmentService
-    arguments:
-      $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
-      $eventDispatcher: '@OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface'
-      $logger: '@oxid_esales.monolog.logger'
-    public: true
 
   # VR-20 R6: the chain ContractCommitService dispatches into —
   # PaymentAuthorizedEvent → PaymentAuthorizedEventHandler (fulfils payment_authorized)
@@ -434,26 +393,11 @@ services:
       - { name: payment.event_handler, priority: 0 }
     public: false
 
-  # NOTE: kept public:false to match Stripe's binding of the same shared interface — in this
-  # dev shop both modules are active simultaneously and the merged container's visibility for a
-  # given service id is decided by whichever module's services.yaml is merged last, so the two
-  # declarations must agree. The Story 6 integration test verifies the recorded transaction via
-  # a direct SQL SELECT instead of resolving this service from the container.
-  OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface:
-    class: OxidEsales\PaymentBase\Repository\DoctrineTransactionRepository
-    arguments:
-      $connection: '@doctrine.dbal.connection'
-    public: false
-
   # public: true — needed by the Story 3 idempotency-claim integration test.
   OxidEsales\PaymentBase\Repository\WebhookLogRepositoryInterface:
     class: OxidEsales\PaymentBase\Repository\DoctrineWebhookLogRepository
     arguments:
       $connection: '@doctrine.dbal.connection'
-    public: true
-
-  OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface:
-    alias: OxidEsales\Payments\Mollie\Service\OxidContractLinkedOrderUpdater
     public: true
 
   OxidEsales\Payments\Mollie\Webhook\Handler\WebhookContractFulfillmentHandler:
@@ -573,17 +517,11 @@ services:
   OxidEsales\Payments\Mollie\Service\ReleaseAuthorizationServiceInterface:
     alias: OxidEsales\Payments\Mollie\Service\ReleaseAuthorizationService
     public: true
-  OxidEsales\Payments\Mollie\Service\OxpaidReconciliationServiceInterface:
-    alias: OxidEsales\Payments\Mollie\Service\OxpaidReconciliationService
-    public: true
 
-  # Console entrypoint for the reconciliation service. Command/ is not swept by the Service/*
-  # resource glob, so it is registered explicitly and tagged for OXID's console (mirrors Stripe's
-  # stripe:reconcile-oxpaid wiring).
-  OxidEsales\Payments\Mollie\Command\ReconcileOxpaidCommand:
+  # VR-25 D1: payment-base's `oe:payments:reconcile-oxpaid` asks this port what Mollie says.
+  OxidEsales\Payments\Mollie\Service\MolliePaidStatusProvider:
     tags:
-      - { name: 'console.command', command: 'mollie:reconcile-oxpaid' }
-    public: true
+      - { name: oe.payment.paid_status_provider }
 
   # MOL-17: fulfil contracts stuck at `committed` whose Mollie payment is paid (the lost update the
   # optimistic contract version now prevents left such rows behind; without `fulfilled` no refund).
@@ -694,26 +632,6 @@ services:
 
   OxidEsales\Payments\Mollie\Adapter\MollieMethodsAdapterInterface:
     alias: OxidEsales\Payments\Mollie\Adapter\LazyMollieAdapter
-    public: true
-
-  # ===========================================================================
-  # payment-base infrastructure bindings (self-sufficiency).
-  #
-  # payment-base itself does NOT bind these — in this repo they have historically
-  # only been bound by Stripe's/PayPal's services.yaml, which happened to also be
-  # active in every shop Mollie was developed/tested in. A shop with ONLY
-  # payment-base + mollie active (no other PSP) failed to compile its DI
-  # container as a result. These mirror Stripe's own bindings for the identical
-  # payment-base concretes (same classes/constructor args) so Mollie activates
-  # standalone. Binding the same interface that another active PSP module also
-  # binds is safe (Symfony tolerates re-declaration to an identical concrete);
-  # coexistence with Stripe/PayPal was verified after adding these.
-  # ===========================================================================
-
-  OxidEsales\PaymentBase\Service\ContractServiceInterface:
-    class: OxidEsales\PaymentBase\Service\ContractService
-    arguments:
-      $contractRepository: '@OxidEsales\PaymentBase\Repository\ContractRepositoryInterface'
     public: true
 
   # ===========================================================================

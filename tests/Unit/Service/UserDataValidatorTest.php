@@ -12,13 +12,14 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 use OxidEsales\PaymentBase\Validation\RuleSet;
 use OxidEsales\PaymentBase\Validation\ValidationBaseFactory;
 use OxidEsales\PaymentBase\Validation\ValidationRuleLoaderInterface;
-use OxidEsales\Payments\Mollie\Service\UserDataValidator;
-use OxidEsales\Payments\Mollie\Service\UserFieldReaderInterface;
+use OxidEsales\PaymentBase\Validation\User\UserDataValidator;
+use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
+use OxidEsales\PaymentBase\Validation\User\UserFieldReaderInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Exercises UserDataValidator against the REAL payment-base ValidationBase, loading the
+ * Exercises payment-base's UserDataValidator against the REAL payment-base ValidationBase, loading the
  * module's actual src/Resources/validation-rules.php — not a mocked ValidationBaseInterface —
  * so the rule content itself is under test, not just the wiring.
  */
@@ -30,7 +31,7 @@ final class UserDataValidatorTest extends TestCase
         $validator = $this->validator();
         $reader = $this->readerWith(['firstName' => 'Jane<script>']);
 
-        $failures = $validator->validateForUser($reader);
+        $failures = $validator->validateForUser(MollieDefinitions::MODULE_ID, $reader);
 
         self::assertCount(1, $failures);
         self::assertSame('firstName', $failures[0]->field);
@@ -48,7 +49,7 @@ final class UserDataValidatorTest extends TestCase
             'city' => 'Świętokrzyskie',
         ]);
 
-        $failures = $validator->validateForUser($reader);
+        $failures = $validator->validateForUser(MollieDefinitions::MODULE_ID, $reader);
 
         self::assertSame([], $failures);
     }
@@ -58,7 +59,7 @@ final class UserDataValidatorTest extends TestCase
         $validator = $this->validator();
         $reader = $this->readerWith(['email' => 'jane.doe+test@example.com']);
 
-        $failures = $validator->validateForUser($reader);
+        $failures = $validator->validateForUser(MollieDefinitions::MODULE_ID, $reader);
 
         self::assertSame([], $failures);
     }
@@ -68,14 +69,14 @@ final class UserDataValidatorTest extends TestCase
         $validator = $this->validator();
         $reader = $this->readerWith([]);
 
-        self::assertSame([], $validator->validateForUser($reader));
+        self::assertSame([], $validator->validateForUser(MollieDefinitions::MODULE_ID, $reader));
     }
 
     public function testValidateFieldMapReportsFailuresWithoutOxidColumn(): void
     {
         $validator = $this->validator();
 
-        $failures = $validator->validateFieldMap(['phone' => '+49 (0)30-12345 <injected>']);
+        $failures = $validator->validateFieldMap(MollieDefinitions::MODULE_ID, ['phone' => '+49 (0)30-12345 <injected>']);
 
         self::assertCount(1, $failures);
         self::assertSame('phone', $failures[0]->field);
@@ -91,7 +92,7 @@ final class UserDataValidatorTest extends TestCase
             ['firstName' => 'Jane', 'street' => 'Elm Street <script>'],
         );
 
-        $failures = $this->validator()->validateForUser($reader);
+        $failures = $this->validator()->validateForUser(MollieDefinitions::MODULE_ID, $reader);
 
         self::assertCount(1, $failures);
         self::assertSame('street', $failures[0]->field);
@@ -101,7 +102,7 @@ final class UserDataValidatorTest extends TestCase
 
     public function testReportsBillingFailuresWithTheBillingAddressKind(): void
     {
-        $failures = $this->validator()->validateForUser($this->readerWith(['city' => 'Berlin;']));
+        $failures = $this->validator()->validateForUser(MollieDefinitions::MODULE_ID, $this->readerWith(['city' => 'Berlin;']));
 
         self::assertCount(1, $failures);
         self::assertSame('billing', $failures[0]->addressKind);
@@ -109,7 +110,7 @@ final class UserDataValidatorTest extends TestCase
 
     public function testSkipsTheDeliveryPassWhenNoDeliveryAddressIsSelected(): void
     {
-        self::assertSame([], $this->validator()->validateForUser($this->readerWith(['firstName' => 'Jane'])));
+        self::assertSame([], $this->validator()->validateForUser(MollieDefinitions::MODULE_ID, $this->readerWith(['firstName' => 'Jane'])));
     }
 
     public function testKnowsPostalCodeAndThePhoneTrio(): void
@@ -121,14 +122,14 @@ final class UserDataValidatorTest extends TestCase
             'fax' => '030 | 2',
         ]);
 
-        $fields = array_map(static fn ($failure) => $failure->field, $this->validator()->validateForUser($reader));
+        $fields = array_map(static fn ($failure) => $failure->field, $this->validator()->validateForUser(MollieDefinitions::MODULE_ID, $reader));
 
         self::assertSame(['postalCode', 'cellPhone', 'personalPhone', 'fax'], $fields);
     }
 
     public function testValidateFieldMapCarriesTheGivenAddressKind(): void
     {
-        $failures = $this->validator()->validateFieldMap(['refundDescription' => 'chargeback <x>'], 'admin');
+        $failures = $this->validator()->validateFieldMap(MollieDefinitions::MODULE_ID, ['refundDescription' => 'chargeback <x>'], 'admin');
 
         self::assertCount(1, $failures);
         self::assertSame('admin', $failures[0]->addressKind);

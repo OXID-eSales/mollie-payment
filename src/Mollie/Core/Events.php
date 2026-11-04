@@ -13,7 +13,7 @@ use OxidEsales\Eshop\Application\Model\Shop;
 use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
 use OxidEsales\EshopCommunity\Internal\Framework\Database\QueryBuilderFactoryInterface;
-use OxidEsales\Payments\Mollie\Service\PaymentMethodInstaller;
+use OxidEsales\PaymentBase\Install\PaymentMethodInstaller;
 use Throwable;
 
 /**
@@ -44,7 +44,7 @@ class Events
             $container = ContainerFactory::getInstance()->getContainer();
             /** @var QueryBuilderFactoryInterface $qbFactory */
             $qbFactory = $container->get(QueryBuilderFactoryInterface::class);
-            (new PaymentMethodInstaller($qbFactory))->ensureMolliePaymentMethods();
+            (new PaymentMethodInstaller($qbFactory))->ensurePaymentMethods(MollieDefinitions::getMollieDefinitions());
         } catch (Throwable $e) {
             // Sprint 11 Story 8 (F9): the catch stays — activation must never fail — but it stops
             // being silent. Without the payment-method row Mollie simply never appears in checkout,

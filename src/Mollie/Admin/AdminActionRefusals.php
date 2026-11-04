@@ -11,7 +11,7 @@ namespace OxidEsales\Payments\Mollie\Admin;
 
 use OxidEsales\PaymentBase\Admin\Panel\AdminActionRefusedException;
 use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
-use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
+use OxidEsales\PaymentBase\Validation\User\FieldValidationFailure;
 use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 
 /**

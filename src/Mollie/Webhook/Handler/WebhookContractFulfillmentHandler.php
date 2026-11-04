@@ -11,7 +11,9 @@ namespace OxidEsales\Payments\Mollie\Webhook\Handler;
 
 use OxidEsales\PaymentBase\AtRisk\AtRiskReason;
 use OxidEsales\PaymentBase\AtRisk\PaymentAtRiskFlagInterface;
+use OxidEsales\PaymentBase\Contract\ContractTerminationServiceInterface;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
+use OxidEsales\PaymentBase\Contract\TerminationOutcome;
 use OxidEsales\PaymentBase\LateMoney\LateMoneyResolverInterface;
 use OxidEsales\PaymentBase\Payment\ProviderCaptureLedgerInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
@@ -22,7 +24,6 @@ use OxidEsales\PaymentBase\Service\Commit\ContractCommitServiceInterface;
 use OxidEsales\PaymentBase\Service\Commit\PaymentConfirmation;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-use OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface;
 use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use Psr\Log\LoggerInterface;
 
@@ -42,7 +43,8 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
     public function __construct(
         private readonly ContractRepositoryInterface $contractRepository,
         private readonly ContractFulfillmentServiceInterface $contractFulfillmentService,
-        private readonly ContractLinkedOrderUpdaterInterface $orderUpdater,
+        // payment-base's one cancel/fail/expire path: the contract ends and the linked order follows.
+        private readonly ContractTerminationServiceInterface $termination,
         private readonly TransactionAuditRecorder $auditRecorder,
         private readonly LoggerInterface $logger,
         // VR-23 T2: money on a contract that can no longer take it (cancelled, expired, failed, or a payment of an
@@ -196,16 +198,10 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             return FulfillmentResult::contractNotFound();
         }
 
-        if ($contract->getState()->isTerminal()) {
+        if ($this->termination->fail($contract, $reason) === TerminationOutcome::AlreadyTerminal) {
             return FulfillmentResult::noOp((string) $contract->getId());
         }
 
-        $contract->fail($reason);
-        $this->contractRepository->save($contract);
-        $this->mirrorOnLinkedOrder(
-            $contract,
-            fn (string $orderId) => $this->orderUpdater->markFailed($orderId, $reason)
-        );
         $this->auditRecorder->record(
             $contract,
             MollieDefinitions::TRANSACTION_TYPE_FAILURE,
@@ -223,7 +219,8 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             return FulfillmentResult::contractNotFound();
         }
 
-        if ($contract->getState()->isTerminal()) {
+        $outcome = $this->termination->expire($contract);
+        if ($outcome === TerminationOutcome::AlreadyTerminal) {
             return FulfillmentResult::noOp((string) $contract->getId());
         }
 
@@ -231,14 +228,12 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         // contract would throw out of the webhook and Mollie would retry forever. VR-23 T2 (S-M1): but an
         // authorization that expires on a committed manual-capture contract means the money will never be
         // captured while the order looks valid. Flag it; the merchant decides.
-        if ($contract->getState()->isCommitted()) {
+        if ($outcome === TerminationOutcome::Committed) {
             $this->atRisk->raise($contract, AtRiskReason::AuthorizationExpired, $providerOrderId);
 
             return FulfillmentResult::acted((string) $contract->getId());
         }
 
-        $contract->expire();
-        $this->contractRepository->save($contract);
         $this->auditRecorder->record(
             $contract,
             MollieDefinitions::TRANSACTION_TYPE_EXPIRATION,
@@ -256,13 +251,10 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
             return FulfillmentResult::contractNotFound();
         }
 
-        if ($contract->getState()->isTerminal()) {
+        if ($this->termination->cancel($contract, $reason) === TerminationOutcome::AlreadyTerminal) {
             return FulfillmentResult::noOp((string) $contract->getId());
         }
 
-        $contract->cancel($reason);
-        $this->contractRepository->save($contract);
-        $this->mirrorOnLinkedOrder($contract, fn (string $orderId) => $this->orderUpdater->markCancelled($orderId));
         $this->auditRecorder->record(
             $contract,
             MollieDefinitions::TRANSACTION_TYPE_CANCELLATION,
@@ -417,18 +409,5 @@ final class WebhookContractFulfillmentHandler implements WebhookContractFulfillm
         );
 
         return $this->contractRepository->findByProviderOrderId($providerOrderId) ?? $contract;
-    }
-
-    /**
-     * @param callable(string): void $mirror
-     */
-    private function mirrorOnLinkedOrder(PaymentContractInterface $contract, callable $mirror): void
-    {
-        $orderId = $contract->getOrderId();
-        if ($orderId === null || $orderId === '') {
-            return;
-        }
-
-        $mirror($orderId);
     }
 }

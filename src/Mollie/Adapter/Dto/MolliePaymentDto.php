@@ -52,6 +52,8 @@ final readonly class MolliePaymentDto
         public ?float $amountCaptured = null,
         // OPC-175: whether Mollie lets the shop cancel the payment now (`isCancelable`).
         public bool $isCancelable = false,
+        // When Mollie recorded the payment as paid (ISO 8601); null until it is.
+        public ?string $paidAt = null,
     ) {
     }
 
@@ -69,7 +71,8 @@ final readonly class MolliePaymentDto
      *     webhookUrl?: string|null,
      *     amountChargedBack?: string|int|float|null,
      *     createdAt?: string|null,
-     *     amountCaptured?: string|int|float|null
+     *     amountCaptured?: string|int|float|null,
+     *     paidAt?: string|null
      * } $data
      */
     public static function fromArray(array $data): self
@@ -88,6 +91,7 @@ final readonly class MolliePaymentDto
             (float) ($data['amountChargedBack'] ?? 0.0),
             isset($data['createdAt']) ? (string) $data['createdAt'] : null,
             amountCaptured: isset($data['amountCaptured']) ? (float) $data['amountCaptured'] : null,
+            paidAt: isset($data['paidAt']) ? (string) $data['paidAt'] : null,
         );
     }
 

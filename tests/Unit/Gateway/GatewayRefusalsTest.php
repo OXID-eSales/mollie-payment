@@ -11,7 +11,7 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Gateway;
 
 use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
 use OxidEsales\Payments\Mollie\Gateway\GatewayRefusals;
-use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
+use OxidEsales\PaymentBase\Validation\User\FieldValidationFailure;
 use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

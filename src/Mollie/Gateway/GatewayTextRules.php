@@ -10,8 +10,9 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Gateway;
 
 use OxidEsales\PaymentBase\Admin\Panel\AdminActionRefusedException;
-use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
-use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
+use OxidEsales\PaymentBase\Validation\User\FieldValidationFailure;
+use OxidEsales\PaymentBase\Validation\User\UserDataValidatorInterface;
+use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 
 /**
  * MOL-15: admin free text goes to Mollie with a capture or a refund, so it runs through the checkout's character
@@ -30,7 +31,11 @@ final class GatewayTextRules
         if ($text === null) {
             return null;
         }
-        $failures = $this->validator->validateFieldMap([$field => $text], FieldValidationFailure::KIND_ADMIN);
+        $failures = $this->validator->validateFieldMap(
+            MollieDefinitions::MODULE_ID,
+            [$field => $text],
+            FieldValidationFailure::KIND_ADMIN,
+        );
         if ($failures === []) {
             return null;
         }

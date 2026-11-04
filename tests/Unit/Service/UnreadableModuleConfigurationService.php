@@ -14,18 +14,16 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
- * Test double standing in for the production failure this sprint cares about (F4): the module
- * configuration could not be read at all — the DAO threw in the constructor, the shop id was wrong,
- * the row is missing.
+ * Stands in for the production failure F4 cares about: the module configuration could not be read at
+ * all - the DAO throws in the constructor (wrong shop id, row missing).
  *
- * It reports itself unreadable rather than stubbing `readSetting()`, because the distinction between
- * "unreadable" and "unset" is exactly what {@see ModuleConfigurationService} now has to keep.
+ * It is unreadable rather than unset, because that distinction is exactly what
+ * {@see ModuleConfigurationService} has to keep.
  */
 final class UnreadableModuleConfigurationService extends ModuleConfigurationService
 {
     public function __construct(?LoggerInterface $logger = null)
     {
-        // Intentionally does NOT call parent::__construct — no DAO/container needed in unit tests.
-        $this->initializeForTest(unreadable: true, logger: $logger ?? new NullLogger());
+        parent::__construct(StubShopContext::create(), new StubModuleConfigurationDao(null), $logger ?? new NullLogger());
     }
 }

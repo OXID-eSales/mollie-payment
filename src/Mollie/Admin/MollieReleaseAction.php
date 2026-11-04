@@ -12,9 +12,10 @@ namespace OxidEsales\Payments\Mollie\Admin;
 use OxidEsales\PaymentBase\Admin\Panel\AdminActionRefusedException;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
+use OxidEsales\PaymentBase\Validation\User\FieldValidationFailure;
+use OxidEsales\PaymentBase\Validation\User\UserDataValidatorInterface;
+use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\EventSystem\Event\MollieReleaseAuthorizationRequestEvent;
-use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
-use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
 
 /**
  * Runs the release the same way for every door. No amount: Mollie releases the whole remainder. The same
@@ -58,6 +59,7 @@ final class MollieReleaseAction implements ReleaseActionInterface
             return;
         }
         $failures = $this->userDataValidator->validateFieldMap(
+            MollieDefinitions::MODULE_ID,
             ['captureReason' => $reason],
             FieldValidationFailure::KIND_ADMIN,
         );

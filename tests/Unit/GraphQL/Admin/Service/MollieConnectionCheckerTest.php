@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\Tests\Unit\GraphQL\Admin\Service;
 
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
+use OxidEsales\PaymentBase\Settings\ModuleConfigurationUnreadableException;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieConfigurationException;
 use OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapterInterface;
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieConnectionChecker;
@@ -46,7 +47,7 @@ final class MollieConnectionCheckerTest extends TestCase
     public function testCheck_UnreadableSettings_AreNotConfigured(): void
     {
         $config = $this->createStub(ModuleConfigurationServiceInterface::class);
-        $config->method('getMode')->willThrowException(new MollieConfigurationException('unreadable'));
+        $config->method('getMode')->willThrowException(new ModuleConfigurationUnreadableException('unreadable'));
 
         $status = (new MollieConnectionChecker($config, $this->adapterThrowing(null), $this->createStub(LoggerInterface::class)))->check();
 

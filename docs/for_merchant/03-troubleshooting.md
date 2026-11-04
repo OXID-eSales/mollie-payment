@@ -11,11 +11,10 @@ does). If both are somehow missed:
    4xx (missing `id` — the guard chain and controller are alive), never a connection error or 5xx.
 2. Confirm the shop's outbound HTTPS calls to `api.mollie.com` aren't blocked by an egress
    firewall — the webhook processor's entire verification step is an outbound API call.
-3. `OxpaidReconciliationServiceInterface::reconcile(orderId, providerOrderId)` exists and
-   self-heals OXPAID by trusting Mollie's API as ground truth for a specific order/payment id
-   pair — but unlike Stripe's module, **no `oe-console` command currently exposes it**. Today it
-   can only be invoked programmatically (e.g. from a custom one-off script resolving the service
-   from the container) — a CLI wrapper would be a natural small follow-up.
+3. `bin/oe-console oe:payments:reconcile-oxpaid [orderId] [--dry-run] [--max-age=7] [--provider=mollie]`
+   (payment-base) self-heals OXPAID by trusting Mollie's API as ground truth: it asks the live
+   payment and stamps OXPAID with Mollie's own `paidAt`. A paid payment without a `paidAt` is
+   left for manual review rather than stamped with "now".
 
 ## Webhook always returns 400
 

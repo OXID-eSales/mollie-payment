@@ -19,9 +19,9 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MollieCaptureDto;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
 use OxidEsales\Payments\Mollie\Adapter\MollieCaptureAdapterInterface;
 use OxidEsales\Payments\Mollie\Gateway\GatewayRefusals;
-use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
+use OxidEsales\PaymentBase\Validation\User\FieldValidationFailure;
 use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
-use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
+use OxidEsales\PaymentBase\Validation\User\UserDataValidatorInterface;
 use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
 use OxidEsales\Payments\Mollie\Gateway\GatewayTextRules;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
@@ -104,7 +104,7 @@ final class MollieCaptureGatewayTest extends TestCase
     {
         $validator = $this->createMock(UserDataValidatorInterface::class);
         $validator->expects(self::once())->method('validateFieldMap')
-            ->with(['captureReason' => 'bad;'], FieldValidationFailure::KIND_ADMIN)
+            ->with('oe_payments_mollie', ['captureReason' => 'bad;'], FieldValidationFailure::KIND_ADMIN)
             ->willReturn(['captureReason' => new FieldValidationFailure('captureReason', 'admin', 'blockedCharacter', ';', null)]);
         $this->validator = $validator;
         $this->captures->expects(self::never())->method('createCapture');

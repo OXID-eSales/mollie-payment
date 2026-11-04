@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 
-use OxidEsales\Payments\Mollie\Adapter\Exception\MollieConfigurationException;
+use OxidEsales\PaymentBase\Settings\ModuleConfigurationUnreadableException;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Service\ModuleConfigurationService;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -42,7 +42,7 @@ final class ModuleConfigurationFailClosedTest extends TestCase
     {
         $config = new UnreadableModuleConfigurationService();
 
-        $this->expectException(MollieConfigurationException::class);
+        $this->expectException(ModuleConfigurationUnreadableException::class);
         $config->getMode();
     }
 
@@ -50,7 +50,7 @@ final class ModuleConfigurationFailClosedTest extends TestCase
     {
         $config = new UnreadableModuleConfigurationService();
 
-        $this->expectException(MollieConfigurationException::class);
+        $this->expectException(ModuleConfigurationUnreadableException::class);
         $config->getApiKey();
     }
 
@@ -58,7 +58,7 @@ final class ModuleConfigurationFailClosedTest extends TestCase
     {
         $config = new UnreadableModuleConfigurationService();
 
-        $this->expectException(MollieConfigurationException::class);
+        $this->expectException(ModuleConfigurationUnreadableException::class);
         $config->isTestMode();
     }
 
@@ -87,7 +87,7 @@ final class ModuleConfigurationFailClosedTest extends TestCase
         $logger->expects(self::atLeastOnce())
             ->method('error')
             ->with(
-                self::stringContains('Mollie'),
+                self::stringContains('oe_payments_mollie'),
                 self::callback(static fn (array $context): bool => $context !== []),
             );
 
@@ -95,7 +95,7 @@ final class ModuleConfigurationFailClosedTest extends TestCase
 
         try {
             $config->getMode();
-        } catch (MollieConfigurationException) {
+        } catch (ModuleConfigurationUnreadableException) {
             // expected — we are asserting the log, not the throw
         }
     }

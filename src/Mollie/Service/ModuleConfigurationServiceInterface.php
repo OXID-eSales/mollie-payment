@@ -11,8 +11,8 @@ namespace OxidEsales\Payments\Mollie\Service;
 
 /**
  * Single source of truth for Mollie module configuration (mode, credentials, capture mode,
- * logging). Concrete implementation lands in the shop-glue/config sprint; the adapter factory
- * and shop adapter depend on this interface (DIP), never on Registry::getConfig() reach-ins.
+ * logging). The adapter factory and the checkout services depend on this interface (DIP), never on
+ * Registry::getConfig() reach-ins.
  */
 interface ModuleConfigurationServiceInterface
 {

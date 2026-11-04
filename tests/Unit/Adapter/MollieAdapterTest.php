@@ -302,6 +302,17 @@ final class MollieAdapterTest extends TestCase
         (new MollieAdapter($this->client))->getPayment('tr_missing');
     }
 
+    public function testGetPayment_MapsPaidAt(): void
+    {
+        $sdkPayment = $this->payment(['id' => 'tr_paid', 'status' => 'paid']);
+        $sdkPayment->paidAt = '2026-07-08T10:20:00+00:00';
+        $this->payments->method('get')->with('tr_paid')->willReturn($sdkPayment);
+
+        $dto = (new MollieAdapter($this->client))->getPayment('tr_paid');
+
+        self::assertSame('2026-07-08T10:20:00+00:00', $dto->paidAt);
+    }
+
     public function testListRefunds_MapsEachRefundInTheCollection(): void
     {
         $collection = new RefundCollection($this->client, 1, null);

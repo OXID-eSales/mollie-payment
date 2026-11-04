@@ -14,26 +14,16 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
- * Test double that bypasses the OXID DAO wiring by overriding the protected readSetting() seam,
- * feeding canned settings instead. Mirrors PayPal's TestableModuleConfigurationService pattern.
+ * The real {@see ModuleConfigurationService} fed canned settings through a stub DAO (payment-base's
+ * base class takes the DAO, so no seam in production code is needed).
  */
 final class TestableModuleConfigurationService extends ModuleConfigurationService
 {
     /**
      * @param array<string, mixed> $settings
      */
-    public function __construct(
-        private readonly array $settings,
-        ?LoggerInterface $logger = null,
-    ) {
-        // Intentionally does NOT call parent::__construct — no DAO/container needed in unit tests.
-        // The seam still has to be initialised: Sprint 11 Story 9 made the logger a required
-        // dependency, so it is never implicitly a NullLogger in production any more.
-        $this->initializeForTest(unreadable: false, logger: $logger ?? new NullLogger());
-    }
-
-    protected function readSetting(string $name): mixed
+    public function __construct(array $settings, ?LoggerInterface $logger = null)
     {
-        return $this->settings[$name] ?? '';
+        parent::__construct(StubShopContext::create(), new StubModuleConfigurationDao($settings), $logger ?? new NullLogger());
     }
 }

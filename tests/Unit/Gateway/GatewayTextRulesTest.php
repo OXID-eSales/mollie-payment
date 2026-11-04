@@ -12,9 +12,9 @@ namespace OxidEsales\Payments\Mollie\Tests\Unit\Gateway;
 use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
 use OxidEsales\Payments\Mollie\Gateway\GatewayTextRules;
 use OxidEsales\Payments\Mollie\Gateway\GatewayRefusals;
-use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
+use OxidEsales\PaymentBase\Validation\User\FieldValidationFailure;
 use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
-use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
+use OxidEsales\PaymentBase\Validation\User\UserDataValidatorInterface;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -35,7 +35,7 @@ final class GatewayTextRulesTest extends TestCase
     public function testAcceptedTextIsNothingToRefuse(): void
     {
         $validator = $this->createMock(UserDataValidatorInterface::class);
-        $validator->method('validateFieldMap')->with(['captureReason' => 'fine'], FieldValidationFailure::KIND_ADMIN)->willReturn([]);
+        $validator->method('validateFieldMap')->with('oe_payments_mollie', ['captureReason' => 'fine'], FieldValidationFailure::KIND_ADMIN)->willReturn([]);
 
         self::assertNull($this->rules($validator)->refusalFor('captureReason', 'fine'));
     }

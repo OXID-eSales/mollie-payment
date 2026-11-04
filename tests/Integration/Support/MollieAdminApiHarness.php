@@ -33,6 +33,7 @@ use OxidEsales\PaymentBase\Repository\DoctrineContractRepository;
 use OxidEsales\PaymentBase\Repository\DoctrineIdempotencyRepository;
 use OxidEsales\PaymentBase\Repository\DoctrineTransactionRepository;
 use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
+use OxidEsales\PaymentBase\Validation\User\UserDataValidatorInterface;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
 use OxidEsales\Payments\Mollie\Admin\AdminActionBounds;
@@ -48,7 +49,6 @@ use OxidEsales\Payments\Mollie\EventSystem\Event\MollieReleaseAuthorizationReque
 use OxidEsales\Payments\Mollie\GraphQL\Admin\Service\MollieReleaseOperation;
 use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use OxidEsales\Payments\Mollie\Service\UserDataValidationMessageFormatter;
-use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
 

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\Payments\Mollie\GraphQL\Admin\Service;
 
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieAdapterException;
+use OxidEsales\PaymentBase\Settings\ModuleConfigurationUnreadableException;
 use OxidEsales\Payments\Mollie\Adapter\Exception\MollieConfigurationException;
 use OxidEsales\Payments\Mollie\Adapter\MollieConnectionAdapterInterface;
 use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
@@ -39,7 +40,7 @@ final class MollieConnectionChecker implements MollieConnectionCheckerInterface
             if ($this->config->getApiKey() === '') {
                 return new MollieConnectionStatus(MollieConnectionStatus::NOT_CONFIGURED, $mode);
             }
-        } catch (MollieConfigurationException) {
+        } catch (ModuleConfigurationUnreadableException) {
             return new MollieConnectionStatus(MollieConnectionStatus::NOT_CONFIGURED, '');
         }
 

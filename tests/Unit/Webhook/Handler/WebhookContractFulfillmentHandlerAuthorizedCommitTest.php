@@ -23,7 +23,7 @@ use OxidEsales\PaymentBase\Service\Commit\CommitOutcome;
 use OxidEsales\PaymentBase\Service\Commit\ContractCommitServiceInterface;
 use OxidEsales\PaymentBase\Service\Commit\PaymentConfirmation;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
-use OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface;
+use OxidEsales\PaymentBase\Contract\ContractTerminationServiceInterface;
 use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentResult;
@@ -112,7 +112,7 @@ final class WebhookContractFulfillmentHandlerAuthorizedCommitTest extends TestCa
         return new WebhookContractFulfillmentHandler(
             $this->contracts,
             $this->createMock(ContractFulfillmentServiceInterface::class),
-            $this->createMock(ContractLinkedOrderUpdaterInterface::class),
+            $this->createMock(ContractTerminationServiceInterface::class),
             new TransactionAuditRecorder($this->transactions, $shopAdapter),
             new NullLogger(),
             $this->createMock(LateMoneyResolverInterface::class),

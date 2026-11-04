@@ -304,6 +304,7 @@ final class MollieAdapter implements
             amountCaptured: MollieValueMapper::toOptionalAmountValue($payment->amountCaptured),
             // OPC-175: an attempt the customer leaves is cancelled only when Mollie allows it.
             isCancelable: (bool) $payment->isCancelable,
+            paidAt: MollieValueMapper::toNullableString($payment->paidAt),
         );
     }
 

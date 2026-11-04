@@ -25,9 +25,9 @@ use OxidEsales\Payments\Mollie\Gateway\GatewayRefusals;
 use OxidEsales\Payments\Mollie\Gateway\GatewayTextRules;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use OxidEsales\Payments\Mollie\Gateway\MollieRefundGateway;
-use OxidEsales\Payments\Mollie\Service\FieldValidationFailure;
+use OxidEsales\PaymentBase\Validation\User\FieldValidationFailure;
 use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
-use OxidEsales\Payments\Mollie\Service\UserDataValidatorInterface;
+use OxidEsales\PaymentBase\Validation\User\UserDataValidatorInterface;
 use OxidEsales\PaymentBase\Validation\Message\MessageFormatterInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -140,7 +140,7 @@ final class MollieRefundGatewayTest extends TestCase
     {
         $validator = $this->createMock(UserDataValidatorInterface::class);
         $validator->expects(self::once())->method('validateFieldMap')
-            ->with(['refundDescription' => 'Order 7'], FieldValidationFailure::KIND_ADMIN)
+            ->with('oe_payments_mollie', ['refundDescription' => 'Order 7'], FieldValidationFailure::KIND_ADMIN)
             ->willReturn(['refundDescription' => new FieldValidationFailure('refundDescription', 'admin', 'blockedCharacter', ';', null)]);
         $this->validator = $validator;
         $this->refunds->expects(self::never())->method('createRefund');

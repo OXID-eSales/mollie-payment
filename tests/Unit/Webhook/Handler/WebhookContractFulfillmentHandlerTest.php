@@ -14,6 +14,7 @@ use OxidEsales\PaymentBase\Adapter\ShopAdapterInterface;
 use OxidEsales\PaymentBase\AtRisk\AtRiskReason;
 use OxidEsales\PaymentBase\AtRisk\PaymentAtRiskFlagInterface;
 use OxidEsales\PaymentBase\Contract\ContractCondition;
+use OxidEsales\PaymentBase\Contract\ContractTerminationService;
 use OxidEsales\PaymentBase\Contract\ContractState;
 use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Contract\Transaction;
@@ -27,7 +28,7 @@ use OxidEsales\PaymentBase\Repository\StaleContractException;
 use OxidEsales\PaymentBase\Repository\TransactionRepositoryInterface;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
-use OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface;
+use OxidEsales\PaymentBase\Adapter\ContractLinkedOrderUpdaterInterface;
 use OxidEsales\Payments\Mollie\Service\TransactionAuditRecorder;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentOutcome;
 use OxidEsales\Payments\Mollie\Webhook\Handler\FulfillmentResult;
@@ -346,7 +347,7 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
         return new WebhookContractFulfillmentHandler(
             $this->contractRepository,
             $this->contractFulfillmentService,
-            $this->orderUpdater,
+            new ContractTerminationService($this->contractRepository, $this->orderUpdater),
             $this->auditRecorder,
             new NullLogger(),
             $this->lateMoney,
@@ -462,6 +463,19 @@ final class WebhookContractFulfillmentHandlerTest extends TestCase
 
         self::assertSame(FulfillmentOutcome::Acted, $result->outcome);
         self::assertSame('contract-1', $result->contractId);
+    }
+
+    /**
+     * VR-25 D1: an expired payment ends the linked order too (payment-base's termination service), so the
+     * order cannot stay NOT_FINISHED behind a contract no cleanup command will look at again.
+     */
+    public function testHandlePaymentExpired_OnAnOpenContract_CancelsTheLinkedOrder(): void
+    {
+        $contract = $this->pendingContract();
+        $this->contractRepository->method('findByProviderOrderId')->willReturn($contract);
+        $this->orderUpdater->expects(self::once())->method('markCancelled')->with('order-1');
+
+        $this->handler->handlePaymentExpired('tr_open');
     }
 
     public function testHandlePaymentExpired_OnAnOpenContract_RaisesNoFlag(): void

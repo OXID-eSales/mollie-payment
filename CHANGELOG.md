@@ -5,6 +5,24 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed - D1 adoption (VR-25 D1 / sprint-25 D2): payment-base's shared pieces
+- Deleted the provider copies of `UserDataValidator(+Interface)`, `UserFieldReaderInterface`, `OxidUserFieldReader`,
+  `FieldValidationFailure`, `ContractLinkedOrderUpdater(+Interface)`, `OxpaidReconciliationService(+Interface)`,
+  `ReconcileOxpaidCommand` (`mollie:reconcile-oxpaid`; use payment-base's `oe:payments:reconcile-oxpaid`) and
+  `PaymentMethodInstaller` (`Core\Events` uses payment-base's `Install\PaymentMethodInstaller`). The validator is called
+  with the module id (`MollieDefinitions::MODULE_ID`); the Mollie rules file stays here with its rule-content test.
+- New `Service\MolliePaidStatusProvider` (tag `oe.payment.paid_status_provider`): the live Mollie payment answers the shared
+  reconciliation; OXPAID gets Mollie's `paidAt` (new `MolliePaymentDto::$paidAt`). A paid payment without `paidAt` is skipped.
+- Webhook failed / expired / canceled go through payment-base's `ContractTerminationService`; audit rows and the at-risk
+  flag for an expiry on a committed contract stay here. **Behaviour change:** an expired payment now also cancels the
+  linked order (before, the order stayed NOT_FINISHED behind a terminal contract).
+- `ModuleConfigurationService` extends payment-base's `AbstractModuleConfigurationService`; an unreadable configuration
+  throws `ModuleConfigurationUnreadableException` (was `MollieConfigurationException`) from mode/key getters. The
+  `initializeForTest` seam is gone; test doubles pass a stub DAO.
+- services.yaml no longer binds payment-base's `EventDispatcherInterface`, `EventListenerProviderInterface`,
+  `OrderPaymentStateServiceInterface`, `ContractFulfillmentServiceInterface`, `ContractServiceInterface` and
+  `TransactionRepositoryInterface` a second time.
+
 ### Changed - D0 + A4 adoption (payment-base wave 5)
 - Deleted `Adapter\OxidShopAdapter`, `Adapter\OxidSessionAdapter` and `Adapter\OxidCurrencyReader`; payment-base
   binds `ShopAdapterInterface` / `SessionAdapterInterface` once for every provider (`isTestMode` there is the shop debug

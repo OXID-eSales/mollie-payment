@@ -15,7 +15,7 @@ use OxidEsales\PaymentBase\Contract\PaymentContractInterface;
 use OxidEsales\PaymentBase\Repository\ContractRepositoryInterface;
 use OxidEsales\PaymentBase\Service\ContractFulfillmentServiceInterface;
 use OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface;
-use OxidEsales\Payments\Mollie\Service\ContractLinkedOrderUpdaterInterface;
+use OxidEsales\PaymentBase\Adapter\ContractLinkedOrderUpdaterInterface;
 use OxidEsales\Payments\Mollie\Service\ReleaseAuthorizationService;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;

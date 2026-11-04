@@ -23,7 +23,7 @@ they never bypass a layer.
 │ 4. Domain services                                                │
 │    CheckoutPaymentService, CaptureService, RefundService,        │
 │    CancelAuthorizationService, TransactionHistoryService,        │
-│    OxpaidReconciliationService, ContractTokenService,             │
+│    MolliePaidStatusProvider, ContractTokenService,                │
 │    MollieRedirectUrlValidator, ContractRefundRecorder            │
 ├──────────────────────────────────────────────────────────────────┤
 │ 5. Adapter layer (segregated interfaces, DIP boundary)           │
