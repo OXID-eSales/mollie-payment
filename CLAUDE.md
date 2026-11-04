@@ -31,9 +31,8 @@ implementation**, not `../stripe/`. Concretely:
   `MollieRefundAdapterInterface`, `MollieWebhookAdapterInterface` — all aliased to **one**
   `LazyMollieAdapter` instance (one SDK client per request), exactly like PayPal's
   `LazyPayPalAdapter`.
-- The three `Oxid*Adapter` implementations (`OxidSessionAdapter`, `OxidShopAdapter`,
-  `OxidShopOrderService`) are near-identical across providers — **start by copying PayPal's** and
-  adjust only the PSP touch-points.
+- `OxidShopAdapter`, `OxidSessionAdapter` and the shop currency/name helpers live in payment-base; the
+  provider binds none of them. `OxidShopOrderService` is payment-base's too.
 
 ## How a provider plugs into payment-base (inherited for free)
 

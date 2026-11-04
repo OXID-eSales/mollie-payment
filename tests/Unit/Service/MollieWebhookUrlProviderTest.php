@@ -21,8 +21,7 @@ use Psr\Log\NullLogger;
 
 /**
  * Sprint 11 Story 7 (F20) — webhook-URL derivation, moved out of `ModuleConfigurationService`
- * (which reached into `Registry::getConfig()` to do it, against this module's own DI rules, and
- * cannot take a `ShopAdapterInterface` without closing a dependency cycle).
+ * (which reached into `Registry::getConfig()` to do it, against this module's own DI rules).
  */
 #[CoversClass(MollieWebhookUrlProvider::class)]
 #[Group('F20')]

@@ -19,12 +19,8 @@ use Psr\Log\LoggerInterface;
  *
  * Sprint 11 Story 7 (F20). This lived in {@see ModuleConfigurationService::getWebhookUrl()} and
  * reached into `Registry::getConfig()->getShopUrl()` — forbidden inside a service by this module's
- * rules, and contradicted by that class's own docblock. Moving it here is not just tidiness:
- * `ModuleConfigurationService` cannot take a `ShopAdapterInterface` because
- * {@see \OxidEsales\Payments\Mollie\Adapter\OxidShopAdapter} depends on the config service, so
- * injecting it there would close a dependency cycle the container would refuse to compile. Deriving
- * a URL is a separate responsibility from reading configuration, and separating them resolves both
- * problems at once.
+ * rules, and contradicted by that class's own docblock. Deriving a URL is a separate responsibility
+ * from reading configuration; this provider takes the shop URL from `ShopAdapterInterface`.
  *
  * The URL is also sanity-checked: Mollie will not call an `http://` endpoint, and a webhook Mollie
  * cannot reach produces exactly the symptoms of F1/F2 (orders that never finalize) with none of the

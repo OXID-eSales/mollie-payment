@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Core;
 
-use OxidEsales\Payments\Mollie\Adapter\OxidCurrencyReader;
 use OxidEsales\Payments\Mollie\Core\MollieDefinitions;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -23,7 +22,6 @@ use SplFileInfo;
  * place that reads a currency out of OXID.
  */
 #[CoversClass(MollieDefinitions::class)]
-#[CoversClass(OxidCurrencyReader::class)]
 #[Group('F16')]
 final class CurrencyGateTest extends TestCase
 {
@@ -48,23 +46,6 @@ final class CurrencyGateTest extends TestCase
     public function testNonEuroIsRejectedForTheRealPaymentId(): void
     {
         self::assertFalse(MollieDefinitions::supportsCurrency(MollieDefinitions::PAYMENT_ID, 'GBP'));
-    }
-
-    // --- OxidCurrencyReader (F17) ---
-
-    public function testCurrencyReaderReturnsTheUppercasedCode(): void
-    {
-        self::assertSame('EUR', OxidCurrencyReader::codeFrom((object) ['name' => 'eur']));
-        self::assertSame('GBP', OxidCurrencyReader::codeFrom((object) ['name' => ' GBP ']));
-    }
-
-    public function testCurrencyReaderReportsFailureInsteadOfGuessing(): void
-    {
-        self::assertNull(OxidCurrencyReader::codeFrom(null));
-        self::assertNull(OxidCurrencyReader::codeFrom('not an object'));
-        self::assertNull(OxidCurrencyReader::codeFrom((object) []));
-        self::assertNull(OxidCurrencyReader::codeFrom((object) ['name' => '']));
-        self::assertNull(OxidCurrencyReader::codeFrom((object) ['name' => ['array']]));
     }
 
     /**
@@ -96,7 +77,7 @@ final class CurrencyGateTest extends TestCase
         self::assertSame(
             [],
             $offenders,
-            "A hardcoded 'EUR' reappeared. Read the currency through OxidCurrencyReader and let the "
+            "A hardcoded 'EUR' reappeared. Read the currency through payment-base's ShopCurrency and let the "
             . "caller decide what an unreadable currency means:\n  " . implode("\n  ", $offenders),
         );
     }

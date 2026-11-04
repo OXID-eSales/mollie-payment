@@ -17,7 +17,7 @@ use OxidEsales\PaymentBase\Adapter\SessionAdapterInterface;
  * The session payload is a plain list of already-formatted message strings — never serialized
  * value objects. The key is namespaced per order so two admins editing different orders in one
  * session do not cross-talk. Reuses {@see SessionAdapterInterface} (payment-base's shop-glue
- * seam, already aliased to `OxidSessionAdapter` for this module) rather than reaching into
+ * seam, bound by payment-base) rather than reaching into
  * `Registry::getSession()` directly.
  */
 final class AdminValidationFeedback implements AdminValidationFeedbackInterface

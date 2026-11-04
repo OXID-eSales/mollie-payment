@@ -116,9 +116,8 @@ services:
   OxidEsales\Payments\Mollie\Service\MollieOrderDataProviderInterface:
     alias: OxidEsales\Payments\Mollie\Service\MollieOrderDataProvider
     public: true
-  # Sprint 11 Story 7 (F20): webhook-URL derivation moved out of ModuleConfigurationService, which
-  # cannot hold a ShopAdapterInterface without closing a dependency cycle (OxidShopAdapter depends
-  # on the config service).
+  # Webhook-URL derivation lives in its own provider so ModuleConfigurationService stays free of
+  # shop-URL knowledge.
   OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface:
     alias: OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProvider
     public: true
@@ -184,22 +183,9 @@ services:
     public: false
 
   # ===========================================================================
-  # Sprint 3: OXID shop-glue adapters implementing payment-base contracts.
-  # Registered explicitly (the Adapter/ tree also holds SDK-coupled classes that
-  # must not be autowired), then aliased to the payment-base interfaces.
+  # ShopAdapterInterface / SessionAdapterInterface are bound by payment-base (OxidShopAdapter,
+  # OxidSessionAdapter); this module does not bind them a second time.
   # ===========================================================================
-
-  OxidEsales\Payments\Mollie\Adapter\OxidSessionAdapter:
-    public: true
-  OxidEsales\PaymentBase\Adapter\SessionAdapterInterface:
-    alias: OxidEsales\Payments\Mollie\Adapter\OxidSessionAdapter
-    public: true
-
-  OxidEsales\Payments\Mollie\Adapter\OxidShopAdapter:
-    public: true
-  OxidEsales\PaymentBase\Adapter\ShopAdapterInterface:
-    alias: OxidEsales\Payments\Mollie\Adapter\OxidShopAdapter
-    public: true
 
   # 2026-09-01 — this module does not bind ShopOrderServiceInterface: payment-base owns order
   # finalization (four modules aliasing one container id meant a single winner finalized every

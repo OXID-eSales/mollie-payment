@@ -189,8 +189,7 @@ class ModuleConfigurationService implements ModuleConfigurationServiceInterface
      * `Registry::getConfig()->getShopUrl()` — a reach-in this module's own rules forbid inside a
      * service, and one this class's docblock simultaneously claimed did not exist. Deriving the URL
      * is a different responsibility from reading configuration, so it moved to
-     * {@see MollieWebhookUrlProvider}, which can hold a ShopAdapterInterface without creating a
-     * dependency cycle back into this service.
+     * {@see MollieWebhookUrlProvider}.
      */
     public function getWebhookUrlOverride(): string
     {

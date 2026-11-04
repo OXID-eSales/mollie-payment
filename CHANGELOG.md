@@ -5,6 +5,12 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed - D0 + A4 adoption (payment-base wave 5)
+- Deleted `Adapter\OxidShopAdapter`, `Adapter\OxidSessionAdapter` and `Adapter\OxidCurrencyReader`; payment-base
+  binds `ShopAdapterInterface` / `SessionAdapterInterface` once for every provider (`isTestMode` there is the shop debug
+  flag; the Mollie mode is read only through `ModuleConfigurationServiceInterface`). `ViewConfig` reads the active currency
+  with payment-base's `ShopCurrency::nameOrEmpty`. Stale "dependency cycle" comments removed.
+
 ### Changed - Adopts payment-base VR wave 4 (H6/DC-PB7/D3/L1)
 - H6: `Service\MolliePaymentOwnershipProvider` (`mollie` / `oe_payments_mollie`, tag `oe.payment.ownership_provider`) and
   `Service\MollieClientConfigSecretPatternProvider` (`/^access_/`, `/^(live|test)_[A-Za-z0-9]{30}$/`, tag

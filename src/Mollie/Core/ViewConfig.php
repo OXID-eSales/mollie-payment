@@ -11,8 +11,8 @@ namespace OxidEsales\Payments\Mollie\Core;
 
 use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
+use OxidEsales\PaymentBase\Adapter\ShopCurrency;
 use OxidEsales\PaymentBase\Service\IframeCheckoutSettingsInterface;
-use OxidEsales\Payments\Mollie\Adapter\OxidCurrencyReader;
 use OxidEsales\Payments\Mollie\Admin\MollieContractStateHelp;
 use OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface;
 use OxidEsales\Payments\Mollie\Service\PaymentMethodListServiceInterface;
@@ -108,7 +108,7 @@ class ViewConfig extends ViewConfig_parent
      */
     protected function mollieActiveCurrency(): string
     {
-        return OxidCurrencyReader::codeFrom(Registry::getConfig()->getActShopCurrencyObject()) ?? '';
+        return ShopCurrency::nameOrEmpty(Registry::getConfig()->getActShopCurrencyObject());
     }
 
     /**
