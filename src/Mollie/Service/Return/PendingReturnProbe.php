@@ -24,7 +24,7 @@ use Throwable;
  * doubt (no payment id, adapter unavailable, API error) reads as "not pending" so the caller
  * falls through to its error path — never to a false thank-you.
  *
- * Extracted from MollieOrderController::returnIsPending() (Sprint 02 Story 1): an API concern,
+ * Extracted from MollieOrderController::returnIsPending(): an API concern,
  * not controller flow — and the controller sat at the PHPMD class-complexity threshold.
  */
 final class PendingReturnProbe

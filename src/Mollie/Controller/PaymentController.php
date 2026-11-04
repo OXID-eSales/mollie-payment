@@ -19,7 +19,7 @@ use Throwable;
 /**
  * Thin extension of OXID's core PaymentController.
  *
- * Story 6: gates progression past the payment-selection step when the customer's stored
+ * Gates progression past the payment-selection step when the customer's stored
  * billing/delivery data fails the shared character-level validation rules — mirrors Stripe's
  * `validatePayment()` override.
  *

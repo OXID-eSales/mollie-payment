@@ -18,7 +18,7 @@ use Throwable;
 /**
  * Per-request memoized read of the live Mollie payment, keyed by provider order id.
  *
- * Sprint 136: extracted from {@see AdminActionBounds::loadPayment()}, which made
+ * Extracted from {@see AdminActionBounds::loadPayment()}, which made
  * one HTTP call per question asked (three per render, four once the payment-method
  * row arrived). The container shares this service for the request, so all
  * consumers of one payment share one round trip.
@@ -73,7 +73,7 @@ final class MolliePaymentSnapshotProvider implements MolliePaymentSnapshotProvid
             // panel then renders "0.00 refundable" for both "already fully
             // refunded" and "Mollie is unreachable" — and an operator can
             // reasonably read the first from the second and stop investigating.
-            // At minimum it must be in the log. (Sprint 11 Story 8 / F12.)
+            // At minimum it must be in the log.
             $this->logger->warning(
                 '[MolliePaymentSnapshotProvider] could not load the Mollie payment; capture/refund '
                 . 'bounds will read as 0.00 and the payment method as unknown',

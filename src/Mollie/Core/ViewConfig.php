@@ -98,7 +98,7 @@ class ViewConfig extends ViewConfig_parent
     }
 
     /**
-     * Sprint 11 Story 11 (F17): no 'EUR' guess here.
+     * No 'EUR' guess here.
      *
      * This feeds the method-list filter, which gates on MollieDefinitions::supportsCurrency() — an
      * EUR-only check today. Guessing EUR made the guess *pass its own gate*, so a GBP shop with an
@@ -145,7 +145,7 @@ class ViewConfig extends ViewConfig_parent
     }
 
     /**
-     * Sprint 11 Story 7 (F4): `isTestMode()` now throws when the module configuration cannot be read,
+     * `isTestMode()` throws when the module configuration cannot be read,
      * because guessing which Mollie account is active is how a live shop ended up transacting against
      * its test key. A storefront view must not fatal over it, so the exception is caught HERE — and
      * logged, which the previous silent `?? true` never was.

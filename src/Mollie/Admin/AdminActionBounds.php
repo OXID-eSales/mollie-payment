@@ -22,7 +22,7 @@ use OxidEsales\Payments\Mollie\Service\RefundBound;
  * Kept as a small, independently-injectable seam so the admin panel's read-only display path never depends on the
  * write side.
  *
- * Sprint 136: the payment read itself moved to
+ * The payment read itself moved to
  * {@see MolliePaymentSnapshotProviderInterface}, so the three questions below —
  * plus the new payment-method row — share one HTTP round trip instead of taking
  * one each. Behaviour, including the fail-closed 0.00 bounds and the warning

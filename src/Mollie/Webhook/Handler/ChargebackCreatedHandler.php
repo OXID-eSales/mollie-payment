@@ -24,7 +24,7 @@ use OxidEsales\Payments\Mollie\Webhook\MollieWebhookOutcome;
  * (30 then 50 is +30, +20; a replay books nothing). Before, every delivery recorded the whole total
  * again. Audit only: no automatic reversal of the contract's
  * fulfilled/captured state is performed — dispute resolution is a merchant/operator decision
- * (full dispute handling is out of scope for this sprint; see Sprint 8 stretch goals).
+ * (full dispute handling is out of scope).
  */
 final class ChargebackCreatedHandler implements MollieWebhookEventHandlerInterface
 {

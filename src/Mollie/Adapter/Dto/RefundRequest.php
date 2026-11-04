@@ -12,8 +12,8 @@ namespace OxidEsales\Payments\Mollie\Adapter\Dto;
 /**
  * Immutable input for refunding a Mollie payment (full or partial).
  *
- * Story 3 (Sprint 9): Added `metadata` field for admin description. Description is stored
- * in Mollie's metadata for audit trail retrieval.
+ * The `metadata` field carries the admin description; it is stored in Mollie's metadata for audit trail
+ * retrieval.
  */
 final readonly class RefundRequest
 {

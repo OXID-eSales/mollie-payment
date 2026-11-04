@@ -13,7 +13,7 @@ declare(strict_types=1);
  * FilesystemValidationRuleLoader for plugin id 'oe_payments_mollie'.
  *
  * UNICODE_LETTERS/NUMBERS/SPACES are class tokens interpreted by payment-base's
- * CharacterClass — copied from Stripe's Sprint 124 (STRP-129) rule set so German umlauts
+ * CharacterClass — copied from Stripe's rule set so German umlauts
  * (öäüß) and Polish letters (ł ą ę …) pass, not just ASCII.
  */
 return [

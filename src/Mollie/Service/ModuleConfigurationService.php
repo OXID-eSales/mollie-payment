@@ -21,8 +21,7 @@ use OxidEsales\Payments\Mollie\Module;
  * selected automatically from the configured mode. This is the single source of truth for
  * credentials/mode.
  *
- * Sprint 11 Story 7 (F4) drew the line this class had been blurring. Two situations look the same to
- * a naive reader and must not be treated the same:
+ * Two situations look the same to a naive reader and must not be treated the same:
  *
  * - a setting is **unset** — a real default applies (metadata.php declares `test` for the mode);
  * - the configuration is **unreadable** — the DAO threw, the shop id is wrong, the row is gone. The
@@ -97,7 +96,7 @@ class ModuleConfigurationService extends AbstractModuleConfigurationService impl
     /**
      * The merchant's explicit webhook-URL override, or '' when they have not set one.
      *
-     * Sprint 11 Story 7 (F20): this method used to *derive* the URL, reaching into
+     * This method used to *derive* the URL, reaching into
      * `Registry::getConfig()->getShopUrl()` — a reach-in this module's own rules forbid inside a
      * service, and one this class's docblock simultaneously claimed did not exist. Deriving the URL
      * is a different responsibility from reading configuration, so it moved to

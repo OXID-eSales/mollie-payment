@@ -253,7 +253,7 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
      * reject with an invalid-delivery/user state. The standard `cl=order` flow gets this from its
      * controller guards; the OPC handler runs before them, so it prepares the basket itself.
      *
-     * DOES NOT TOUCH `$_POST['sDeliveryAddressMD5']` — this resolves F10 (Sprint 11), which was
+     * DOES NOT TOUCH `$_POST['sDeliveryAddressMD5']` — this resolves F10, which was
      * documented and deliberately deferred pending a decision from whoever owns the OPC
      * integration. That decision is now made: the hash is passed THROUGH from the OPC request.
      *

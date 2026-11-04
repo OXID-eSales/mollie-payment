@@ -17,9 +17,9 @@ use Psr\Log\LoggerInterface;
  * Resolves the `webhookUrl` sent with every Mollie create-payment call: the merchant's explicit
  * override if they set one, otherwise the shop's own webhook controller.
  *
- * Sprint 11 Story 7 (F20). This lived in {@see ModuleConfigurationService::getWebhookUrl()} and
- * reached into `Registry::getConfig()->getShopUrl()` — forbidden inside a service by this module's
- * rules, and contradicted by that class's own docblock. Deriving a URL is a separate responsibility
+ * This once lived in {@see ModuleConfigurationService::getWebhookUrl()}, which reached into
+ * `Registry::getConfig()->getShopUrl()` — forbidden inside a service by this module's rules, and
+ * contradicted by that class's own docblock. Deriving a URL is a separate responsibility
  * from reading configuration; this provider takes the shop URL from `ShopAdapterInterface`.
  *
  * The URL is also sanity-checked: Mollie will not call an `http://` endpoint, and a webhook Mollie

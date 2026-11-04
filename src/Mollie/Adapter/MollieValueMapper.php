@@ -44,8 +44,6 @@ final class MollieValueMapper
     /**
      * Read one string field out of Mollie's loosely-typed `details` bag (a
      * `stdClass` whose keys depend entirely on the payment method).
-     *
-     * Sprint 136.
      */
     public static function toDetailString(mixed $details, string $property): ?string
     {
@@ -61,8 +59,6 @@ final class MollieValueMapper
      * taken from the tail rather than by cutting at a fixed offset. A number
      * that carries no trailing digits yields null: the mask itself must never
      * be presented as digits a customer can confirm.
-     *
-     * Sprint 136.
      */
     public static function toCardLast4(mixed $details): ?string
     {

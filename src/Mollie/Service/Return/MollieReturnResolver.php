@@ -151,7 +151,7 @@ final class MollieReturnResolver implements ReturnResolverInterface
     }
 
     /**
-     * Sprint 11 Story 11 (F17): the contract's currency, verbatim.
+     * The contract's currency, verbatim.
      *
      * This used to substitute 'EUR' for a blank value, and that value flows into PaymentAuthorizedEvent
      * → TransactionRecordingHandler, i.e. straight into the recorded transaction row. Guessing there

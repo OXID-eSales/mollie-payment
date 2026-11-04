@@ -23,7 +23,7 @@ use Throwable;
 
 /**
  * Assembles the admin Transaction History read-model straight from the Mollie API — parity with
- * Stripe's "display from API, audit from DB" strategy documented in the Sprint 7 plan. A payment
+ * Stripe's "display from API, audit from DB" strategy documented in the Mollie architecture notes. A payment
  * plus its captures and refunds are fetched independently: a hiccup fetching refunds/captures
  * degrades the row set instead of hiding the payment row entirely (an operator still sees
  * *something* useful rather than a blank panel).
@@ -106,7 +106,7 @@ final class TransactionHistoryService implements TransactionHistoryServiceInterf
         try {
             return $this->paymentsAdapter->getPayment($providerOrderId);
         } catch (Throwable $e) {
-            // Sprint 11 Story 8: degrading the captures/refunds lists is deliberate and documented,
+            // Degrading the captures/refunds lists is deliberate and documented,
             // but losing the payment itself means a BLANK panel — the operator sees no transactions
             // at all and nothing distinguishes that from "there are none".
             $this->logger->warning(

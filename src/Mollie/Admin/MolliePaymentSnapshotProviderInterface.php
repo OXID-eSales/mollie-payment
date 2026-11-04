@@ -15,7 +15,7 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 /**
  * The one live Mollie payment read the admin panel makes per render.
  *
- * Sprint 136: the panel asks four questions of the same payment — capture
+ * The panel asks four questions of the same payment — capture
  * bound, refund bound, is-this-still-an-authorized-hold, and which method the
  * customer paid with. Each was previously its own HTTP round trip. This seam
  * owns the read (and its failure handling) exactly once; every consumer reads

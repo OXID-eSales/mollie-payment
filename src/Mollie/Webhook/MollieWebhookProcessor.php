@@ -93,7 +93,7 @@ final class MollieWebhookProcessor extends AbstractWebhookProcessor
     }
 
     /**
-     * Identify the DELIVERY, not the payment (Sprint 11 Story 2 / F1).
+     * Identify the DELIVERY, not the payment.
      *
      * Mollie sends only `id=tr_xxx`, and payment-base claims events on `UNIQUE(OXEVENTID)` alone —
      * `OXEVENTTYPE` is passed to `claimEvent()` but is not part of the constraint. Using the bare
@@ -192,7 +192,7 @@ final class MollieWebhookProcessor extends AbstractWebhookProcessor
             'amountRemaining' => $payment->amountRemaining,
             'method' => $payment->method,
             'metadata' => $payment->metadata,
-            // Sprint 11 Story 3 (D3): the handlers bound how long a missing contract is treated as
+            // The handlers bound how long a missing contract is treated as
             // "our own commit may still be in flight" by the payment's own age.
             'createdAt' => $payment->createdAt,
         ];

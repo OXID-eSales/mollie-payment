@@ -14,7 +14,7 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MolliePaymentDto;
 /**
  * What the customer actually paid with, as the Mollie admin panel needs to show it.
  *
- * Sprint 136: `OXPAYMENTTYPE` only ever says `mollie_payment`. The real answer —
+ * `OXPAYMENTTYPE` only ever says `mollie_payment`. The real answer —
  * iDEAL, Klarna, PayPal, a card, a wallet — lives on the Mollie payment, and it
  * changes what an operator does next (settlement times and dispute channels
  * differ per method). This value object is the projection of that payment onto

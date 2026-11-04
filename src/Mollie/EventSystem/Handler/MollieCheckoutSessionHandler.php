@@ -109,7 +109,7 @@ final class MollieCheckoutSessionHandler implements HandlerInterface
             return;
         }
 
-        // Persist Mollie's checkout URL, or nothing (Sprint 11 Story 10 / F18). The `?? $redirectUrl`
+        // Persist Mollie's checkout URL, or nothing. The `?? $redirectUrl`
         // that used to be here wrote OUR return URL — which carries the contract_token bearer value
         // built by buildRedirectUrl() — into the provider-redirect column and into OXMETADATA, where
         // it sat at rest and surfaced in anything that renders contract metadata. It was redundant on

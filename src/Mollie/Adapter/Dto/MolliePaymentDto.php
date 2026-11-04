@@ -15,7 +15,7 @@ use OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper;
  * Immutable snapshot of a Mollie payment as the rest of the module sees it. No Mollie SDK type
  * crosses this boundary — the adapter maps the SDK Payment into this DTO.
  *
- * Sprint 136: `cardBrand`, `cardLast4` and `walletType` come from Mollie's `details` bag and feed
+ * `cardBrand`, `cardLast4` and `walletType` come from Mollie's `details` bag and feed
  * the admin panel's "payment method used" row. All three are null for every method that has no
  * card behind it, which is most of them — `$method` alone answers those.
  *
@@ -141,9 +141,9 @@ final readonly class MolliePaymentDto
      * get-payment reference), so on a partially-captured payment it reports the refundable remainder
      * of the captured part, not what is still capturable. The pre-MOL-32 formula
      * (`amountRemaining > 0 ? amountRemaining : amount`) fell back to the full `amount` after a
-     * partial capture and offered the whole authorization for capture a second time (Sprint 11
-     * Story 10 / F11 fixed only the fully-captured/non-authorized case, not the multi-capture one,
-     * which could not occur until multi-capture was enabled on the account).
+     * partial capture and offered the whole authorization for capture a second time (the earlier fix
+     * covered only the fully-captured/non-authorized case, not the multi-capture one, which could not occur
+     * until multi-capture was enabled on the account).
      */
     public function capturableAmount(): float
     {

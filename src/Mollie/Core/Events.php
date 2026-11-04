@@ -46,7 +46,7 @@ class Events
             $qbFactory = $container->get(QueryBuilderFactoryInterface::class);
             (new PaymentMethodInstaller($qbFactory))->ensurePaymentMethods(MollieDefinitions::getMollieDefinitions());
         } catch (Throwable $e) {
-            // Sprint 11 Story 8 (F9): the catch stays — activation must never fail — but it stops
+            // The catch stays — activation must never fail — but it stops
             // being silent. Without the payment-method row Mollie simply never appears in checkout,
             // and the old comment's recovery plan ("admin can re-run oe:module:activate") assumed an
             // admin who knows something went wrong. Nothing told them.

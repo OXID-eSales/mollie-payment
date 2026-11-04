@@ -71,7 +71,7 @@ final class MollieLinesBuilder
 
     /**
      * The fold exists to absorb a cent or two of OXID rounding, and it must not quietly absorb
-     * anything larger (Sprint 11 Story 10 / F14).
+     * anything larger.
      *
      * It had no bound at all, so a basket that read back empty or partial — `MollieOrderDataProvider`
      * returns `[]` when the session basket is unavailable — produced a single line reading

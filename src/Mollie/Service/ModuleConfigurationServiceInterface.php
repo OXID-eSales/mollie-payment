@@ -44,7 +44,7 @@ interface ModuleConfigurationServiceInterface
 
     /**
      * The merchant's explicit webhook-URL override, or '' when unset. Deriving the effective URL
-     * is {@see MollieWebhookUrlProviderInterface}'s job (Sprint 11 Story 7 / F20).
+     * is {@see MollieWebhookUrlProviderInterface}'s job.
      */
     public function getWebhookUrlOverride(): string;
 

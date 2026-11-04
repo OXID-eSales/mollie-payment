@@ -272,7 +272,7 @@ final class MollieAdapter implements
     /**
      * Named arguments throughout: this is the module's ONLY production construction site for
      * {@see MolliePaymentDto}, and a positional list is exactly how `amountChargedBack` came to be
-     * omitted while the DTO's `= 0.0` default made the gap invisible (Sprint 11 Story 4 / F7).
+     * omitted while the DTO's `= 0.0` default made the gap invisible.
      * {@see \OxidEsales\Payments\Mollie\Tests\Unit\Adapter\PaymentMoneyMappingRegressionTest} pins
      * every money field against distinct SDK values.
      */
@@ -293,7 +293,7 @@ final class MollieAdapter implements
             webhookUrl: MollieValueMapper::toNullableString($payment->webhookUrl),
             amountChargedBack: $payment->getAmountChargedBack(),
             createdAt: MollieValueMapper::toNullableString($payment->createdAt),
-            // Sprint 136: the admin panel's "payment method used" row. `details`
+            // The admin panel's "payment method used" row. `details`
             // is method-dependent — card fields are simply absent for Klarna,
             // iDEAL and friends, which is why every read is null-tolerant.
             cardBrand: MollieValueMapper::toDetailString($payment->details, 'cardLabel'),

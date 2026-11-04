@@ -60,7 +60,7 @@ $aModule = [
         'onDeactivate' => Events::class . '::onDeactivate',
     ],
     'templates' => [
-        // Sprint 7 — body rendered inside payment-base's shared "Payment" admin tab. Both
+        // Body rendered inside payment-base's shared "Payment" admin tab. Both
         // aliases registered so `{% include %}` works with or without the `.html.twig` suffix
         // (mirrors PayPal's/Stripe's own panel template registration).
         '@oe_payments_mollie/admin/panel/mollie_panel' => 'views/twig/admin/panel/mollie_panel.html.twig',

@@ -75,14 +75,14 @@ the code. Do **not** rebuild anything below — it comes from `../payment-base/`
    Mollie Methods API — a Mollie concern with no Stripe equivalent (Stripe Checkout hosts its own).
 5. **Auth = API key** (`test_`/`live_`); OAuth is only for Mollie Connect (deferred stretch).
 
-## Central user-input validation — adopt it (like Stripe, unlike PayPal)
+## Central user-input validation (payment-base's)
 
 `payment-base` provides a shared anti-injection validation subsystem: the frontend endpoint
 `index.php?cl=oepaymentvalidationapi&fnc=validate`, a 7-guard chain, and a character-class engine.
-Stripe adopted it; PayPal skipped it; **Mollie must adopt it** (Sprint 4 Story 6). The provider
-supplies only `src/Resources/validation-rules.php` + a `ValidationRulesProvider` + a tagged
-`UserDataValidationMessageFormatter` + bindings in `services.yaml`. Do **not** roll a bespoke
-validator or a second endpoint.
+Mollie uses it: the provider supplies only `src/Resources/validation-rules.php` + a
+`ValidationRulesProvider` + a tagged `UserDataValidationMessageFormatter` + bindings in `services.yaml`;
+the validator itself is payment-base's `UserDataValidatorInterface`, called with the module id. Do **not**
+roll a bespoke validator or a second endpoint.
 
 ## PSP SDK confinement
 
@@ -92,9 +92,8 @@ in `composer.json`.
 
 ## Commands
 
-The DevOps spine (composer scripts + `bin/pre-commit-check.sh`) is created in **Sprint 1** by
-copying from `../stripe/` and `../paypal/` and repathing to Mollie. Once scaffolded, from this
-directory:
+The DevOps spine (composer scripts + `bin/pre-commit-check.sh`) is copied from `../stripe/` and
+`../paypal/` and repathed to Mollie. From this directory:
 
 ```bash
 composer phpcs                     # PSR-12 (php_codesniffer)

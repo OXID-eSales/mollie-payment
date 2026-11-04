@@ -74,7 +74,7 @@ final class PaidPaymentFulfiller
             return FulfillmentResult::acted((string) $contract->getId());
         }
 
-        // Sprint 11 Story 1 (F2): this is NOT the same as "already fulfilled". The ladder did not complete, so
+        // This is NOT the same as "already fulfilled". The ladder did not complete, so
         // Mollie must be told to come back.
         $this->logger->warning('[PaidPaymentFulfiller] fulfilment did not complete', [
             'contractId' => $contract->getId(),
@@ -117,7 +117,7 @@ final class PaidPaymentFulfiller
     }
 
     /**
-     * MOL-17 Story 5, VR-22 A6: an automatically captured payment (iDEAL, a card with automatic capture, ...) has no
+     * An automatically captured payment (iDEAL, a card with automatic capture, ...) has no
      * capture of its own to book, so the admin panel showed "Captured 0.00" for every paid Mollie order. The paid
      * payment is the capture: payment-base's ledger books it once under the Mollie payment id (a redelivery books
      * nothing). Nothing is booked when a capture is on record already (a manual capture, booked by the admin

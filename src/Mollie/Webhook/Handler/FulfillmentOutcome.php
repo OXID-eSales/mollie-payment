@@ -12,7 +12,7 @@ namespace OxidEsales\Payments\Mollie\Webhook\Handler;
 /**
  * What a {@see WebhookContractFulfillmentHandlerInterface} method actually did.
  *
- * Sprint 11 Story 1 (F2). These methods previously returned a tri-state `?bool`, and that shape is
+ * These methods once returned a tri-state `?bool`, and that shape is
  * what caused the bug: `false` meant BOTH "already fulfilled / already terminal — nothing to do"
  * and "we tried and could not complete it". Both were mapped to `WebhookResult::skipped()`, whose
  * `success` flag is `true`, so both were answered `HTTP 200` — and Mollie only retries on non-2xx.

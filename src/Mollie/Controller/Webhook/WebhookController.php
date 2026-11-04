@@ -40,7 +40,7 @@ class WebhookController extends FrontendController
     /**
      * Whether `X-Forwarded-Proto: https` may stand in for a TLS connection at the origin.
      *
-     * Sprint 11 Story 6 (F5) shipped this as `false` — anyone can send that header, so honouring it
+     * Once shipped as `false` — anyone can send that header, so honouring it
      * lets anyone tell the HTTPS guard a plaintext request was encrypted. Running it against the real
      * deployment reversed the decision, and the reasoning is worth keeping:
      *
@@ -94,7 +94,7 @@ class WebhookController extends FrontendController
             $clientIp = $container->get(TrustedProxyClientIp::class);
             $this->clientIp = $clientIp instanceof TrustedProxyClientIp ? $clientIp : null;
         } catch (Throwable $e) {
-            // error, not warning (Sprint 11 Story 5 / F3): render() now refuses to serve without a
+            // error, not warning: render() now refuses to serve without a
             // guard chain, so this is the reason the endpoint is down, not a background nuisance.
             Registry::getLogger()->error('Mollie webhook guard chain unavailable', ['error' => $e->getMessage()]);
         }
@@ -113,7 +113,7 @@ class WebhookController extends FrontendController
     {
         $this->setResponseContentType();
 
-        // Three distinct cases, explicitly (Sprint 11 Story 5 / F3). This used to be a `?->` plus a
+        // Three distinct cases, explicitly. This used to be a `?->` plus a
         // `!== null` test, which quietly made "the guard chain could not be built" mean "the guard
         // chain passed" — the security control was the one thing in this method that failed open.
         // 503 rather than 500: retry-worthy, so a transient container problem does not lose the event.
@@ -282,7 +282,7 @@ class WebhookController extends FrontendController
      *
      * The shape check is deliberately here rather than deeper in the stack: verification of a Mollie
      * webhook IS an outbound API round-trip, so an implausible id must be refused before it can buy
-     * one (Sprint 11 Story 6 / F6 — this replaces the token-bucket rate limiter that could never
+     * one (this replaces the token-bucket rate limiter that could never
      * fire because its buckets lived in per-request memory).
      */
     protected function extractPaymentId(): ?string

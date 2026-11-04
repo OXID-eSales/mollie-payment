@@ -22,8 +22,7 @@ use Psr\Log\LoggerInterface;
  * canceled).
  *
  * Owns the mapping from a {@see FulfillmentOutcome} onto a `WebhookResult`, which is the same thing
- * as deciding what HTTP status Mollie sees — and therefore whether Mollie retries. Sprint 11
- * Stories 1 + 3 (F2).
+ * as deciding what HTTP status Mollie sees — and therefore whether Mollie retries.
  */
 abstract class AbstractMollieWebhookHandler implements MollieWebhookEventHandlerInterface
 {

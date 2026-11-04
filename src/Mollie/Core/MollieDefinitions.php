@@ -36,7 +36,7 @@ final class MollieDefinitions
     // The `cl=` value of the webhook endpoint controller. Registered in metadata.php `controllers`.
     public const WEBHOOK_CONTROLLER_ID = 'MollieWebhookController';
 
-    // Transaction types recorded via TransactionRepositoryInterface (Sprint 5 webhook pipeline).
+    // Transaction types recorded via TransactionRepositoryInterface by the webhook pipeline.
     public const TRANSACTION_TYPE_CAPTURE = 'capture';
     public const TRANSACTION_TYPE_REFUND = 'refund';
     public const TRANSACTION_TYPE_FAILURE = 'failure';
@@ -59,7 +59,7 @@ final class MollieDefinitions
 
     /**
      * Module settings that carry a credential and must never render in clear text on the admin
-     * Settings tab (Sprint 10).
+     * Settings tab.
      *
      * The admin `module_config` template override reads this list through Twig's `constant()` and
      * masks whatever is in it, so adding an entry here is the whole change — there is no second list
@@ -200,7 +200,7 @@ final class MollieDefinitions
     }
 
     /**
-     * Sprint 11 Story 11 (F16): an empty currency list means "unknown", and unknown must not mean
+     * An empty currency list means "unknown", and unknown must not mean
      * "everything is allowed".
      *
      * The old form (`$currencies === [] || in_array(...)`) returned true for an unknown payment id or

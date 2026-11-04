@@ -17,8 +17,8 @@ namespace OxidEsales\Payments\Mollie\Webhook\Handler;
  * transitions onto the linked oxorder.
  *
  * Every method reports what it did — and to which contract — as a {@see FulfillmentResult}
- * (review 2026-10-14, A-M2). Sprint 11 Story 1 replaced the
- * previous tri-state `?bool` because `false` conflated "already done, nothing to do" with "tried and
+ * (review 2026-10-14, A-M2). The previous
+ * tri-state `?bool` was replaced because `false` conflated "already done, nothing to do" with "tried and
  * failed" — and the caller answered Mollie `HTTP 200` for both, so a failed fulfilment was never
  * retried. See {@see FulfillmentOutcome} for the mapping onto HTTP status codes.
  */

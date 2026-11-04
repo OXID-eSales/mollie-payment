@@ -20,7 +20,7 @@ use OxidEsales\Payments\Mollie\Service\TransactionHistoryServiceInterface;
  * Assembles the flat, Twig-consumable view-data array for the Mollie admin panel body
  * ({@see MolliePaymentPanelProvider::build()}): contract identity, capture/refund bounds (Story
  * 2), live transaction history, a Mollie dashboard deep-link, and any pending admin validation
- * message (Story 3, consumed exactly once per render).
+ * message (consumed exactly once per render).
  */
 class MolliePanelViewDataBuilder
 {
@@ -30,7 +30,7 @@ class MolliePanelViewDataBuilder
         private readonly AdminActionBoundsInterface $bounds,
         private readonly MollieUrlBuilder $urlBuilder,
         private readonly AdminValidationFeedbackInterface $validationFeedback,
-        // Sprint 136: shared with AdminActionBounds, so the whole render is one
+        // Shared with AdminActionBounds, so the whole render is one
         // live Mollie read rather than one per question asked.
         private readonly MolliePaymentSnapshotProviderInterface $snapshots,
         private readonly PaymentMethodLabelResolver $methodLabels,
@@ -113,7 +113,7 @@ class MolliePanelViewDataBuilder
             'transactions' => $transactions,
             'errorMessage' => null,
             'validationErrors' => $validationErrors,
-            // Sprint 136: what the customer actually paid with. 'paymentType'
+            // What the customer actually paid with. 'paymentType'
             // above is the shop's method id and reads 'mollie_payment' for every
             // Mollie order.
             'paymentMethod' => $this->buildPaymentMethod($this->snapshots->snapshot($contract)),
@@ -204,8 +204,8 @@ class MolliePanelViewDataBuilder
     /**
      * Drop every per-request memo so the next {@see build()} reads Mollie again.
      *
-     * Story 2 (Sprint 9) added this for API parity with Stripe, as a no-op: at the time nothing
-     * in the Mollie render was cached. Sprint 136 then made the live payment a per-request memo
+     * This began as a no-op kept for API parity with Stripe, because nothing in the Mollie render was
+     * cached. The live payment then became a per-request memo
      * ({@see MolliePaymentSnapshotProviderInterface}), and the no-op silently became a bug: the
      * action request validated the amount against the memoized payment, acted, and re-rendered
      * the same memo — the panel showed pre-action bounds until the operator reloaded (2026-09-17).

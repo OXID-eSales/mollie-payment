@@ -12,7 +12,7 @@ namespace OxidEsales\Payments\Mollie\Admin;
 /**
  * Raw Mollie payment-method code → admin language key.
  *
- * Sprint 136: the admin "Payment" tab shows the method the customer actually
+ * The admin "Payment" tab shows the method the customer actually
  * paid with. Mollie reports it as a lowercase code in `payment.method`, or as a
  * wallet marker in `payment.details.wallet`; this map turns that code into a
  * translatable ident.

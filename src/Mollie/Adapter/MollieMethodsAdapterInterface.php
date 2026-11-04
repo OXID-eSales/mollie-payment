@@ -13,7 +13,7 @@ use OxidEsales\Payments\Mollie\Adapter\Dto\MethodsListRequest;
 use OxidEsales\Payments\Mollie\Adapter\Dto\MollieMethodDto;
 
 /**
- * Payment-method listing (Sprint 7 ISP slice, 5th of the segregated adapter interfaces).
+ * Payment-method listing (the fifth of the segregated adapter interfaces).
  */
 interface MollieMethodsAdapterInterface
 {

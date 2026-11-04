@@ -53,7 +53,7 @@ final class CheckoutPaymentService implements CheckoutPaymentServiceInterface
         // shopper, drop the forced method so Mollie presents its hosted page (which collects the
         // address itself). Normal logged-in checkouts always have a complete address, so this is rare.
         //
-        // Sprint 11 Story 8 (F15): this silently replaces the method the shopper explicitly chose, so
+        // This silently replaces the method the shopper explicitly chose, so
         // it is logged. An address-mapping problem affecting every Klarna order would otherwise be
         // invisible — the checkout would just quietly stop honouring the selection.
         $needsOrderData = $effectiveMethod !== null && MollieDefinitions::requiresOrderData($effectiveMethod);
