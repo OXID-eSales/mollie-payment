@@ -5,6 +5,11 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+- **Requires payment-base `^v1.7`.** payment-base 1.7.0 is the release that ships everything this module adopted in
+  the VR waves: the refund/chargeback/capture ledgers, the shared webhook pipeline, the money-operation runner, the
+  return-access guard and the late-money gateway. Older payment-base releases do not have them.
+
 ### Fixed - VR-26 M2: Mollie chargeback raises "payment at risk"; a refund after a chargeback is booked
 - Once `amountChargedBack > 0`, every delivery of the payment was typed `chargedback` with the id
   `tr_x:chargedback:<cents>`: a refund issued after the chargeback arrived with an unchanged id, was answered `duplicate`
