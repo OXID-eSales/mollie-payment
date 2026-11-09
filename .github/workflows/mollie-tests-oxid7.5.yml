@@ -25,6 +25,7 @@ env:
 
 jobs:
   install_shop_with_module:
+    name: install_shop_with_module (${{ matrix.graphql }} GraphQL)
     # GraphQL dimension: 'without' (no GraphQL package at all) and 'with' (GraphQL active).
     strategy:
       fail-fast: false
@@ -151,7 +152,7 @@ jobs:
 
       - name: Install dependencies, reset shop, activate theme
         env:
-          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN || github.token }}
         run: |
           # An EMPTY github-oauth token 401s where anonymous access would succeed —
           # only pass COMPOSER_AUTH when a PAT is actually configured.
@@ -162,11 +163,15 @@ jobs:
           if [ '${{ matrix.graphql }}' = 'with' ]; then
             docker compose exec -T php composer require oxid-esales/graphql-storefront --no-interaction --no-update
           fi
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             docker compose exec -T -e COMPOSER_AUTH="${COMPOSER_AUTH_JSON}" \
               php composer update --with-all-dependencies --no-interaction && break
-            if [ "$attempt" = 3 ]; then exit 1; fi
-            echo "composer update failed (attempt $attempt), retrying in 20 s"; sleep 20
+            if [ "$attempt" = 5 ]; then exit 1; fi
+            # api.github.com refuses every dist zip from some runners for the whole job (curl error 7). Composer
+            # writes composer.lock before it downloads, so the lock already names every dist: seed Composer's
+            # cache from codeload.github.com and the retry serves every GitHub dist from the cache instead.
+            docker compose exec -T php php /var/www/test-module/.github/scripts/composer-dist-cache-from-codeload.php /var/www/composer.lock || true
+            echo "composer update failed (attempt $attempt), retrying in $((20 * attempt)) s"; sleep $((20 * attempt))
           done
 
       # Workaround for a CI-environment-specific bug in
@@ -346,7 +351,7 @@ jobs:
         id: dependencies
         working-directory: source/test-module
         env:
-          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN || github.token }}
         run: |
           # Only authenticate when a PAT exists — an empty github-oauth token 401s.
           if [ -n "${GH_TOKEN}" ]; then
@@ -412,10 +417,14 @@ jobs:
 
       - name: Install module dependencies
         run: |
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             docker compose exec -T php bash -c "cd /var/www/test-module && composer update --no-interaction" && break
-            if [ "$attempt" = 3 ]; then exit 1; fi
-            echo "composer update failed (attempt $attempt), retrying in 20 s"; sleep 20
+            if [ "$attempt" = 5 ]; then exit 1; fi
+            # api.github.com refuses every dist zip from some runners for the whole job (curl error 7). Composer
+            # writes composer.lock before it downloads, so the lock already names every dist: seed Composer's
+            # cache from codeload.github.com and the retry serves every GitHub dist from the cache instead.
+            docker compose exec -T php php /var/www/test-module/.github/scripts/composer-dist-cache-from-codeload.php /var/www/test-module/composer.lock || true
+            echo "composer update failed (attempt $attempt), retrying in $((20 * attempt)) s"; sleep $((20 * attempt))
           done
 
       - name: Run isolated unit tests
@@ -428,6 +437,7 @@ jobs:
           docker compose exec -T php bash -c "cd /var/www/test-module && vendor/bin/phpunit -c tests/phpunit-unit.xml"
 
   integration_tests:
+    name: integration_tests (PHP ${{ matrix.php }}, MySQL ${{ matrix.mysql }}, ${{ matrix.graphql }} GraphQL)
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -484,10 +494,14 @@ jobs:
           if [ '${{ matrix.graphql }}' = 'with' ]; then
             docker compose exec -T php composer require oxid-esales/graphql-storefront --no-interaction --no-update
           fi
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             docker compose exec -T php composer update --no-interaction && break
-            if [ "$attempt" = 3 ]; then exit 1; fi
-            echo "composer update failed (attempt $attempt), retrying in 20 s"; sleep 20
+            if [ "$attempt" = 5 ]; then exit 1; fi
+            # api.github.com refuses every dist zip from some runners for the whole job (curl error 7). Composer
+            # writes composer.lock before it downloads, so the lock already names every dist: seed Composer's
+            # cache from codeload.github.com and the retry serves every GitHub dist from the cache instead.
+            docker compose exec -T php php /var/www/test-module/.github/scripts/composer-dist-cache-from-codeload.php /var/www/composer.lock || true
+            echo "composer update failed (attempt $attempt), retrying in $((20 * attempt)) s"; sleep $((20 * attempt))
           done
 
       - name: Install module

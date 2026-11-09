@@ -5,6 +5,18 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- **CI on OXID 7.1 / 7.2 / 7.3 (PHP 8.3, PHPUnit 12).** Workflow `.github/workflows/mollie-tests-oxid7.1-7.3.yml`
+  installs the module into a CE shop of each line as the recipes build it (composer project, `oxideshop-ce
+  dev-b-7.N.x`), with the deltas the older shops need: `conflict oxideshop-ce <7.4` relaxed to `<7.1` in the
+  checked-out copy for the run only, PHPUnit 12 required at shop level (the 7.1/7.2 clones would bring ^10.4),
+  composer's advisory policy off (7.1/7.2 pin twig 3.8.0), and `.github/scripts/fix-unified-namespace-dirs.sh`
+  repairing the OXDEV-10249 layout after the shop-level composer update. Runs the Integration suite on the shop's
+  PHPUnit. No GraphQL dimension yet (phase 2 of the 7.1-7.3 experiment) and no styles / unit jobs (shop-independent;
+  7.4-7.6 workflows). `BasketSummaryHashParityTest` skips below 7.3: core's private
+  `OrderController::getBasketSummaryHash()` exists from 7.3 on, those lines post no hash, and the mirror then only
+  warns and proceeds, so there is nothing to pin.
+
 ### Changed
 - **Requires payment-base `^v1.7`.** payment-base 1.7.0 is the release that ships everything this module adopted in
   the VR waves: the refund/chargeback/capture ledgers, the shared webhook pipeline, the money-operation runner, the

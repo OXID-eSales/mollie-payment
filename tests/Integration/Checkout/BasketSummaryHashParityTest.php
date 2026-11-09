@@ -26,6 +26,7 @@ use Throwable;
  *
  * If this test fails or errors (method renamed/removed), core's recipe moved — update the mirror
  * in MollieOrderController AND chase the known spin-off (make core's helpers protected upstream).
+ * Skipped below OXID 7.3, where core has no basket-summary check (see the method).
  *
  * @group integration
  */
@@ -48,14 +49,22 @@ final class BasketSummaryHashParityTest extends TestCase
             'the Mollie class-chain extension must be active for this parity to mean anything',
         );
 
+        // OXID 7.1 and 7.2 have no basket-summary check at all: core's getBasketSummaryHash() exists from
+        // 7.3 on, their order templates post no hash, and the mirror then only warns and proceeds (core
+        // parity: "a MISSING hash only logs a warning"). There is nothing to pin below 7.3.
+        $coreClass = \OxidEsales\EshopCommunity\Application\Controller\OrderController::class;
+        if (!method_exists($coreClass, 'getBasketSummaryHash')) {
+            self::markTestSkipped(
+                'core OrderController::getBasketSummaryHash() does not exist on this shop line (< 7.3): '
+                . 'no basket-summary check to mirror',
+            );
+        }
+
         // The summary content is irrelevant — the pin is the RECIPE (method + encoding + digest).
         // Both sides read the same session basket, so a core change to getBasketSummary() itself
         // moves both hashes equally and does not fail this test; only recipe drift does.
         // Private methods are not inherited: reflect on the DECLARING core class.
-        $core = new ReflectionMethod(
-            \OxidEsales\EshopCommunity\Application\Controller\OrderController::class,
-            'getBasketSummaryHash',
-        );
+        $core = new ReflectionMethod($coreClass, 'getBasketSummaryHash');
         $coreHash = (string) $core->invoke($controller);
 
         $mirror = new ReflectionMethod($controller, 'currentBasketSummaryHash');
