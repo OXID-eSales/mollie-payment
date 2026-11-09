@@ -39,6 +39,7 @@ env:
 
 jobs:
   install_shop_with_module:
+    name: install_shop_with_module (OXID ${{ matrix.oxid }}, without GraphQL)
     strategy:
       fail-fast: false
       matrix:
@@ -217,8 +218,13 @@ jobs:
             COMPOSER_AUTH_JSON="{\"github-oauth\":{\"github.com\":\"${GH_TOKEN}\"}}"
           fi
           for attempt in 1 2 3 4 5; do
+            # api.github.com refuses the dist zips from some runners for the whole job (curl error 7 on every
+            # package, every attempt); github.com itself keeps serving git. From the 4th attempt on, install
+            # from source: slower, but a clone needs only github.com.
+            prefer=''
+            if [ "$attempt" -ge 4 ]; then prefer='--prefer-source'; echo "attempt $attempt: --prefer-source (api.github.com refused)"; fi
             docker compose exec -T -e COMPOSER_AUTH="${COMPOSER_AUTH_JSON}" \
-              php composer update --with-all-dependencies --no-interaction && break
+              php composer update --with-all-dependencies --no-interaction $prefer && break
             if [ "$attempt" = 5 ]; then exit 1; fi
             echo "composer update failed (attempt $attempt), retrying in $((20 * attempt)) s"; sleep $((20 * attempt))
           done
@@ -337,6 +343,7 @@ jobs:
             data/php/logs/error_log.txt
 
   integration_tests:
+    name: integration_tests (OXID ${{ matrix.oxid }}, PHP ${{ matrix.php }}, MySQL ${{ matrix.mysql }}, without GraphQL)
     strategy:
       fail-fast: false
       matrix:
