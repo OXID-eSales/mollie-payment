@@ -150,7 +150,7 @@ jobs:
 
       - name: Install dependencies, reset shop, activate theme
         env:
-          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN || github.token }}
         run: |
           # An EMPTY github-oauth token 401s where anonymous access would succeed —
           # only pass COMPOSER_AUTH when a PAT is actually configured.
@@ -161,11 +161,11 @@ jobs:
           if [ '${{ matrix.graphql }}' = 'with' ]; then
             docker compose exec -T php composer require oxid-esales/graphql-storefront --no-interaction --no-update
           fi
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             docker compose exec -T -e COMPOSER_AUTH="${COMPOSER_AUTH_JSON}" \
               php composer update --with-all-dependencies --no-interaction && break
-            if [ "$attempt" = 3 ]; then exit 1; fi
-            echo "composer update failed (attempt $attempt), retrying in 20 s"; sleep 20
+            if [ "$attempt" = 5 ]; then exit 1; fi
+            echo "composer update failed (attempt $attempt), retrying in $((20 * attempt)) s"; sleep $((20 * attempt))
           done
 
       # Workaround for a CI-environment-specific bug in
@@ -345,7 +345,7 @@ jobs:
         id: dependencies
         working-directory: source/test-module
         env:
-          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN || github.token }}
         run: |
           # Only authenticate when a PAT exists — an empty github-oauth token 401s.
           if [ -n "${GH_TOKEN}" ]; then
@@ -401,7 +401,7 @@ jobs:
       - name: Install module dependencies
         working-directory: source/test-module
         env:
-          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN || github.token }}
         run: |
           if [ -n "${GH_TOKEN}" ]; then
             export COMPOSER_AUTH="{\"github-oauth\":{\"github.com\":\"${GH_TOKEN}\"}}"
@@ -466,10 +466,10 @@ jobs:
 
       - name: Install module dependencies
         run: |
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             docker compose exec -T php bash -c "cd /var/www/test-module && composer update --no-interaction" && break
-            if [ "$attempt" = 3 ]; then exit 1; fi
-            echo "composer update failed (attempt $attempt), retrying in 20 s"; sleep 20
+            if [ "$attempt" = 5 ]; then exit 1; fi
+            echo "composer update failed (attempt $attempt), retrying in $((20 * attempt)) s"; sleep $((20 * attempt))
           done
 
       - name: Run isolated unit tests
@@ -537,10 +537,10 @@ jobs:
           if [ '${{ matrix.graphql }}' = 'with' ]; then
             docker compose exec -T php composer require oxid-esales/graphql-storefront --no-interaction --no-update
           fi
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             docker compose exec -T php composer update --no-interaction && break
-            if [ "$attempt" = 3 ]; then exit 1; fi
-            echo "composer update failed (attempt $attempt), retrying in 20 s"; sleep 20
+            if [ "$attempt" = 5 ]; then exit 1; fi
+            echo "composer update failed (attempt $attempt), retrying in $((20 * attempt)) s"; sleep $((20 * attempt))
           done
 
       - name: Install module

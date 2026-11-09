@@ -208,7 +208,7 @@ jobs:
 
       - name: Install dependencies
         env:
-          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.ENTERPRISE_GITHUB_TOKEN || secrets.GH_TOKEN || github.token }}
         run: |
           # An EMPTY github-oauth token 401s where anonymous access would succeed -
           # only pass COMPOSER_AUTH when a PAT is actually configured.
@@ -216,11 +216,11 @@ jobs:
           if [ -n "${GH_TOKEN}" ]; then
             COMPOSER_AUTH_JSON="{\"github-oauth\":{\"github.com\":\"${GH_TOKEN}\"}}"
           fi
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             docker compose exec -T -e COMPOSER_AUTH="${COMPOSER_AUTH_JSON}" \
               php composer update --with-all-dependencies --no-interaction && break
-            if [ "$attempt" = 3 ]; then exit 1; fi
-            echo "composer update failed (attempt $attempt), retrying in 20 s"; sleep 20
+            if [ "$attempt" = 5 ]; then exit 1; fi
+            echo "composer update failed (attempt $attempt), retrying in $((20 * attempt)) s"; sleep $((20 * attempt))
           done
 
       # OXDEV-10249, see the script header. Must follow every shop-level composer update.
