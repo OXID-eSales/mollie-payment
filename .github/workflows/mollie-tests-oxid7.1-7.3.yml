@@ -218,14 +218,13 @@ jobs:
             COMPOSER_AUTH_JSON="{\"github-oauth\":{\"github.com\":\"${GH_TOKEN}\"}}"
           fi
           for attempt in 1 2 3 4 5; do
-            # api.github.com refuses the dist zips from some runners for the whole job (curl error 7 on every
-            # package, every attempt); github.com itself keeps serving git. From the 4th attempt on, install
-            # from source: slower, but a clone needs only github.com.
-            prefer=''
-            if [ "$attempt" -ge 4 ]; then prefer='--prefer-source'; echo "attempt $attempt: --prefer-source (api.github.com refused)"; fi
             docker compose exec -T -e COMPOSER_AUTH="${COMPOSER_AUTH_JSON}" \
-              php composer update --with-all-dependencies --no-interaction $prefer && break
+              php composer update --with-all-dependencies --no-interaction && break
             if [ "$attempt" = 5 ]; then exit 1; fi
+            # api.github.com refuses every dist zip from some runners for the whole job (curl error 7). Composer
+            # writes composer.lock before it downloads, so the lock already names every dist: seed Composer's
+            # cache from codeload.github.com and the retry serves every GitHub dist from the cache instead.
+            docker compose exec -T php php /var/www/test-module/.github/scripts/composer-dist-cache-from-codeload.php /var/www/composer.lock || true
             echo "composer update failed (attempt $attempt), retrying in $((20 * attempt)) s"; sleep $((20 * attempt))
           done
 
