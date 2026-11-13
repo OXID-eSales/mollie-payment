@@ -104,7 +104,7 @@ final class ValidationEndpointGuardParityTest extends TestCase
         $store = $this->createMock(RateLimitStoreInterface::class);
         $store->method('increment')->willReturn(31);
         $config = $this->createMock(RateLimitConfigInterface::class);
-        $config->method('getLimitForPlugin')->with(MollieDefinitions::MODULE_ID)->willReturn(30);
+        $config->method('getLimitPerMinute')->willReturn(30);
         $guard = new RateLimitGuard($store, $config);
 
         $result = $guard->check($this->context(pluginModuleId: MollieDefinitions::MODULE_ID));
@@ -135,6 +135,7 @@ final class ValidationEndpointGuardParityTest extends TestCase
             $sessionId,
             $originHeader,
             $refererHeader,
+            '203.0.113.1',
         );
     }
 }
