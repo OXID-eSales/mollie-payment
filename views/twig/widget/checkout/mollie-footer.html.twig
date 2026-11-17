@@ -276,13 +276,27 @@ class MollieCheckoutFooterController extends BaseController {
       return Array.prototype.every.call(boxes, function (box) { return box.checked; });
     }
 
+    /**
+     * The CSRF token OPC's money-actions accept. Since OPC v1.6.270 (OPC-345)
+     * processCheckout reads `stoken` from the JSON body and from nowhere else —
+     * the X-CSRF-Token header it used to honour is ignored. The DOM is the
+     * source so a post-login token refresh is picked up; the Twig-rendered
+     * value is the fallback so a markup change cannot downgrade the payment
+     * to a token-less one.
+     */
+    _requestToken() {
+      var dom = document.querySelector('input[name="stoken"]');
+      return (dom && dom.value) ? dom.value : this.csrfTokenValue;
+    }
+
     async _processCheckout(method, cardToken) {
       // The OPC CheckoutService rejects processCheckout unless both consent flags are true;
       // forward the real checkbox state so the server can refuse an order without consent.
       var body = {
         paymentMethodId: this.paymentMethodValue,
         confirmTermsAndConditions: this._consentAccepted('confirmTerms'),
-        confirmPrivacyPolicy: this._consentAccepted('confirmPrivacy')
+        confirmPrivacyPolicy: this._consentAccepted('confirmPrivacy'),
+        stoken: this._requestToken()
       };
       // Provider-specific fields — OPC forwards them into the PaymentContext metadata bag.
       if (method) { body.mollieMethod = method; }
