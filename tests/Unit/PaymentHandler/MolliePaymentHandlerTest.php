@@ -143,6 +143,7 @@ final class MolliePaymentHandlerTest extends TestCase
 
         self::assertFalse($result->isSuccess());
         self::assertSame(MolliePaymentHandler::ERROR_ORDER_IN_PROGRESS, $result->getErrorCode());
+        self::assertSame('MOLLIE_ORDER_IN_PROGRESS', $result->getErrorMessage(), 'the translated sentence of that key');
         self::assertNull($result->getMetadataValue('redirectUrl'));
     }
 

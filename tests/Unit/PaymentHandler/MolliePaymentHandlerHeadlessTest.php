@@ -26,6 +26,7 @@ use OxidEsales\Payments\Mollie\Service\BasketBuyabilityValidator;
 use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
 use OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages;
 use OxidEsales\Payments\Mollie\Service\OxidLanguageTranslator;
+use OxidEsales\Payments\Mollie\Tests\Unit\Support\KeyEchoTranslator;
 use OxidEsales\Payments\Mollie\Tests\Unit\Support\FixedIframeSettings;
 use OxidEsales\Payments\Mollie\Tests\Unit\Support\FixedUserDataGate;
 use OxidEsales\Payments\Mollie\Tests\Unit\Support\NoInFlightReplay;
@@ -50,7 +51,7 @@ final class SessionRecordingMollieHandler extends MolliePaymentHandler
             new FixedIframeSettings(),
             new NotOrderableItemsMessages(new OxidLanguageTranslator()),
             new ThrowableSummary([]),
-            new OxidLanguageTranslator(),
+            new KeyEchoTranslator(),
         );
     }
 

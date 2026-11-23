@@ -20,6 +20,7 @@ use OxidEsales\Payments\Mollie\Service\CheckoutSessionStarter;
 use OxidEsales\Payments\Mollie\Service\InFlightCheckoutReplayInterface;
 use OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages;
 use OxidEsales\Payments\Mollie\Service\OxidLanguageTranslator;
+use OxidEsales\Payments\Mollie\Tests\Unit\Support\KeyEchoTranslator;
 use OxidEsales\Payments\Mollie\Tests\Unit\Support\FixedIframeSettings;
 use OxidEsales\Payments\Mollie\Tests\Unit\Support\FixedUserDataGate;
 use OxidEsales\Payments\Mollie\Tests\Unit\Support\NoInFlightReplay;
@@ -60,7 +61,7 @@ final class TestableMolliePaymentHandler extends MolliePaymentHandler
             $iframeSettings ?? new FixedIframeSettings(),
             $notOrderableMessages ?? new NotOrderableItemsMessages(new OxidLanguageTranslator()),
             new ThrowableSummary([]),
-            new OxidLanguageTranslator(),
+            new KeyEchoTranslator(),
         );
     }
 
