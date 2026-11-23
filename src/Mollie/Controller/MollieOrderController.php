@@ -98,6 +98,10 @@ class MollieOrderController extends MollieOrderController_parent
             return $this->showNotOrderable($outcome->notOrderable);
         }
 
+        if ($outcome->isOrderInProgress()) {
+            return $this->onOrderInProgress();
+        }
+
         if ($outcome->hasUserDataProblems()) {
             $this->showUserDataProblems($outcome->userDataProblems);
 
@@ -258,6 +262,17 @@ class MollieOrderController extends MollieOrderController_parent
         foreach ($messages as $message) {
             Registry::getUtilsView()->addErrorToDisplay($message);
         }
+    }
+
+    /**
+     * MOL-39: another request of this shopper creates the order right now (a second tab or device).
+     * Nothing was created here. The shopper stays on the order step and is told to wait.
+     */
+    protected function onOrderInProgress(): string
+    {
+        Registry::getUtilsView()->addErrorToDisplay('MOLLIE_ORDER_IN_PROGRESS');
+
+        return 'order';
     }
 
     /**

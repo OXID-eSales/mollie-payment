@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\PaymentHandler;
 
+use OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface;
 use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\Eshop\Application\Model\User;
 use OxidEsales\Eshop\Core\Registry;
@@ -66,12 +67,16 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
     /** Error code the footer receives when the shopper's address data must be fixed first (MOL-15). */
     public const ERROR_USER_DATA_INVALID = 'MOLLIE_USER_DATA_INVALID';
 
+    /** MOL-39: another request of this shopper creates the order; also the language key of the sentence. */
+    public const ERROR_ORDER_IN_PROGRESS = 'MOLLIE_ORDER_IN_PROGRESS';
+
     public function __construct(
         private readonly CheckoutSessionStarter $checkoutStarter,
         private readonly LoggerInterface $logger,
         private readonly IframeCheckoutSettingsInterface $iframeSettings,
         private readonly NotOrderableItemsMessages $notOrderableMessages,
         private readonly ThrowableSummaryInterface $throwableSummary,
+        private readonly LanguageTranslatorInterface $translator,
     ) {
     }
 
@@ -144,6 +149,14 @@ class MolliePaymentHandler implements ContractFirstPaymentHandlerInterface
     {
         if ($outcome->isNotOrderable() && $outcome->notOrderable !== null) {
             return $this->notOrderableResult($outcome->notOrderable);
+        }
+
+        if ($outcome->isOrderInProgress()) {
+            // MOL-39: the footer prints the message verbatim - a translated sentence.
+            return PaymentHandlerResult::error(
+                $this->translator->translateString(self::ERROR_ORDER_IN_PROGRESS),
+                self::ERROR_ORDER_IN_PROGRESS,
+            );
         }
 
         if ($outcome->hasUserDataProblems()) {

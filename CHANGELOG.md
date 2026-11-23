@@ -5,6 +5,16 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed
+- **OPC: `stoken` in the `processCheckout` request body (OPC-345, Bartosz Sosnowski).** OPC v1.6.270 reads the token
+  from the body only; every OPC Mollie payment failed with `INVALID_REQUEST_TOKEN`.
+- **`&` in street and additional address line is accepted (STRP-178 parity, sprint 145 AW).** "Lohmann & Rauscher,
+  1 Wellington Court" passed with Stripe and was refused with Mollie. First name, last name and city still refuse `&`.
+- **Two parallel checkouts of one contract: the second says "Your order is already being processed" (MOL-39, sprint
+  145 AW; needs payment-base with the order-creation claim).** `CheckoutStartOutcome::orderInProgress()`; OPC answers
+  `MOLLIE_ORDER_IN_PROGRESS`, the standard checkout stays on the order step. No Mollie payment is created for a
+  request that created no order.
+
 ### Added
 - **CI on OXID 7.1 / 7.2 / 7.3 (PHP 8.3, PHPUnit 12).** Workflow `.github/workflows/mollie-tests-oxid7.1-7.3.yml`
   installs the module into a CE shop of each line as the recipes build it (composer project, `oxideshop-ce

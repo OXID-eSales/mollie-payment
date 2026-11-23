@@ -179,6 +179,15 @@ final class TestableMollieOrderController extends MollieOrderController
         return 'basket';
     }
 
+    public bool $orderInProgressShown = false;
+
+    protected function onOrderInProgress(): string
+    {
+        $this->orderInProgressShown = true;
+
+        return 'order';
+    }
+
     protected function onCheckoutUnavailable(): string
     {
         $this->unavailableErrorShown = true;

@@ -35,7 +35,10 @@ return [
         [
             'field' => 'street',
             'rules' => [
-                'allow' => "UNICODE_LETTERS NUMBERS SPACES ' - . , /",
+                // STRP-178 parity (sprint 145 AW): '&' is legitimate address-line content ("Lohmann &
+                // Rauscher, 1 Wellington Court"). The company field always allowed it through the same sinks
+                // (Mollie API JSON, parameterised DB writes, escaped Twig output). Names and city refuse it.
+                'allow' => "UNICODE_LETTERS NUMBERS SPACES ' - . , / &",
                 'block' => ': ; < > { } [ ] | \\ ~ ! @ $ % ^ * = +',
             ],
         ],
@@ -74,7 +77,7 @@ return [
         [
             'field' => 'additionalInfo',
             'rules' => [
-                'allow' => "UNICODE_LETTERS NUMBERS SPACES ' - . , / #",
+                'allow' => "UNICODE_LETTERS NUMBERS SPACES ' - . , / # &",
                 'block' => '< > { } [ ] | \\ ~ ! @ $ % ^ * = +',
             ],
         ],
