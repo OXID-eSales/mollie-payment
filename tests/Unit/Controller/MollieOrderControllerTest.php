@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Controller;
 
+use OxidEsales\PaymentBase\Checkout\Attempt\OrderCreationAlreadyClaimedException;
 use OxidEsales\PaymentBase\Adapter\Exception\ShopOrderException;
 use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\Eshop\Core\Price;
@@ -92,6 +93,25 @@ final class MollieOrderControllerTest extends TestCase
 
         self::assertSame('payment', $result);
         self::assertTrue($controller->unavailableErrorShown);
+        self::assertFalse($controller->delegatedToParent);
+        self::assertSame([], $controller->redirectedTo);
+    }
+
+    /**
+     * MOL-39 / sprint 145 (AW).
+     */
+    public function testExecute_WhenOrderCreationIsAlreadyClaimed_StaysOnTheOrderStepAndSaysSo(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willThrowException(OrderCreationAlreadyClaimedException::forContract('ctr-1'));
+
+        $controller = $this->executeController(MollieDefinitions::PAYMENT_ID, $dispatcher);
+
+        $result = $controller->execute();
+
+        self::assertSame('order', $result);
+        self::assertTrue($controller->orderInProgressShown);
+        self::assertFalse($controller->unavailableErrorShown);
         self::assertFalse($controller->delegatedToParent);
         self::assertSame([], $controller->redirectedTo);
     }

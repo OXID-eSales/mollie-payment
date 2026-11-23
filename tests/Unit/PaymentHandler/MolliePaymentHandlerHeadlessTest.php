@@ -50,6 +50,7 @@ final class SessionRecordingMollieHandler extends MolliePaymentHandler
             new FixedIframeSettings(),
             new NotOrderableItemsMessages(new OxidLanguageTranslator()),
             new ThrowableSummary([]),
+            new OxidLanguageTranslator(),
         );
     }
 

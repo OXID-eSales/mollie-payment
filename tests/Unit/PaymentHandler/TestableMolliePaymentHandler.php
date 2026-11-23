@@ -60,6 +60,7 @@ final class TestableMolliePaymentHandler extends MolliePaymentHandler
             $iframeSettings ?? new FixedIframeSettings(),
             $notOrderableMessages ?? new NotOrderableItemsMessages(new OxidLanguageTranslator()),
             new ThrowableSummary([]),
+            new OxidLanguageTranslator(),
         );
     }
 

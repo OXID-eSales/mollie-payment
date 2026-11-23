@@ -19,6 +19,7 @@ namespace OxidEsales\Payments\Mollie\Service;
  *  - replay            — MOL-18, an attempt is already in flight; {@see $checkoutUrl} rejoins it
  *  - ready             — fresh Mollie checkout session; {@see $checkoutUrl} + {@see $contractId}
  *  - unavailable       — no checkout possible; {@see $contractId} when a contract already exists
+ *  - orderInProgress   — another request of this shopper creates the order right now (MOL-39)
  */
 final readonly class CheckoutStartOutcome
 {
@@ -31,6 +32,7 @@ final readonly class CheckoutStartOutcome
         public ?string $checkoutUrl = null,
         public string $contractId = '',
         private bool $unavailable = false,
+        private bool $orderInProgress = false,
     ) {
     }
 
@@ -60,6 +62,20 @@ final readonly class CheckoutStartOutcome
     public static function unavailable(string $contractId = ''): self
     {
         return new self(contractId: $contractId, unavailable: true);
+    }
+
+    /**
+     * MOL-39: payment-base refused the order step because another request holds the order-creation
+     * claim of this contract. Nothing was created here; the shopper is told to wait, not to retry.
+     */
+    public static function orderInProgress(): self
+    {
+        return new self(orderInProgress: true);
+    }
+
+    public function isOrderInProgress(): bool
+    {
+        return $this->orderInProgress;
     }
 
     public function isNotOrderable(): bool

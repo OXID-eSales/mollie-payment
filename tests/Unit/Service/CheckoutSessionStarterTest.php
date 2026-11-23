@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Unit\Service;
 
+use OxidEsales\PaymentBase\Checkout\Attempt\OrderCreationAlreadyClaimedException;
 use OxidEsales\PaymentBase\Logging\ThrowableSummary;
 use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\Eshop\Application\Model\User;
@@ -175,6 +176,32 @@ final class CheckoutSessionStarterTest extends TestCase
         $outcome = $this->starter(dispatcher: $dispatcher)->start($this->request());
 
         self::assertTrue($outcome->isNotOrderable(), 'core refusing an item mid-chain is a named failure');
+    }
+
+    /**
+     * MOL-39 / sprint 145 (AW): payment-base refuses the order step when another request holds the
+     * order-creation claim. That is "being processed", not "Mollie unavailable".
+     */
+    public function testStart_WhenOrderCreationIsAlreadyClaimed_AnswersOrderInProgress(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willThrowException(OrderCreationAlreadyClaimedException::forContract('ctr-1'));
+
+        $outcome = $this->starter(dispatcher: $dispatcher)->start($this->request());
+
+        self::assertTrue($outcome->isOrderInProgress());
+        self::assertFalse($outcome->isUnavailable());
+        self::assertFalse($outcome->isRedirect(), 'no Mollie payment for a request that created no order');
+    }
+
+    public function testStart_WhenTheClaimRefusalIsWrapped_StillAnswersOrderInProgress(): void
+    {
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willThrowException(
+            new RuntimeException('handler failed', 0, OrderCreationAlreadyClaimedException::forContract('ctr-1'))
+        );
+
+        self::assertTrue($this->starter(dispatcher: $dispatcher)->start($this->request())->isOrderInProgress());
     }
 
     public function testAnyOtherDispatchFailureIsUnavailable(): void

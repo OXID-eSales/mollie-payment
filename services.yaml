@@ -271,6 +271,8 @@ services:
       # MOL-22: a not-orderable basket item is named to the shopper instead of a raw core key.
       $notOrderableMessages: '@OxidEsales\Payments\Mollie\Service\NotOrderableItemsMessages'
       $throwableSummary: '@OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface'
+      # MOL-39: 'your order is already being processed' for a lost order-creation claim.
+      $translator: '@OxidEsales\Payments\Mollie\Service\LanguageTranslatorInterface'
     tags:
       - { name: oe.payment.handler }
     public: true

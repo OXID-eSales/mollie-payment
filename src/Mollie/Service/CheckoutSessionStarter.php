@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Service;
 
+use OxidEsales\PaymentBase\Checkout\Attempt\OrderCreationAlreadyClaimedException;
 use OxidEsales\PaymentBase\EventSystem\Event\EventContext;
 use OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface;
 use OxidEsales\PaymentBase\Logging\ThrowableSummaryInterface;
@@ -94,6 +95,21 @@ class CheckoutSessionStarter
         return $failures === [] ? null : NotOrderableCheckoutFailure::fromBuyabilityFailures($failures);
     }
 
+    /**
+     * MOL-39: the order step threw because another request of this shopper holds the order-creation
+     * claim. The exception stopped the chain before a Mollie payment was created.
+     */
+    private function orderIsBeingCreatedElsewhere(Throwable $failure): bool
+    {
+        for ($current = $failure; $current !== null; $current = $current->getPrevious()) {
+            if ($current instanceof OrderCreationAlreadyClaimedException) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function dispatch(CheckoutStartRequest $request): CheckoutStartOutcome
     {
         $context = $this->buildEventContext($request);
@@ -112,7 +128,9 @@ class CheckoutSessionStarter
                 return CheckoutStartOutcome::notOrderable($notOrderable);
             }
 
-            return CheckoutStartOutcome::unavailable();
+            return $this->orderIsBeingCreatedElsewhere($e)
+                ? CheckoutStartOutcome::orderInProgress()
+                : CheckoutStartOutcome::unavailable();
         }
 
         $contractId = (string) ($context->getContract()?->getId() ?? '');

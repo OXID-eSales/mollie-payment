@@ -127,6 +127,25 @@ final class MolliePaymentHandlerTest extends TestCase
         self::assertSame('https://mollie.test/checkout/tr_1', $result->getMetadataValue('redirectUrl'));
     }
 
+    /**
+     * MOL-39 / sprint 145 (AW): another request of this shopper creates the order. This one answers
+     * "in progress" - not "Mollie unavailable", and with no redirect.
+     */
+    public function testProcessPayment_WhenOrderCreationIsAlreadyClaimed_ReturnsTheInProgressResult(): void
+    {
+        $dispatcher = $this->createMock(\OxidEsales\PaymentBase\EventSystem\EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willThrowException(
+            \OxidEsales\PaymentBase\Checkout\Attempt\OrderCreationAlreadyClaimedException::forContract('ct_123')
+        );
+
+        $result = (new TestableMolliePaymentHandler($dispatcher))
+            ->processPayment($this->createMock(PaymentContextInterface::class));
+
+        self::assertFalse($result->isSuccess());
+        self::assertSame(MolliePaymentHandler::ERROR_ORDER_IN_PROGRESS, $result->getErrorCode());
+        self::assertNull($result->getMetadataValue('redirectUrl'));
+    }
+
     public function testProcessPaymentFailsWhenNoCheckoutUrlIsReturned(): void
     {
         $dispatcher = $this->dispatcherThatMutates(static fn (EventContext $context) => null);
