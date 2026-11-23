@@ -124,6 +124,10 @@ final class MollieAdapter implements
         if ($request->description !== null && $request->description !== '') {
             $body['description'] = $request->description;
         }
+        if ($request->reason !== null && $request->reason !== '') {
+            // Mollie has no reason field. The reason of the admin goes with the refund as metadata.
+            $body['metadata'] = ['reason' => $request->reason];
+        }
 
         try {
             $this->useIdempotencyKey($request->idempotencyKey);
