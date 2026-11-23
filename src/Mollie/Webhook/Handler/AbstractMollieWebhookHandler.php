@@ -107,10 +107,22 @@ abstract class AbstractMollieWebhookHandler implements MollieWebhookEventHandler
         $this->logger->warning(
             '[MollieWebhook] dropping delivery: no contract for this Mollie payment and the payment '
             . 'is older than the wait window',
-            ['providerOrderId' => $providerOrderId, 'eventType' => $event->type],
+            [
+                'providerOrderId' => $providerOrderId,
+                'eventType' => $event->type,
+                // An absent or damaged date also counts as "older": the value shows which case this is.
+                'createdAt' => $this->createdAtOf($event),
+            ],
         );
 
         return MollieWebhookOutcome::of(WebhookResult::skipped('Contract not found'));
+    }
+
+    private function createdAtOf(WebhookEvent $event): ?string
+    {
+        $createdAt = $event->getObject()['createdAt'] ?? null;
+
+        return is_string($createdAt) && $createdAt !== '' ? $createdAt : null;
     }
 
     /**
@@ -119,8 +131,8 @@ abstract class AbstractMollieWebhookHandler implements MollieWebhookEventHandler
      */
     private function paymentIsYoungEnoughToWaitFor(WebhookEvent $event): bool
     {
-        $createdAt = $event->getObject()['createdAt'] ?? null;
-        if (!is_string($createdAt) || $createdAt === '') {
+        $createdAt = $this->createdAtOf($event);
+        if ($createdAt === null) {
             return false;
         }
 

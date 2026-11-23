@@ -293,6 +293,7 @@ services:
     arguments:
       $paymentsAdapter: '@OxidEsales\Payments\Mollie\Adapter\MolliePaymentsAdapterInterface'
       $statusMapper: '@OxidEsales\Payments\Mollie\Adapter\MollieStatusMapper'
+      $logger: '@oxid_esales.monolog.logger'
 
   # MollieReturnResolver is excluded from the Service/* resource sweep above (it lives in the
   # Return/ subdirectory, mirroring Stripe's own split) and registered explicitly here.
