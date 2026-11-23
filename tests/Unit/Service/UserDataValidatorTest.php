@@ -54,6 +54,39 @@ final class UserDataValidatorTest extends TestCase
         self::assertSame([], $failures);
     }
 
+    /**
+     * STRP-178 parity (sprint 145 AW): a company name in an address line.
+     */
+    public function testValidate_WhenStreetHasAmpersand_Passes(): void
+    {
+        $failures = $this->validator()->validateForUser(
+            MollieDefinitions::MODULE_ID,
+            $this->readerWith(['street' => 'Lohmann & Rauscher, 1 Wellington Court'])
+        );
+
+        self::assertSame([], $failures);
+    }
+
+    public function testValidate_WhenAdditionalInfoHasAmpersand_Passes(): void
+    {
+        $failures = $this->validator()->validateForUser(
+            MollieDefinitions::MODULE_ID,
+            $this->readerWith(['additionalInfo' => 'c/o Smith & Sons'])
+        );
+
+        self::assertSame([], $failures);
+    }
+
+    public function testValidate_WhenNameOrCityHasAmpersand_Refuses(): void
+    {
+        $failures = $this->validator()->validateForUser(
+            MollieDefinitions::MODULE_ID,
+            $this->readerWith(['firstName' => 'Tom & Jerry', 'lastName' => 'A & B', 'city' => 'Town & Country'])
+        );
+
+        self::assertSame(['firstName', 'lastName', 'city'], array_map(static fn ($failure) => $failure->field, $failures));
+    }
+
     public function testValidateEmailAllowsAtAndDot(): void
     {
         $validator = $this->validator();

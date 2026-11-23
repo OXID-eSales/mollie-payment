@@ -75,7 +75,7 @@ final class MollieCheckoutFooterTest extends TestCase
 
         self::assertSame('https://shop.test/index.php?cl=oepaymentvalidationapi&fnc=validate', $data['validationUrl']);
         self::assertSame(MollieDefinitions::MODULE_ID, $data['pluginModuleId']);
-        self::assertSame("letters, digits, spaces, ' - . , /", $data['fieldAllowed']['street']);
+        self::assertSame("letters, digits, spaces, ' - . , / &", $data['fieldAllowed']['street']);
         self::assertArrayHasKey('postalCode', $data['fieldAllowed']);
     }
 

@@ -65,7 +65,7 @@ final class UserDataValidationMessageFormatterTest extends TestCase
         );
 
         self::assertSame(
-            "The street field is not valid. Allowed symbols are: letters, digits, spaces, ' - . , /",
+            "The street field is not valid. Allowed symbols are: letters, digits, spaces, ' - . , / &",
             $formatter->format('street', 'blocked_character', ':'),
         );
     }
