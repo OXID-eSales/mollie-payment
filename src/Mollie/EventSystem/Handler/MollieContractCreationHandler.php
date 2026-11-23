@@ -31,7 +31,6 @@ use OxidEsales\Payments\Mollie\EventSystem\Event\MollieCheckoutSessionRequestEve
  */
 final class MollieContractCreationHandler extends ContractCreationHandler
 {
-    public const METADATA_MOLLIE_METHOD = 'mollie_method';
     public const METADATA_PAYMENT_ID = 'payment_id';
 
     public static function getHandledEventClass(): string
@@ -48,11 +47,6 @@ final class MollieContractCreationHandler extends ContractCreationHandler
         PaymentContractInterface $contract,
         EventContextInterface $context,
     ): void {
-        $method = $context->get('mollieMethod');
-        if (is_string($method) && $method !== '') {
-            $contract->setMetadata(self::METADATA_MOLLIE_METHOD, $method);
-        }
-
         $contract->setMetadata(self::METADATA_PAYMENT_ID, MollieDefinitions::PAYMENT_ID);
         $this->rememberInitiatingSession($contract, $context);
     }
