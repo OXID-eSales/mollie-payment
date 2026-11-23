@@ -29,10 +29,11 @@ env:
   MYSQL_VERSION: '8.0'
   TEMPLATE_ENGINE: 'twig'
   # Branch of OXID-eSales/payment-base to test against. Keep in sync with the 7.4-7.6 workflows.
-  PAYMENT_BASE_BRANCH: 'b-7.4.x'
+  # Sprints 147/149 (AW), temporary: payment-base afterworks/147-honest-failures. Back to 'b-7.4.x' and '' before the merge.
+  PAYMENT_BASE_BRANCH: 'afterworks/147-honest-failures'
   # ` as <version>` suffix for the payment-base require when a feature branch carries no usable
   # branch alias. b-7.4.x satisfies this module's `^v1.7` through its alias (1.7.x-dev), so empty.
-  PAYMENT_BASE_VERSION_ALIAS: ''
+  PAYMENT_BASE_VERSION_ALIAS: ' as 1.8.x-dev'
   # In a composer project the console lives in vendor/bin (the ce clone of the 7.4+ workflows
   # has bin/oe-console).
   OE_CONSOLE: 'vendor/bin/oe-console'
