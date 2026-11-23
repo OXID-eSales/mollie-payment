@@ -71,9 +71,8 @@ class PaymentController extends PaymentController_parent
     }
     /**
      * Testability seam: the translated messages for the session user's address problems, empty when
-     * the data may go to Mollie ({@see CheckoutUserDataGate}). Fail-open when the gate is unavailable:
-     * this is defence in depth and must not be the thing that breaks checkout - but a wiring problem
-     * is logged, not swallowed, because CLAUDE.md makes adopting the shared validation a requirement.
+     * the data may go to Mollie ({@see CheckoutUserDataGate}). Sprint 149 (AW): fail closed when the
+     * gate is unavailable - data that was not validated does not go to Mollie - with an error log line.
      *
      * @return list<string>
      */
@@ -81,12 +80,9 @@ class PaymentController extends PaymentController_parent
     {
         $gate = $this->resolveGate();
         if ($gate === null) {
-            Registry::getLogger()->warning(
-                '[MolliePaymentController] user-data validation unavailable; allowing checkout to '
-                . 'proceed without the shared character-level rules',
-            );
-
-            return [];
+            // Sprint 149 (AW): fail closed, as the gate itself does. The data is not validated, so it
+            // does not go to Mollie. The cause is in the log line of resolveGate().
+            return ['MOLLIE_CHECKOUT_UNAVAILABLE'];
         }
 
         $user = Registry::getSession()->getUser();
@@ -108,7 +104,13 @@ class PaymentController extends PaymentController_parent
     {
         try {
             $gate = ContainerFacade::get(CheckoutUserDataGate::class);
-        } catch (Throwable) {
+        } catch (Throwable $failure) {
+            // The exception text can carry container internals: the class is enough to find the cause.
+            Registry::getLogger()->error(
+                '[MolliePaymentController] user-data validation unavailable; checkout refused',
+                ['exception' => $failure::class]
+            );
+
             return null;
         }
 

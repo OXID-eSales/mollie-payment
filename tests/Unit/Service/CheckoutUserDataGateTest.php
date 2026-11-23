@@ -56,20 +56,24 @@ final class CheckoutUserDataGateTest extends TestCase
         );
     }
 
-    public function testFailsOpenWhenTheValidatorCannotRun(): void
+    /**
+     * Sprint 149 (AW): no silent fallback. When the validator cannot run, the address data is not
+     * validated, so it does not go to Mollie: the shopper sees "payment not available right now".
+     */
+    public function testProblemsFor_WhenTheValidatorCannotRun_AnswersCheckoutUnavailable(): void
     {
         $validator = $this->createMock(UserDataValidatorInterface::class);
         $validator->method('validateForUser')->willThrowException(new RuntimeException('rules file gone'));
 
-        self::assertSame([], $this->gate($validator)->problemsFor($this->user()));
+        self::assertSame(['MOLLIE_CHECKOUT_UNAVAILABLE'], $this->gate($validator)->problemsFor($this->user()));
     }
 
-    public function testTheFailOpenLogCarriesTheThrowableSummaryNotItsMessage(): void
+    public function testProblemsFor_WhenTheValidatorCannotRun_LogsTheThrowableSummaryNotItsMessage(): void
     {
         $validator = $this->createMock(UserDataValidatorInterface::class);
         $validator->method('validateForUser')->willThrowException(new RuntimeException('rules for shopper@example.test gone', 5));
         $logger = $this->createMock(LoggerInterface::class);
-        $logger->expects(self::once())->method('warning')->with(
+        $logger->expects(self::once())->method('error')->with(
             self::anything(),
             self::callback(static fn (array $c): bool => $c['exception'] === ['class' => RuntimeException::class, 'code' => 5]
                 && !str_contains(json_encode($c) ?: '', 'shopper@example.test')),

@@ -220,6 +220,47 @@ final class MollieAdapterTest extends TestCase
     }
 
     /**
+     * Sprint 149 (AW): the refund reason of the admin was accepted and dropped. Mollie has no reason
+     * field; the reason goes into the refund's metadata, where the merchant finds it in the dashboard.
+     */
+    public function testCreateRefund_WithAReason_SendsItInTheRefundMetadata(): void
+    {
+        $captured = [];
+        $this->refunds->method('createForId')->willReturnCallback(
+            function (string $paymentId, array $data) use (&$captured): Refund {
+                $captured = $data;
+                return $this->refund();
+            },
+        );
+
+        (new MollieAdapter($this->client))->createRefund(new RefundRequest(
+            'tr_abc',
+            new MollieAmountDto('EUR', 3.5),
+            'requested_by_customer',
+            null,
+            'partial refund',
+        ));
+
+        self::assertSame(['reason' => 'requested_by_customer'], $captured['metadata']);
+        self::assertSame('partial refund', $captured['description'], 'the description is not replaced');
+    }
+
+    public function testCreateRefund_WithNoReason_SendsNoMetadata(): void
+    {
+        $captured = [];
+        $this->refunds->method('createForId')->willReturnCallback(
+            function (string $paymentId, array $data) use (&$captured): Refund {
+                $captured = $data;
+                return $this->refund();
+            },
+        );
+
+        (new MollieAdapter($this->client))->createRefund(new RefundRequest('tr_abc', new MollieAmountDto('EUR', 3.5), ''));
+
+        self::assertArrayNotHasKey('metadata', $captured);
+    }
+
+    /**
      * VR-21 F1 — the key was carried all the way to the adapter and never given to
      * the Mollie client: a double click or a retry after a timeout created a second
      * refund / capture.

@@ -5,6 +5,21 @@ All notable changes to this module are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed (sprint 149 AW)
+- **A "paid" webhook does not continue with a contract copy from before its own commit.** When the read after the
+  commit or after the capture booking found nothing, the fulfiller saved the old copy with no log. The delivery now
+  fails with an error log line and Mollie sends the event again.
+- **The address gate fails closed (behaviour change).** When the address validator cannot run, the checkout answered
+  "no problems" and the data went to Mollie without validation. The shopper now sees "Payment via Mollie is not
+  available right now", and the cause is in the error log.
+- **The refund reason of the admin reaches Mollie** as refund metadata (`reason`). It was accepted and dropped.
+- **The return page logs why Mollie did not answer**, and the "no contract, payment too old" webhook warning names
+  the payment date.
+
+### Removed (sprint 149 AW)
+- Contract metadata `mollie_method`: nothing wrote it (the handler read a context key that no code sets) and
+  nothing read it.
+
 ### Fixed
 - **OPC: `stoken` in the `processCheckout` request body (OPC-345, Bartosz Sosnowski).** OPC v1.6.270 reads the token
   from the body only; every OPC Mollie payment failed with `INVALID_REQUEST_TOKEN`.

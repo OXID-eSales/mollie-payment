@@ -25,12 +25,18 @@ use Throwable;
  * Billing and (when selected) delivery address run through payment-base's ValidationBase with
  * Mollie's rules; each failure becomes the same translated sentence the OPC footer and the admin
  * panel show ("The <field> field is not valid. Allowed symbols are: …"), followed by one "please
- * review your address" notice. Fail-open with a logged warning when the validator cannot run:
- * defence in depth must not take the checkout down.
+ * review your address" notice.
+ *
+ * Sprint 149 (AW): fail closed. When the validator cannot run, the data is not validated and does not
+ * go to Mollie: the answer is the "payment not available right now" sentence, with an error log line.
+ * Before, the gate answered "no problems" with a warning.
  */
 final class CheckoutUserDataGate implements CheckoutUserDataGateInterface
 {
     private const REVIEW_KEY = 'MOLLIE_VALIDATION_REVIEW_ADDRESS';
+
+    /** The sentence the checkout shows when Mollie cannot be used right now. */
+    private const UNAVAILABLE_KEY = 'MOLLIE_CHECKOUT_UNAVAILABLE';
 
     public function __construct(
         private readonly UserDataValidatorInterface $validator,
@@ -56,11 +62,11 @@ final class CheckoutUserDataGate implements CheckoutUserDataGateInterface
                 new OxidUserFieldReader($user),
             );
         } catch (Throwable $e) {
-            $this->logger->warning('[CheckoutUserDataGate] user-data validation unavailable; allowing checkout', [
+            $this->logger->error('[CheckoutUserDataGate] user-data validation unavailable; checkout refused', [
                 'exception' => $this->throwableSummary->fromThrowable($e),
             ]);
 
-            return [];
+            return [$this->translator->translateString(self::UNAVAILABLE_KEY)];
         }
 
         if ($failures === []) {

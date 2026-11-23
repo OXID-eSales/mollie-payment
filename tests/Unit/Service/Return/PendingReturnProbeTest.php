@@ -26,7 +26,7 @@ final class PendingReturnProbeTest extends TestCase
         $adapter = $this->createMock(MolliePaymentsAdapterInterface::class);
         $adapter->expects(self::never())->method('getPayment');
 
-        $probe = new PendingReturnProbe($adapter, new MollieStatusMapper());
+        $probe = new PendingReturnProbe($adapter, new MollieStatusMapper(), new \Psr\Log\NullLogger());
 
         self::assertFalse($probe->isPending($this->contractStub(null)));
         self::assertFalse($probe->isPending($this->contractStub('')));
@@ -37,6 +37,7 @@ final class PendingReturnProbeTest extends TestCase
         $probe = new PendingReturnProbe(
             $this->adapterReturning(MollieStatusMapper::STATUS_OPEN),
             new MollieStatusMapper(),
+            new \Psr\Log\NullLogger(),
         );
 
         self::assertTrue($probe->isPending($this->contractStub('tr_1')));
@@ -47,6 +48,7 @@ final class PendingReturnProbeTest extends TestCase
         $probe = new PendingReturnProbe(
             $this->adapterReturning(MollieStatusMapper::STATUS_PAID),
             new MollieStatusMapper(),
+            new \Psr\Log\NullLogger(),
         );
 
         self::assertFalse($probe->isPending($this->contractStub('tr_1')));
@@ -57,9 +59,26 @@ final class PendingReturnProbeTest extends TestCase
         $adapter = $this->createMock(MolliePaymentsAdapterInterface::class);
         $adapter->method('getPayment')->willThrowException(new RuntimeException('api down'));
 
-        $probe = new PendingReturnProbe($adapter, new MollieStatusMapper());
+        $probe = new PendingReturnProbe($adapter, new MollieStatusMapper(), new \Psr\Log\NullLogger());
 
         self::assertFalse($probe->isPending($this->contractStub('tr_1')));
+    }
+
+    /**
+     * Sprint 149 (AW): the shopper sees the error page; the cause must be in a log.
+     */
+    public function testIsPending_WhenMollieFails_LogsAWarningWithTheContractAndTheExceptionClass(): void
+    {
+        $adapter = $this->createMock(MolliePaymentsAdapterInterface::class);
+        $adapter->method('getPayment')->willThrowException(new RuntimeException('api down'));
+        $logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+        $logger->expects(self::once())->method('warning')->with(
+            self::anything(),
+            self::callback(static fn (array $context): bool => $context['exception'] === RuntimeException::class
+                && !in_array('api down', $context, true))
+        );
+
+        self::assertFalse((new PendingReturnProbe($adapter, new MollieStatusMapper(), $logger))->isPending($this->contractStub('tr_1')));
     }
 
     private function adapterReturning(string $status): MolliePaymentsAdapterInterface

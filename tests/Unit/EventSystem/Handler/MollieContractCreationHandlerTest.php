@@ -67,7 +67,7 @@ final class MollieContractCreationHandlerTest extends TestCase
         self::assertSame($contract, $context->getContract());
     }
 
-    public function testHandleStoresSelectedMethodInContractMetadata(): void
+    public function testHandle_WithTheContextTheStarterBuilds_WritesThePaymentIdAndNoMethodMetadata(): void
     {
         $metadataCalls = [];
         $contract = $this->createMock(PaymentContractInterface::class);
@@ -85,39 +85,19 @@ final class MollieContractCreationHandlerTest extends TestCase
             new MollieCheckoutSessionRequestEvent(new EventContext([
                 'userId' => 'USR-1',
                 'basket' => new stdClass(),
-                'mollieMethod' => 'ideal',
+                // The key the shared starter writes (CheckoutSessionStarter::buildEventContext()).
+                'selectedMethod' => 'ideal',
             ])),
         );
 
-        self::assertSame('ideal', $metadataCalls[MollieContractCreationHandler::METADATA_MOLLIE_METHOD] ?? null);
+        // Sprint 149 (AW): the handler read a context key ('mollieMethod') that nothing writes, for a
+        // metadata value ('mollie_method') that nothing reads. Both are gone; the method reaches Mollie
+        // through MollieCheckoutSessionHandler.
+        self::assertArrayNotHasKey('mollie_method', $metadataCalls);
         self::assertSame(
             MollieDefinitions::PAYMENT_ID,
             $metadataCalls[MollieContractCreationHandler::METADATA_PAYMENT_ID] ?? null,
         );
-    }
-
-    public function testHandleWithoutMethodDoesNotSetMethodMetadata(): void
-    {
-        $metadataCalls = [];
-        $contract = $this->createMock(PaymentContractInterface::class);
-        $contract->method('setMetadata')->willReturnCallback(
-            static function (string $key, mixed $value) use (&$metadataCalls): void {
-                $metadataCalls[$key] = $value;
-            },
-        );
-
-        $service = $this->createMock(ContractServiceInterface::class);
-        $service->method('createContract')->willReturn($contract);
-        $dispatcher = $this->createMock(EventDispatcherInterface::class);
-
-        (new MollieContractCreationHandler($service, $dispatcher))->handle(
-            new MollieCheckoutSessionRequestEvent(new EventContext([
-                'userId' => 'USR-1',
-                'basket' => new stdClass(),
-            ])),
-        );
-
-        self::assertArrayNotHasKey(MollieContractCreationHandler::METADATA_MOLLIE_METHOD, $metadataCalls);
     }
 
     /**

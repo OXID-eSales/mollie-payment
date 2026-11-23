@@ -60,10 +60,16 @@ final class PaidPaymentFulfiller
                 return $refusal;
             }
             // The commit service saved its own copy; continue on the committed row.
-            $contract = $this->contractRepository->findByProviderOrderId($providerOrderId) ?? $contract;
+            $contract = $this->contractRepository->findByProviderOrderId($providerOrderId);
+            if ($contract === null) {
+                return $this->goneAfter('the commit', $providerOrderId);
+            }
         }
 
         $contract = $this->bookAutomaticCapture($contract, $providerOrderId);
+        if ($contract === null) {
+            return $this->goneAfter('the capture booking', $providerOrderId);
+        }
         $this->contractRepository->save($contract);
 
         return $this->fulfilled($contract, $providerOrderId);
@@ -127,12 +133,12 @@ final class PaidPaymentFulfiller
      * nothing). Nothing is booked when a capture is on record already (a manual capture, booked by the admin
      * action by its Mollie capture id); the `paid` that follows it only fulfils.
      *
-     * The ledger saves its own copy of the contract, so the copy to continue on is read again.
+     * The ledger saves its own copy of the contract, so the copy to continue on is read again (null: it is gone).
      */
     private function bookAutomaticCapture(
         PaymentContractInterface $contract,
         string $providerOrderId,
-    ): PaymentContractInterface {
+    ): ?PaymentContractInterface {
         if (($contract->getCapturedAmount() ?? 0.0) > 0.0 || !$contract->getState()->isCommitted()) {
             return $contract;
         }
@@ -145,6 +151,20 @@ final class PaidPaymentFulfiller
             'webhook',
         );
 
-        return $this->contractRepository->findByProviderOrderId($providerOrderId) ?? $contract;
+        return $this->contractRepository->findByProviderOrderId($providerOrderId);
+    }
+
+    /**
+     * Sprint 149 (AW): the contract was there a moment ago and its own commit or capture booking just
+     * saved it. A read that now finds nothing is an error. The copy from before is not saved over
+     * whatever happened; the delivery fails and Mollie sends the event again.
+     */
+    private function goneAfter(string $step, string $providerOrderId): FulfillmentResult
+    {
+        $this->logger->error('[PaidPaymentFulfiller] the contract is gone after ' . $step, [
+            'providerOrderId' => $providerOrderId,
+        ]);
+
+        return FulfillmentResult::failed();
     }
 }
