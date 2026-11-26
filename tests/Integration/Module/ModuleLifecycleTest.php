@@ -9,6 +9,9 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Integration\Module;
 
+// The shop's autoloader runs the integration suite in CI and does not map this module's Tests namespace.
+require_once __DIR__ . '/../Support/ShopContainer.php';
+
 use OxidEsales\EshopCommunity\Internal\Framework\Module\Setup\Service\ModuleActivationServiceInterface;
 use OxidEsales\EshopCommunity\Internal\Framework\Module\State\ModuleStateServiceInterface;
 use OxidEsales\Payments\Mollie\Module;
