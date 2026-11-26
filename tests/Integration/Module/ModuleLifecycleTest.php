@@ -9,17 +9,26 @@ declare(strict_types=1);
 
 namespace OxidEsales\Payments\Mollie\Tests\Integration\Module;
 
-use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
+// The shop's autoloader runs the integration suite in CI and does not map this module's Tests namespace.
+require_once __DIR__ . '/../Support/ShopContainer.php';
+
 use OxidEsales\EshopCommunity\Internal\Framework\Module\Setup\Service\ModuleActivationServiceInterface;
 use OxidEsales\EshopCommunity\Internal\Framework\Module\State\ModuleStateServiceInterface;
 use OxidEsales\Payments\Mollie\Module;
+use OxidEsales\Payments\Mollie\Tests\Integration\Support\ShopContainer;
 use PHPUnit\Framework\TestCase;
-use Throwable;
 
 /**
  * Integration tests for the module activation/deactivation lifecycle.
  *
- * Verifies the Mollie module installs into OXID, activates, and deactivates cleanly on a shop.
+ * Verifies the Mollie module activates and deactivates cleanly on a shop.
+ *
+ * The services come from ShopContainer: ModuleActivationServiceInterface is private, which the
+ * production container removes. Asking that container for it is an error, not a reason to skip.
+ *
+ * No IntegrationTestCase: its database transaction is rolled back after the test, but activation
+ * also writes the module configuration files, which a rollback does not undo. The module's
+ * activation state is restored in tearDown instead, so the tests after this one find Mollie as it was.
  *
  * @group integration
  * @group module
@@ -29,27 +38,34 @@ final class ModuleLifecycleTest extends TestCase
 {
     private const SHOP_ID = 1;
 
-    private ?ModuleActivationServiceInterface $activationService = null;
-    private ?ModuleStateServiceInterface $stateService = null;
+    private ModuleActivationServiceInterface $activationService;
+    private ModuleStateServiceInterface $stateService;
+    private bool $wasActive;
 
     protected function setUp(): void
     {
         parent::setUp();
-        try {
-            $container = ContainerFactory::getInstance()->getContainer();
-            $this->activationService = $container->get(ModuleActivationServiceInterface::class);
-            $this->stateService = $container->get(ModuleStateServiceInterface::class);
-        } catch (Throwable $e) {
-            self::markTestSkipped('OXID container unavailable: ' . $e->getMessage());
+        $container = ShopContainer::build();
+        $this->activationService = $container->get(ModuleActivationServiceInterface::class);
+        $this->stateService = $container->get(ModuleStateServiceInterface::class);
+        $this->wasActive = $this->stateService->isActive(Module::MODULE_ID, self::SHOP_ID);
+    }
+
+    protected function tearDown(): void
+    {
+        $isActive = $this->stateService->isActive(Module::MODULE_ID, self::SHOP_ID);
+        if ($this->wasActive && !$isActive) {
+            $this->activationService->activate(Module::MODULE_ID, self::SHOP_ID);
         }
+        if (!$this->wasActive && $isActive) {
+            $this->activationService->deactivate(Module::MODULE_ID, self::SHOP_ID);
+        }
+        parent::tearDown();
     }
 
     public function testModule_InstallsAndActivatesCleanly(): void
     {
-        self::assertNotNull($this->activationService);
-        self::assertNotNull($this->stateService);
-
-        if ($this->stateService->isActive(Module::MODULE_ID, self::SHOP_ID)) {
+        if ($this->wasActive) {
             $this->activationService->deactivate(Module::MODULE_ID, self::SHOP_ID);
         }
 
@@ -62,10 +78,7 @@ final class ModuleLifecycleTest extends TestCase
 
     public function testModule_DeactivatesWithoutError(): void
     {
-        if ($this->activationService === null || $this->stateService === null) {
-            self::fail('container services unavailable');
-        }
-        if (!$this->stateService->isActive(Module::MODULE_ID, self::SHOP_ID)) {
+        if (!$this->wasActive) {
             $this->activationService->activate(Module::MODULE_ID, self::SHOP_ID);
         }
 
