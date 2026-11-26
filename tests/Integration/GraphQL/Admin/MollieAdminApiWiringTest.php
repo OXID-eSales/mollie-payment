@@ -27,6 +27,8 @@ use PHPUnit\Framework\Attributes\Group;
  * The Mollie admin API in the real shop: wired, in the schema, and no API key value anywhere in what it returns.
  */
 #[Group('integration')]
+#[Group('graphql')]
+#[Group('graphql-admin')]
 final class MollieAdminApiWiringTest extends IntegrationTestCase
 {
     private const CONFIG_FIELDS = 'mode captureMode multiCapture profileId webhookUrlOverride effectiveWebhookUrl logLevel '

@@ -40,6 +40,7 @@ use TheCodingMachine\GraphQLite\SchemaFactory;
  * for an `oxidanonymous` token with and without the right.
  */
 #[Group('integration')]
+#[Group('graphql')]
 final class CheckoutAccessWithAnonymousTokenTest extends TestCase
 {
     use FixedClassFinderTrait;

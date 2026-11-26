@@ -20,6 +20,7 @@ use OxidEsales\PaymentBase\GraphQL\Admin\DataType\AdminPaymentContract;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\AdminStepUpInterface;
 use OxidEsales\PaymentBase\GraphQL\Admin\Service\PaymentRightsProvider;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
@@ -30,6 +31,8 @@ use ReflectionNamedType;
  * the stand-ins against the real classes whenever those are installed: the members the Mollie admin API calls exist
  * with the signature it assumes (payment-base's approach).
  */
+#[Group('graphql')]
+#[Group('graphql-admin')]
 final class AdminModuleParityTest extends TestCase
 {
     protected function setUp(): void

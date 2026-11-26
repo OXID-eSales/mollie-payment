@@ -35,6 +35,7 @@ use TheCodingMachine\GraphQLite\SchemaFactory;
  * kcs/class-finder's interface at file level is a fatal on such a shop).
  */
 #[Group('integration')]
+#[Group('graphql')]
 final class SchemaContainsMollieMutationsTest extends TestCase
 {
     use FixedClassFinderTrait;
