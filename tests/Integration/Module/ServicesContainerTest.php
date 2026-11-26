@@ -13,8 +13,8 @@ use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
 use OxidEsales\EshopCommunity\Internal\Framework\Module\Setup\Service\ModuleActivationServiceInterface;
 use OxidEsales\EshopCommunity\Internal\Framework\Module\State\ModuleStateServiceInterface;
 use OxidEsales\Payments\Mollie\Module;
+use OxidEsales\Payments\Mollie\Tests\Integration\Support\ShopContainer;
 use PHPUnit\Framework\TestCase;
-use Throwable;
 
 /**
  * The module's services.yaml must compile inside the real OXID DI container once the module is
@@ -28,27 +28,32 @@ final class ServicesContainerTest extends TestCase
 {
     private const SHOP_ID = 1;
 
+    /**
+     * ModuleActivationServiceInterface is private, so it comes from ShopContainer; the production
+     * container has removed it. The module's activation state is restored at the end, so the tests
+     * after this one find Mollie as it was.
+     */
     public function testContainer_CompilesWithMollieServices(): void
     {
+        $container = ShopContainer::build();
+        $activation = $container->get(ModuleActivationServiceInterface::class);
+        $state = $container->get(ModuleStateServiceInterface::class);
+        $wasActive = $state->isActive(Module::MODULE_ID, self::SHOP_ID);
+
         try {
-            $container = ContainerFactory::getInstance()->getContainer();
-            $activation = $container->get(ModuleActivationServiceInterface::class);
-            $state = $container->get(ModuleStateServiceInterface::class);
-        } catch (Throwable $e) {
-            self::markTestSkipped('OXID container unavailable: ' . $e->getMessage());
-            return;
+            if (!$wasActive) {
+                $activation->activate(Module::MODULE_ID, self::SHOP_ID);
+            }
+
+            // Building the container with the module active proves services.yaml is valid; a broken
+            // definition/autowire would throw here.
+            $rebuilt = ShopContainer::build();
+            self::assertTrue($rebuilt->has(\OxidEsales\Payments\Mollie\Service\ModuleConfigurationServiceInterface::class));
+        } finally {
+            if (!$wasActive) {
+                $activation->deactivate(Module::MODULE_ID, self::SHOP_ID);
+            }
         }
-
-        if (!$state->isActive(Module::MODULE_ID, self::SHOP_ID)) {
-            $activation->activate(Module::MODULE_ID, self::SHOP_ID);
-        }
-
-        // Rebuilding the container after activation proves services.yaml is valid; a broken
-        // definition/autowire would throw here.
-        $rebuilt = ContainerFactory::getInstance()->getContainer();
-        self::assertNotNull($rebuilt);
-
-        $activation->deactivate(Module::MODULE_ID, self::SHOP_ID);
     }
 
     /**
@@ -66,14 +71,13 @@ final class ServicesContainerTest extends TestCase
      */
     public function testServicesWithRequiredLoggersResolveFromTheContainer(): void
     {
-        // Deliberately does NOT go through ModuleActivationServiceInterface: that service is not public
-        // in the compiled container here, which is why testContainer_CompilesWithMollieServices() skips.
-        // Resolving the ids directly is what this story actually needs to prove, and it runs.
+        // The production container: these ids are public, and resolving them there is what this story proves.
         $container = ContainerFactory::getInstance()->getContainer();
 
-        if (!$container->has(\OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface::class)) {
-            self::markTestSkipped('Mollie services are not registered in this container (module inactive).');
-        }
+        self::assertTrue(
+            $container->has(\OxidEsales\Payments\Mollie\Service\MollieWebhookUrlProviderInterface::class),
+            'Mollie services are not registered in the shop container: the module is not active.',
+        );
 
         foreach (
             [
