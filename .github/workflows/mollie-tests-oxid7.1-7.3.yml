@@ -15,8 +15,8 @@ name: Mollie full tests OXID CE 7.1-7.3
 #  * OXDEV-10249: the unified-namespace generator of the lines below 7.4 writes a broken layout
 #    with symfony/filesystem >= 6.4.48; .github/scripts/fix-unified-namespace-dirs.sh repairs it
 #    after every shop-level composer update.
-#  * No GraphQL dimension: graphql-base/storefront for 7.1-7.3 is phase 2 of the experiment, so
-#    every shop is the 'without' variant and the headless tests skip themselves.
+#  * No GraphQL phase: graphql-base/storefront for 7.1-7.3 is phase 2 of the experiment, so the
+#    integration job runs only the 7.4+ workflows' phase 1 (everything but the group 'graphql').
 #  * No styles / isolated unit jobs: they do not depend on the shop line and run in the
 #    7.4/7.5/7.6 workflows already.
 
@@ -276,17 +276,7 @@ jobs:
       # shop through any dependency, or the headless tests would run against an untested stack.
       - name: Prove GraphQL absent
         run: |
-          present=''
-          for package in oxid-esales/graphql-base oxid-esales/graphql-storefront thecodingmachine/graphqlite webonyx/graphql-php; do
-            if docker compose exec -T php composer show "$package" > /dev/null 2>&1; then
-              present="$present $package"
-            fi
-          done
-          if [ -n "$present" ]; then
-            echo "::error title=GraphQL in the shop::installed:$present. Something requires GraphQL; the 7.1-7.3 shops are the 'without' variant."
-            exit 1
-          fi
-          echo "No GraphQL package in the shop (graphql-base, graphql-storefront, GraphQLite, graphql-php)"
+          $GITHUB_WORKSPACE/source/test-module/.github/scripts/graphql-absent.sh
 
       # payment-base is an oxideshop-module and must be installed and activated before the PSP
       # module activates. Otherwise the `oe.payment.admin_panel` tagged-iterator that powers the
@@ -383,32 +373,26 @@ jobs:
           docker compose exec -T php php -v | head -1
           docker compose exec -T php composer show oxid-esales/oxideshop-ce | grep -E '^(name|versions)'
           docker compose exec -T php vendor/bin/phpunit --version
-          present=''
-          for package in oxid-esales/graphql-base oxid-esales/graphql-storefront thecodingmachine/graphqlite webonyx/graphql-php; do
-            if docker compose exec -T php composer show "$package" > /dev/null 2>&1; then
-              present="$present $package"
-            fi
-          done
-          if [ -n "$present" ]; then
-            echo "::error title=GraphQL in the shop::installed:$present. The 7.1-7.3 shops are the 'without' variant."
-            exit 1
-          fi
-          echo "No GraphQL package in the shop (graphql-base, graphql-storefront, GraphQLite, graphql-php)"
+          $GITHUB_WORKSPACE/source/test-module/.github/scripts/graphql-absent.sh
 
-      - name: Run integration tests with shop bootstrap
+      - name: Integration tests without GraphQL (all but the group 'graphql')
         run: |
           set -o pipefail
           docker compose exec -T -e XDEBUG_MODE=coverage php vendor/bin/phpunit \
             -c /var/www/test-module/tests/phpunit.xml \
             --testsuite Integration \
             --bootstrap=/var/www/source/bootstrap.php \
+            --exclude-group graphql \
             --display-skipped | tee integration-tests.log
 
-      # Informational on these lines: the headless tests skip themselves without GraphQL.
-      - name: Count the tests skipped for a missing GraphQL package
+      # A test that skips itself for a missing GraphQL package here lacks #[Group('graphql')].
+      - name: No GraphQL test outside the group 'graphql'
         run: |
-          skipped=$(grep -c -E 'graphql-(base|storefront).* is not installed' integration-tests.log || true)
-          echo "Tests skipped for a missing GraphQL package (phase 2 on 7.1-7.3): $skipped"
+          $GITHUB_WORKSPACE/source/test-module/.github/scripts/graphql-skip-check.sh without integration-tests.log
+
+      - name: GraphQL tests not run on these lines
+        run: |
+          echo "::notice title=Group graphql not run::graphql-base/storefront for OXID 7.1-7.3 is phase 2 of the experiment; the GraphQL tests run in the 7.4, 7.5 and 7.6 workflows."
 
       - name: Upload log artifact
         if: always()
